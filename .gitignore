@@ -28,3 +28,11 @@ next-env.d.ts
 # generados automáticamente (ver scripts/)
 /src/infraestructura/sqlite/esquema-sql.generado.ts
 /public/sql-wasm.wasm
+
+# Base de datos local - NO subir
+*.db
+*.sqlite
+*.sqlite3
+*.db-shm
+*.db-wal
+*.db-journal

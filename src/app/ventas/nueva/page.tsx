@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { construirVenta, ErrorDeNegocio } from '@/core/reglas-negocio';
 import type { Cliente, MetodoPago, Producto } from '@/core/tipos';
@@ -31,11 +31,15 @@ export default function PaginaNuevaVenta() {
 
   const [productos, setProductos] = useState<Producto[]>([]);
   const [texto, setTexto] = useState('');
+  const inputBusquedaProductoRef = useRef<HTMLInputElement>(null);
   const [carrito, setCarrito] = useState<LineaCarrito[]>([]);
   const [metodoPago, setMetodoPago] = useState<MetodoPago>('efectivo');
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [clienteId, setClienteId] = useState<number | null>(null);
-  const [nombreClienteNuevo, setNombreClienteNuevo] = useState('');
+
+  // Cliente: opcional para cualquier método de pago, obligatorio si es fiado.
+  const [busquedaCliente, setBusquedaCliente] = useState('');
+  const [clientesEncontrados, setClientesEncontrados] = useState<Cliente[]>([]);
+  const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null);
+
   const [etapa, setEtapa] = useState<'armando' | 'revisando' | 'guardada'>('armando');
   const [totalGuardado, setTotalGuardado] = useState(0);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
@@ -46,8 +50,12 @@ export default function PaginaNuevaVenta() {
   }, [contenedor]);
 
   useEffect(() => {
-    if (contenedor && metodoPago === 'fiado') setClientes(contenedor.clientes.listarActivos());
-  }, [contenedor, metodoPago]);
+    if (!contenedor || !busquedaCliente.trim()) {
+      setClientesEncontrados([]);
+      return;
+    }
+    setClientesEncontrados(contenedor.clientes.buscarPorTexto(busquedaCliente));
+  }, [contenedor, busquedaCliente]);
 
   const resultadosBusqueda = useMemo(() => {
     if (!texto.trim()) return [];
@@ -98,6 +106,11 @@ export default function PaginaNuevaVenta() {
         },
       ];
     });
+    // Vuelve el foco al buscador para que quede claro que puede seguir
+    // agregando productos sin tener que tocar la pantalla de nuevo.
+    // El pequeño delay deja que React re-renderice el input (que se
+    // vació arriba) antes de intentar enfocarlo.
+    setTimeout(() => inputBusquedaProductoRef.current?.focus(), 0);
   }
 
   function cambiarCantidad(productoId: number, delta: number) {
@@ -116,18 +129,26 @@ export default function PaginaNuevaVenta() {
     setCarrito((actual) => actual.filter((l) => l.productoId !== productoId));
   }
 
-  async function crearClienteRapido() {
-    if (!contenedor || !nombreClienteNuevo.trim()) return;
-    const nuevo = contenedor.clientes.crear(nombreClienteNuevo.trim());
-    await contenedor.persistir();
-    setClientes((actual) => [...actual, nuevo]);
-    setClienteId(nuevo.id);
-    setNombreClienteNuevo('');
+  function elegirMetodoPago(valor: MetodoPago) {
+    setMetodoPago(valor);
+    // Corrige el bug de que un cliente elegido para una venta al fiado
+    // quedara "pegado" si luego se cambia a efectivo/yape/etc: al salir
+    // de fiado, se limpia la selección para no arrastrarla.
+    if (valor !== 'fiado') {
+      setClienteSeleccionado(null);
+      setBusquedaCliente('');
+    }
+  }
+
+  function seleccionarCliente(cliente: Cliente) {
+    setClienteSeleccionado(cliente);
+    setBusquedaCliente('');
+    setClientesEncontrados([]);
   }
 
   async function confirmarVenta() {
     if (!contenedor || !calculoValido) return;
-    if (metodoPago === 'fiado' && !clienteId) {
+    if (metodoPago === 'fiado' && !clienteSeleccionado) {
       setMensajeError('Elige un cliente para la venta al fiado.');
       return;
     }
@@ -138,7 +159,7 @@ export default function PaginaNuevaVenta() {
       const venta = contenedor.ventas.registrarVenta({
         lineas: carrito.map((l) => ({ productoId: l.productoId, cantidad: l.cantidad })),
         metodoPago,
-        clienteId: metodoPago === 'fiado' ? clienteId : null,
+        clienteId: clienteSeleccionado?.id ?? null,
       });
       await contenedor.persistir();
       setTotalGuardado(venta.total);
@@ -152,7 +173,8 @@ export default function PaginaNuevaVenta() {
 
   function empezarNuevaVenta() {
     setCarrito([]);
-    setClienteId(null);
+    setClienteSeleccionado(null);
+    setBusquedaCliente('');
     setMetodoPago('efectivo');
     setMensajeError(null);
     setEtapa('armando');
@@ -220,10 +242,8 @@ export default function PaginaNuevaVenta() {
         </div>
 
         <p className="mt-2 text-sm text-tinta/60">
-          Pago: {METODOS_PAGO.find((m) => m.valor === metodoPago)?.etiqueta}
-          {metodoPago === 'fiado' &&
-            clienteId &&
-            ` · ${clientes.find((c) => c.id === clienteId)?.nombre ?? ''}`}
+          Pago: {METODOS_PAGO.find((m) => m.valor === metodoPago)?.etiqueta} ·{' '}
+          {clienteSeleccionado ? clienteSeleccionado.nombre : 'Cliente eventual'}
         </p>
 
         {mensajeError && <p className="mt-3 text-sm text-alerta">{mensajeError}</p>}
@@ -259,6 +279,7 @@ export default function PaginaNuevaVenta() {
       {/* Buscador de productos */}
       <div className="relative mt-5">
         <input
+          ref={inputBusquedaProductoRef}
           value={texto}
           onChange={(e) => setTexto(e.target.value)}
           placeholder="Buscar producto…"
@@ -340,7 +361,7 @@ export default function PaginaNuevaVenta() {
           {METODOS_PAGO.map((m) => (
             <button
               key={m.valor}
-              onClick={() => setMetodoPago(m.valor)}
+              onClick={() => elegirMetodoPago(m.valor)}
               className={`h-9 rounded-full border px-4 text-sm font-medium ${
                 metodoPago === m.valor
                   ? 'border-bodega bg-bodega text-white'
@@ -353,39 +374,61 @@ export default function PaginaNuevaVenta() {
         </div>
       </section>
 
-      {/* Selector de cliente, solo si es fiado */}
-      {metodoPago === 'fiado' && (
-        <section className="mt-4">
-          <p className="text-sm text-tinta/60">Cliente</p>
-          <select
-            value={clienteId ?? ''}
-            onChange={(e) => setClienteId(e.target.value ? Number(e.target.value) : null)}
-            className="mt-2 h-11 w-full rounded-xl border border-linea bg-white px-3 text-sm"
-          >
-            <option value="">Elige un cliente…</option>
-            {clientes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.nombre}
-              </option>
-            ))}
-          </select>
-          <div className="mt-2 flex gap-2">
-            <input
-              value={nombreClienteNuevo}
-              onChange={(e) => setNombreClienteNuevo(e.target.value)}
-              placeholder="O escribe un cliente nuevo…"
-              className="h-10 flex-1 rounded-xl border border-linea bg-white px-3 text-sm"
-            />
+      {/* Cliente: opcional siempre, obligatorio solo si es fiado */}
+      <section className="mt-4">
+        <p className="text-sm text-tinta/60">
+          Cliente {metodoPago === 'fiado' ? '(obligatorio para fiado)' : '(opcional)'}
+        </p>
+
+        {clienteSeleccionado ? (
+          <div className="mt-2 flex items-center justify-between rounded-xl border border-linea bg-white px-4 py-3">
+            <div>
+              <p className="text-sm text-tinta">{clienteSeleccionado.nombre}</p>
+              <p className="text-xs text-tinta/50">{clienteSeleccionado.documento}</p>
+            </div>
             <button
-              onClick={crearClienteRapido}
-              disabled={!nombreClienteNuevo.trim()}
-              className="h-10 rounded-xl border border-linea px-3 text-sm font-semibold text-bodega-oscuro disabled:opacity-40"
+              onClick={() => setClienteSeleccionado(null)}
+              className="text-tinta/40"
+              aria-label="Quitar cliente"
             >
-              Agregar
+              ✕
             </button>
           </div>
-        </section>
-      )}
+        ) : (
+          <div className="relative mt-2">
+            <input
+              value={busquedaCliente}
+              onChange={(e) => setBusquedaCliente(e.target.value)}
+              placeholder="Buscar por nombre o documento…"
+              className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+            />
+            {clientesEncontrados.length > 0 && (
+              <ul className="absolute inset-x-0 top-full z-10 mt-1 max-h-56 overflow-y-auto rounded-xl border border-linea bg-white shadow-sm">
+                {clientesEncontrados.map((cliente) => (
+                  <li key={cliente.id}>
+                    <button
+                      onClick={() => seleccionarCliente(cliente)}
+                      className="flex w-full flex-col items-start px-4 py-2 text-left text-sm"
+                    >
+                      <span>{cliente.nombre}</span>
+                      <span className="text-xs text-tinta/50">{cliente.documento}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="mt-2 text-xs text-tinta/40">
+              Si no seleccionas a nadie, la venta queda como{' '}
+              <span className="font-medium text-tinta/60">Cliente eventual</span>. ¿Cliente nuevo?
+              Créalo en{' '}
+              <Link href="/mas/clientes" className="underline">
+                Más → Clientes
+              </Link>
+              .
+            </p>
+          </div>
+        )}
+      </section>
 
       {/* Acción principal */}
       {calculoValido && (

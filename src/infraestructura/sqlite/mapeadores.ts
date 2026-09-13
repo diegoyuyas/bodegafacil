@@ -39,6 +39,7 @@ export function mapearProducto(fila: FilaProducto): Producto {
 export interface FilaCliente {
   id: number;
   nombre: string;
+  documento: string | null;
   telefono: string | null;
   direccion: string | null;
   saldo_pendiente: number;
@@ -51,6 +52,7 @@ export function mapearCliente(fila: FilaCliente): Cliente {
   return {
     id: fila.id,
     nombre: fila.nombre,
+    documento: fila.documento,
     telefono: fila.telefono,
     direccion: fila.direccion,
     saldoPendiente: fila.saldo_pendiente,

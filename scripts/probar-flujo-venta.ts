@@ -63,8 +63,39 @@ async function main() {
   afirmar(caja.obtenerSaldoActual() === 12, `La caja sube con la venta en efectivo (obtenido: ${caja.obtenerSaldoActual()})`);
 
   // --- Venta al fiado ---
-  const cliente = clientes.crear('Doña Rosa', '987654321');
+  const cliente = clientes.crear('Doña Rosa', '123456789101234', '987654321');
   afirmar(cliente.saldoPendiente === 0, 'Cliente nuevo empieza sin deuda');
+  afirmar(cliente.documento === '123456789101234', 'El documento del cliente se guarda tal cual');
+
+  let documentoInvalidoFalló = false;
+  try {
+    clientes.crear('Cliente cualquiera', '123-456'); // guion no permitido
+  } catch {
+    documentoInvalidoFalló = true;
+  }
+  afirmar(documentoInvalidoFalló, 'Un documento con caracteres no alfanuméricos es rechazado');
+
+  let documentoLargoFalló = false;
+  try {
+    clientes.crear('Cliente cualquiera', '1234567890123456'); // 16 caracteres
+  } catch {
+    documentoLargoFalló = true;
+  }
+  afirmar(documentoLargoFalló, 'Un documento de más de 15 caracteres es rechazado');
+
+  const clienteDocumentoCorto = clientes.crear('Cliente con DNI corto', '87654321');
+  afirmar(
+    clienteDocumentoCorto.documento === '87654321',
+    'Un documento más corto que 15 caracteres (ej: DNI de 8) SÍ es válido',
+  );
+
+  let documentoDuplicadoFalló = false;
+  try {
+    clientes.crear('Otra persona', '123456789101234'); // mismo documento que Doña Rosa
+  } catch {
+    documentoDuplicadoFalló = true;
+  }
+  afirmar(documentoDuplicadoFalló, 'No se puede repetir el documento de un cliente');
 
   const venta2 = ventas.registrarVenta({
     lineas: [{ productoId: incaKola.id, cantidad: 2 }],
@@ -99,6 +130,62 @@ async function main() {
     fallóComoEsperado = true;
   }
   afirmar(fallóComoEsperado, 'Vender más stock del disponible lanza error de negocio');
+
+  // --- Listado detallado para Inicio (cliente resuelto + preview) ---
+  const detalleHoy = ventas.listarDeHoyConDetalle();
+  afirmar(detalleHoy.length === 2, `El detalle de hoy lista las 2 ventas (obtenido: ${detalleHoy.length})`);
+  afirmar(
+    detalleHoy.some((v) => v.clienteNombre === 'Doña Rosa'),
+    'El detalle de hoy resuelve el nombre del cliente para la venta al fiado',
+  );
+  afirmar(
+    detalleHoy.some((v) => v.clienteNombre === null),
+    'La venta en efectivo sin cliente aparece con clienteNombre null (Cliente eventual en la UI)',
+  );
+
+  const lineasVenta1 = ventas.obtenerLineas(venta1.id);
+  const primeraLineaVenta1 = lineasVenta1[0];
+  afirmar(
+    lineasVenta1.length === 1 && primeraLineaVenta1?.cantidad === 3,
+    'El preview de líneas de la venta 1 es correcto',
+  );
+
+  // --- Anular una venta: repone stock, revierte caja, no cuenta para el histórico ---
+  const stockAntesDeAnular = productos.obtenerPorId(incaKola.id).stockActual;
+  const cajaAntesDeAnular = caja.obtenerSaldoActual();
+
+  const venta3 = ventas.registrarVenta({
+    lineas: [{ productoId: incaKola.id, cantidad: 1 }],
+    metodoPago: 'yape',
+  });
+  afirmar(
+    ventas.contarTotalHistorico() === 3,
+    `El histórico cuenta la venta 3 antes de anularla (obtenido: ${ventas.contarTotalHistorico()})`,
+  );
+
+  ventas.anularVenta(venta3.id);
+  const ventaAnulada = ventas.obtenerPorId(venta3.id);
+  afirmar(ventaAnulada.anulada, 'La venta anulada queda marcada como anulada');
+  afirmar(
+    productos.obtenerPorId(incaKola.id).stockActual === stockAntesDeAnular,
+    'Anular una venta repone el stock vendido',
+  );
+  afirmar(
+    caja.obtenerSaldoActual() === cajaAntesDeAnular,
+    `Anular una venta revierte su efecto en caja (obtenido: ${caja.obtenerSaldoActual()})`,
+  );
+  afirmar(
+    ventas.contarTotalHistorico() === 2,
+    `Una venta anulada no cuenta para el histórico (obtenido: ${ventas.contarTotalHistorico()})`,
+  );
+
+  let anularDeNuevoFalló = false;
+  try {
+    ventas.anularVenta(venta3.id);
+  } catch {
+    anularDeNuevoFalló = true;
+  }
+  afirmar(anularDeNuevoFalló, 'No se puede anular dos veces la misma venta');
 
   // --- Resumen del día ---
   const resumen = ventas.resumenDelDia();
@@ -141,7 +228,20 @@ async function main() {
 
   const csvVentas = exportarVentasACsv(ventas.listarDetalleParaExportar());
   afirmar(
-    csvVentas.split('\r\n').length === 3, // encabezado + 2 líneas de detalle (una por venta)
+    csvVentas.startsWith('Pedido,Fecha,Producto,Cantidad,Precio unitario,Subtotal,Método de pago,Cliente'),
+    'El CSV de ventas tiene la cabecera "Pedido" (correlativo V-N)',
+  );
+  afirmar(csvVentas.includes(`V-${venta1.id}`), `El CSV incluye el correlativo V-${venta1.id}`);
+  afirmar(
+    !csvVentas.includes(`V-${venta3.id},`),
+    'La venta anulada no aparece en el historial exportado',
+  );
+  afirmar(
+    csvVentas.includes('Cliente Eventual'),
+    'El CSV pone "Cliente Eventual" en vez de dejar el campo Cliente vacío',
+  );
+  afirmar(
+    csvVentas.split('\r\n').length === 3, // encabezado + 2 líneas de detalle (una por venta válida)
     `El CSV de ventas tiene una fila por línea vendida (obtenido: ${csvVentas.split('\r\n').length} filas)`,
   );
 

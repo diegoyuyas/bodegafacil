@@ -1,0 +1,34 @@
+/**
+ * Bodega Fácil — Migraciones
+ * ------------------------------------------------------------
+ * `esquema.sql` solo se ejecuta en una base NUEVA (vacía). Si el
+ * dispositivo ya tenía datos guardados de una versión anterior, hay
+ * que ir agregando los cambios de esquema aquí, uno por uno, en
+ * orden. Cada sentencia se ejecuta dentro de un try/catch: si ya se
+ * aplicó antes (ej. "duplicate column name"), se ignora en silencio.
+ * Así el mismo código sirve tanto para una base recién creada (donde
+ * esquema.sql ya trae todo) como para una que se está actualizando.
+ */
+
+import type { BaseDatosLocal } from './base-datos';
+
+const MIGRACIONES: string[] = [
+  // 0001: campo documento de identidad en cliente (Nombre + DNI/CE).
+  `ALTER TABLE cliente ADD COLUMN documento TEXT;`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_cliente_documento ON cliente(documento) WHERE documento IS NOT NULL;`,
+];
+
+export function aplicarMigraciones(bd: BaseDatosLocal): void {
+  for (const sentencia of MIGRACIONES) {
+    try {
+      bd.ejecutar(sentencia);
+    } catch (error) {
+      const mensaje = error instanceof Error ? error.message.toLowerCase() : '';
+      const yaAplicada =
+        mensaje.includes('duplicate column name') || mensaje.includes('already exists');
+      if (!yaAplicada) {
+        throw error;
+      }
+    }
+  }
+}

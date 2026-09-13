@@ -42,6 +42,7 @@ export interface Producto {
 export interface Cliente {
   id: number;
   nombre: string;
+  documento: string | null;
   telefono: string | null;
   direccion: string | null;
   saldoPendiente: number;
@@ -198,4 +199,20 @@ export interface ResumenDia {
   porMetodoPago: { metodo: MetodoPago; monto: number }[];
   productosStockBajo: number;
   totalPorCobrar: number;
+}
+
+/** Una fila de la lista de ventas de hoy en Inicio (con nombre de cliente ya resuelto). */
+export interface VentaListaItem {
+  id: number;
+  fechaHora: string;
+  metodoPago: MetodoPago;
+  total: number;
+  clienteNombre: string | null;
+  anulada: boolean;
+}
+
+/** Una línea de producto dentro de una venta, para el preview al expandir. */
+export interface LineaVentaResumen {
+  producto: string;
+  cantidad: number;
 }

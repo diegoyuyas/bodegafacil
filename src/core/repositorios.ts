@@ -11,6 +11,7 @@
 import type {
   Cliente,
   Compra,
+  LineaVentaResumen,
   MetodoPagoSinFiado,
   MovimientoCaja,
   Producto,
@@ -18,6 +19,7 @@ import type {
   RegistrarVentaInput,
   ResumenDia,
   Venta,
+  VentaListaItem,
 } from './tipos';
 import type { FilaVentaDetallada } from './exportacion';
 
@@ -42,15 +44,24 @@ export interface DatosNuevoProducto {
 
 export interface ClienteRepositorio {
   listarActivos(): Cliente[];
+  buscarPorTexto(texto: string): Cliente[];
   obtenerPorId(id: number): Cliente;
-  crear(nombre: string, telefono?: string | null): Cliente;
+  crear(nombre: string, documento: string, telefono?: string | null): Cliente;
 }
 
 export interface VentaRepositorio {
   registrarVenta(input: RegistrarVentaInput): Venta;
   obtenerPorId(id: number): Venta;
   listarDeHoy(): Venta[];
+  /** Para Inicio: ventas de hoy con nombre de cliente ya resuelto. */
+  listarDeHoyConDetalle(): VentaListaItem[];
+  /** Para el preview al expandir una venta en la lista. */
+  obtenerLineas(ventaId: number): LineaVentaResumen[];
+  /** Repone stock, revierte caja/deuda, y marca la venta como anulada. */
+  anularVenta(id: number, motivo?: string): void;
   resumenDelDia(fechaIso?: string): ResumenDia;
+  /** Total histórico de ventas válidas (no anuladas) — para el umbral de Plan Pro. */
+  contarTotalHistorico(): number;
   /** Filas planas (venta + producto + cliente) listas para exportar a CSV. */
   listarDetalleParaExportar(): FilaVentaDetallada[];
 }

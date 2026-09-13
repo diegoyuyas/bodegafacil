@@ -196,6 +196,24 @@ export function calcularSaldoCaja(
 }
 
 // ------------------------------------------------------------
+// Clientes
+// ------------------------------------------------------------
+
+const PATRON_DOCUMENTO = /^[A-Za-z0-9]{1,15}$/;
+
+/**
+ * El documento de identidad debe ser alfanumérico y de hasta 15
+ * caracteres (no hace falta llenar los 15 — un DNI de 8 dígitos, por
+ * ejemplo, también es válido). Es la llave que evita clientes
+ * duplicados.
+ */
+export function validarDocumentoIdentidad(documento: string): void {
+  if (!PATRON_DOCUMENTO.test(documento)) {
+    throw new ErrorDeNegocio('El documento debe ser alfanumérico, de hasta 15 caracteres.');
+  }
+}
+
+// ------------------------------------------------------------
 // Utilidades
 // ------------------------------------------------------------
 

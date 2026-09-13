@@ -2,13 +2,13 @@
 
 import Link from 'next/link';
 import { usarContenedor } from '@/hooks/usar-contenedor';
-import type { ResumenDia } from '@/core/tipos';
-import { useEffect, useState } from 'react';
+import type { LineaVentaResumen, ResumenDia, VentaListaItem } from '@/core/tipos';
+import { useEffect, useMemo, useState } from 'react';
 
 /**
  * Pantalla de inicio — resumen del día (sección 7 del documento maestro),
- * ahora conectada a la base de datos local real vía el contenedor de
- * repositorios (Paso 3). Antes de esto, los números eran de ejemplo.
+ * con la lista de ventas de hoy (cliente, preview de productos, y
+ * anular) agregada a pedido.
  */
 
 const ETIQUETAS_METODO_PAGO: Record<string, string> = {
@@ -19,6 +19,8 @@ const ETIQUETAS_METODO_PAGO: Record<string, string> = {
   fiado: 'Fiado',
 };
 
+const UMBRAL_PLAN_PRO = 500;
+
 function formatearSoles(monto: number): string {
   return `S/ ${monto.toFixed(2)}`;
 }
@@ -26,11 +28,67 @@ function formatearSoles(monto: number): string {
 export default function PaginaInicio() {
   const { contenedor, error, cargando } = usarContenedor();
   const [resumen, setResumen] = useState<ResumenDia | null>(null);
+  const [ventasDeHoy, setVentasDeHoy] = useState<VentaListaItem[]>([]);
+  const [totalHistorico, setTotalHistorico] = useState(0);
+  const [ventaExpandida, setVentaExpandida] = useState<number | null>(null);
+  const [lineasPorVenta, setLineasPorVenta] = useState<Record<number, LineaVentaResumen[]>>({});
+  const [pedidosAbiertos, setPedidosAbiertos] = useState(false);
+  const [busquedaPedidos, setBusquedaPedidos] = useState('');
 
-  useEffect(() => {
+  function recargar() {
     if (!contenedor) return;
     setResumen(contenedor.ventas.resumenDelDia());
-  }, [contenedor]);
+    setVentasDeHoy(contenedor.ventas.listarDeHoyConDetalle());
+    setTotalHistorico(contenedor.ventas.contarTotalHistorico());
+  }
+
+  useEffect(recargar, [contenedor]);
+
+  useEffect(() => {
+    if (!pedidosAbiertos || !contenedor) return;
+    setLineasPorVenta((actual) => {
+      const faltantes = ventasDeHoy.filter((v) => !actual[v.id]);
+      if (faltantes.length === 0) return actual;
+      const nuevas = { ...actual };
+      for (const venta of faltantes) {
+        nuevas[venta.id] = contenedor.ventas.obtenerLineas(venta.id);
+      }
+      return nuevas;
+    });
+  }, [pedidosAbiertos, contenedor, ventasDeHoy]);
+
+  const pedidosFiltrados = useMemo(() => {
+    const texto = busquedaPedidos.trim().toLowerCase();
+    if (!texto) return ventasDeHoy;
+    return ventasDeHoy.filter((venta) => {
+      const nombreCliente = (venta.clienteNombre ?? 'Cliente eventual').toLowerCase();
+      if (nombreCliente.includes(texto)) return true;
+      if (venta.total.toFixed(2).includes(texto)) return true;
+      const lineas = lineasPorVenta[venta.id] ?? [];
+      return lineas.some((linea) => linea.producto.toLowerCase().includes(texto));
+    });
+  }, [ventasDeHoy, busquedaPedidos, lineasPorVenta]);
+
+  function alternarExpandida(venta: VentaListaItem) {
+    if (ventaExpandida === venta.id) {
+      setVentaExpandida(null);
+      return;
+    }
+    setVentaExpandida(venta.id);
+    if (!lineasPorVenta[venta.id] && contenedor) {
+      const lineas = contenedor.ventas.obtenerLineas(venta.id);
+      setLineasPorVenta((actual) => ({ ...actual, [venta.id]: lineas }));
+    }
+  }
+
+  async function anularVenta(venta: VentaListaItem, evento: React.MouseEvent) {
+    evento.stopPropagation();
+    const confirmar = window.confirm(`¿Eliminar el pedido V-${venta.id}?`);
+    if (!confirmar || !contenedor) return;
+    contenedor.ventas.anularVenta(venta.id);
+    await contenedor.persistir();
+    recargar();
+  }
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col">
@@ -51,6 +109,14 @@ export default function PaginaInicio() {
           </p>
         )}
 
+        {totalHistorico >= UMBRAL_PLAN_PRO && (
+          <div className="mb-4 rounded-xl border border-acento bg-acento/10 px-4 py-3 text-sm text-tinta">
+            Ya llevas <span className="font-semibold">{totalHistorico} ventas</span> registradas.
+            Es un buen momento para pasar a{' '}
+            <span className="font-semibold text-bodega-oscuro">Bodega Fácil Pro</span>.
+          </div>
+        )}
+
         {resumen && (
           <>
             {/* Hero: lo primero que el bodeguero necesita saber */}
@@ -65,7 +131,7 @@ export default function PaginaInicio() {
               </p>
             </section>
 
-            {/* Desglose por método de pago, con estilo de boleta */}
+            {/* Desglose por método de pago */}
             <section aria-label="Ventas por método de pago" className="mt-8">
               {resumen.porMetodoPago.length === 0 ? (
                 <p className="border-y border-linea py-4 text-sm text-tinta/50">
@@ -115,6 +181,85 @@ export default function PaginaInicio() {
                 </div>
               )}
             </section>
+
+            {/* Pedidos de hoy: desplegable con buscador, preview y anular */}
+            {ventasDeHoy.length > 0 && (
+              <section aria-label="Pedidos de hoy" className="mt-8">
+                <button
+                  onClick={() => setPedidosAbiertos((v) => !v)}
+                  className="flex w-full items-center justify-between border-y border-linea py-3 text-sm font-semibold text-tinta"
+                >
+                  <span>Pedidos de hoy ({ventasDeHoy.length})</span>
+                  <span className={`text-tinta/50 transition-transform ${pedidosAbiertos ? 'rotate-180' : ''}`}>
+                    ⌄
+                  </span>
+                </button>
+
+                {pedidosAbiertos && (
+                  <div className="pt-3">
+                    <input
+                      value={busquedaPedidos}
+                      onChange={(e) => setBusquedaPedidos(e.target.value)}
+                      placeholder="Buscar por monto, cliente o producto…"
+                      className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+                    />
+
+                    {pedidosFiltrados.length === 0 ? (
+                      <p className="border-y border-linea py-6 text-center text-sm text-tinta/50 mt-3">
+                        Ningún pedido coincide con "{busquedaPedidos}".
+                      </p>
+                    ) : (
+                      <ul className="mt-3 divide-y divide-linea border-y border-linea">
+                        {pedidosFiltrados.map((venta) => (
+                          <li key={venta.id}>
+                            <button
+                              onClick={() => alternarExpandida(venta)}
+                              className={`flex w-full items-center justify-between py-3 text-left ${
+                                venta.anulada ? 'opacity-40' : ''
+                              }`}
+                            >
+                              <div>
+                                <p className="text-xs text-tinta/40">V-{venta.id}</p>
+                                <p className="text-sm text-tinta/80">
+                                  {ETIQUETAS_METODO_PAGO[venta.metodoPago] ?? venta.metodoPago} —{' '}
+                                  {venta.clienteNombre ?? 'Cliente eventual'}
+                                  {venta.anulada && ' (Anulada)'}
+                                </p>
+                              </div>
+                              <div className="flex items-center gap-3">
+                                <span className="text-sm font-semibold text-tinta">
+                                  {formatearSoles(venta.total)}
+                                </span>
+                                {!venta.anulada && (
+                                  <span
+                                    role="button"
+                                    onClick={(e) => anularVenta(venta, e)}
+                                    className="text-lg text-alerta"
+                                    aria-label={`Anular pedido V-${venta.id}`}
+                                  >
+                                    🗑
+                                  </span>
+                                )}
+                              </div>
+                            </button>
+
+                            {ventaExpandida === venta.id && (
+                              <div className="-mt-1 mb-3 rounded-lg bg-bodega-claro/40 px-3 py-2 text-xs text-tinta/70">
+                                {(lineasPorVenta[venta.id] ?? []).map((linea, i) => (
+                                  <p key={i}>
+                                    {linea.cantidad} × {linea.producto}
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </section>
+            )}
           </>
         )}
       </main>

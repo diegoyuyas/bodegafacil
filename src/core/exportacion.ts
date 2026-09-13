@@ -10,13 +10,14 @@
 import type { Cliente, Producto } from './tipos';
 
 export interface FilaVentaDetallada {
+  pedido: string;
   fecha: string;
   producto: string;
   cantidad: number;
   precioUnitario: number;
   subtotal: number;
   metodoPago: string;
-  cliente: string | null;
+  cliente: string;
 }
 
 function escaparCsv(valor: string | number | null | undefined): string {
@@ -40,8 +41,9 @@ function filasACsv(
 
 export function exportarVentasACsv(filas: FilaVentaDetallada[]): string {
   return filasACsv(
-    ['Fecha', 'Producto', 'Cantidad', 'Precio unitario', 'Subtotal', 'Método de pago', 'Cliente'],
+    ['Pedido', 'Fecha', 'Producto', 'Cantidad', 'Precio unitario', 'Subtotal', 'Método de pago', 'Cliente'],
     filas.map((f) => [
+      f.pedido,
       f.fecha,
       f.producto,
       f.cantidad,

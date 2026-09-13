@@ -46,6 +46,7 @@ CREATE INDEX idx_producto_activo    ON producto(activo);
 CREATE TABLE cliente (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre              TEXT NOT NULL,
+    documento           TEXT,                          -- DNI/CE, 15 caracteres alfanuméricos
     telefono            TEXT,
     direccion           TEXT,
     saldo_pendiente     REAL NOT NULL DEFAULT 0,      -- total adeudado, se recalcula
@@ -53,6 +54,10 @@ CREATE TABLE cliente (
     activo              INTEGER NOT NULL DEFAULT 1,
     creado_en           TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+-- Único cuando hay documento; permite convivir con clientes antiguos
+-- sin documento (creados antes de este campo) sin romper nada.
+CREATE UNIQUE INDEX idx_cliente_documento ON cliente(documento) WHERE documento IS NOT NULL;
 
 -- ------------------------------------------------------------
 -- 3. Ventas

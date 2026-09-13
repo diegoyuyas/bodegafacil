@@ -1,6 +1,7 @@
 import type { Database } from 'sql.js';
 import { obtenerMotorSqlJs } from './motor';
 import { ESQUEMA_SQL } from './esquema-sql.generado';
+import { aplicarMigraciones } from './migraciones';
 
 export interface OpcionesBaseDatosLocal {
   /** Dónde buscar el .wasm de sql.js (distinto en navegador vs. Node). */
@@ -25,6 +26,8 @@ export class BaseDatosLocal {
 
     if (!opciones.datosPrevios) {
       instancia.ejecutar(ESQUEMA_SQL);
+    } else {
+      aplicarMigraciones(instancia);
     }
 
     return instancia;

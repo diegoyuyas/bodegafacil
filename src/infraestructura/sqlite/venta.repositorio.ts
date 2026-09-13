@@ -4,9 +4,17 @@ import {
   calcularDeudaNueva,
   calcularStockNuevo,
   construirVenta,
+  redondear,
 } from '@/core/reglas-negocio';
-import type { RegistrarVentaInput, ResumenDia, Venta } from '@/core/tipos';
+import type {
+  LineaVentaResumen,
+  RegistrarVentaInput,
+  ResumenDia,
+  Venta,
+  VentaListaItem,
+} from '@/core/tipos';
 import type { FilaVentaDetallada } from '@/core/exportacion';
+import { ahoraLocalSql, hoyLocalSql } from '@/core/tiempo';
 import type { BaseDatosLocal } from './base-datos';
 import { mapearVenta, type FilaVenta } from './mapeadores';
 
@@ -33,9 +41,10 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
       const calculada = construirVenta(input.lineas, (id) => this.productos.obtenerPorId(id));
 
       this.bd.ejecutar(
-        `INSERT INTO venta (cliente_id, metodo_pago, subtotal, total, ganancia_estimada)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO venta (fecha_hora, cliente_id, metodo_pago, subtotal, total, ganancia_estimada)
+         VALUES (?, ?, ?, ?, ?, ?)`,
         [
+          ahoraLocalSql(),
           input.clienteId ?? null,
           input.metodoPago,
           calculada.subtotal,
@@ -76,7 +85,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
       if (input.metodoPago === 'fiado') {
         this.registrarFiado(input.clienteId as number, calculada.total, ventaId);
       } else {
-        this.caja.registrarIngreso(calculada.total, `Venta #${ventaId}`, input.metodoPago, ventaId);
+        this.caja.registrarIngreso(calculada.total, `Venta V-${ventaId}`, input.metodoPago, ventaId);
       }
 
       return this.obtenerPorId(ventaId);
@@ -95,15 +104,109 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
     return this.bd
       .consultar<FilaVenta>(
         `SELECT * FROM venta
-         WHERE anulada = 0 AND date(fecha_hora) = date('now')
+         WHERE anulada = 0 AND substr(fecha_hora, 1, 10) = ?
          ORDER BY fecha_hora DESC`,
+        [hoyLocalSql()],
       )
       .map(mapearVenta);
   }
 
+  listarDeHoyConDetalle(): VentaListaItem[] {
+    return this.bd
+      .consultar<{
+        id: number;
+        fecha_hora: string;
+        metodo_pago: Venta['metodoPago'];
+        total: number;
+        cliente: string | null;
+        anulada: number;
+      }>(
+        `SELECT v.id AS id, v.fecha_hora AS fecha_hora, v.metodo_pago AS metodo_pago,
+                v.total AS total, c.nombre AS cliente, v.anulada AS anulada
+         FROM venta v
+         LEFT JOIN cliente c ON c.id = v.cliente_id
+         WHERE substr(v.fecha_hora, 1, 10) = ?
+         ORDER BY v.id DESC`,
+        [hoyLocalSql()],
+      )
+      .map((fila) => ({
+        id: fila.id,
+        fechaHora: fila.fecha_hora,
+        metodoPago: fila.metodo_pago,
+        total: fila.total,
+        clienteNombre: fila.cliente,
+        anulada: fila.anulada === 1,
+      }));
+  }
+
+  obtenerLineas(ventaId: number): LineaVentaResumen[] {
+    return this.bd.consultar<LineaVentaResumen>(
+      `SELECT p.nombre AS producto, dv.cantidad AS cantidad
+       FROM detalle_venta dv
+       JOIN producto p ON p.id = dv.producto_id
+       WHERE dv.venta_id = ?
+       ORDER BY dv.id`,
+      [ventaId],
+    );
+  }
+
+  /**
+   * Anula una venta: repone el stock vendido, revierte el efecto en
+   * caja (si se pagó al contado) o reduce la deuda del cliente (si
+   * fue al fiado), y marca la venta como anulada. No se borra nada —
+   * queda trazabilidad completa, tal como una venta anulada real.
+   */
+  anularVenta(id: number, motivo?: string): void {
+    this.bd.transaccion(() => {
+      const venta = this.obtenerPorId(id);
+      if (venta.anulada) {
+        throw new ErrorDeNegocio(`La venta V-${id} ya estaba anulada.`);
+      }
+
+      const lineas = this.bd.consultar<{ producto_id: number; cantidad: number }>(
+        'SELECT producto_id, cantidad FROM detalle_venta WHERE venta_id = ?',
+        [id],
+      );
+
+      for (const linea of lineas) {
+        const producto = this.productos.obtenerPorId(linea.producto_id);
+        const stockNuevo = calcularStockNuevo(producto.stockActual, linea.cantidad, 0);
+        this.productos.actualizarStock(producto.id, stockNuevo);
+        this.bd.ejecutar(
+          `INSERT INTO movimiento_inventario
+             (producto_id, tipo, cantidad, motivo, venta_id, stock_resultante)
+           VALUES (?, 'entrada', ?, 'anulacion', ?, ?)`,
+          [linea.producto_id, linea.cantidad, id, stockNuevo],
+        );
+      }
+
+      if (venta.metodoPago === 'fiado') {
+        if (venta.clienteId) {
+          const filaCliente = this.bd.consultar<{ saldo_pendiente: number }>(
+            'SELECT saldo_pendiente FROM cliente WHERE id = ?',
+            [venta.clienteId],
+          )[0];
+          if (filaCliente) {
+            const saldoNuevo = Math.max(0, redondear(filaCliente.saldo_pendiente - venta.total));
+            this.bd.ejecutar('UPDATE cliente SET saldo_pendiente = ? WHERE id = ?', [
+              saldoNuevo,
+              venta.clienteId,
+            ]);
+          }
+        }
+      } else {
+        this.caja.registrarEgreso(venta.total, `Anulación de V-${id}`, venta.metodoPago);
+      }
+
+      this.bd.ejecutar('UPDATE venta SET anulada = 1, motivo_anulacion = ? WHERE id = ?', [
+        motivo ?? 'Anulada desde Inicio',
+        id,
+      ]);
+    });
+  }
+
   resumenDelDia(fechaIso?: string): ResumenDia {
-    const filtroFecha = fechaIso ? 'date(fecha_hora) = ?' : "date(fecha_hora) = date('now')";
-    const parametrosFecha = fechaIso ? [fechaIso] : [];
+    const fecha = fechaIso ?? hoyLocalSql();
 
     const totales = this.bd.consultar<{
       total_ventas: number | null;
@@ -115,16 +218,16 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
          COALESCE(SUM(ganancia_estimada), 0) AS ganancia_estimada,
          COUNT(*) AS numero_ventas
        FROM venta
-       WHERE anulada = 0 AND ${filtroFecha}`,
-      parametrosFecha,
+       WHERE anulada = 0 AND substr(fecha_hora, 1, 10) = ?`,
+      [fecha],
     )[0] ?? { total_ventas: 0, ganancia_estimada: 0, numero_ventas: 0 };
 
     const porMetodo = this.bd.consultar<{ metodo_pago: Venta['metodoPago']; monto: number }>(
       `SELECT metodo_pago, COALESCE(SUM(total), 0) AS monto
        FROM venta
-       WHERE anulada = 0 AND ${filtroFecha}
+       WHERE anulada = 0 AND substr(fecha_hora, 1, 10) = ?
        GROUP BY metodo_pago`,
-      parametrosFecha,
+      [fecha],
     );
 
     const stockBajo = this.bd.consultar<{ total: number }>(
@@ -136,7 +239,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
     )[0] ?? { total: 0 };
 
     return {
-      fecha: fechaIso ?? new Date().toISOString().slice(0, 10),
+      fecha,
       totalVentas: totales.total_ventas ?? 0,
       gananciaEstimada: totales.ganancia_estimada ?? 0,
       numeroVentas: totales.numero_ventas,
@@ -146,9 +249,17 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
     };
   }
 
+  contarTotalHistorico(): number {
+    const fila = this.bd.consultar<{ total: number }>(
+      'SELECT COUNT(*) AS total FROM venta WHERE anulada = 0',
+    )[0];
+    return fila?.total ?? 0;
+  }
+
   listarDetalleParaExportar(): FilaVentaDetallada[] {
     return this.bd
       .consultar<{
+        id: number;
         fecha_hora: string;
         producto: string;
         cantidad: number;
@@ -158,6 +269,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         cliente: string | null;
       }>(
         `SELECT
+           v.id AS id,
            v.fecha_hora AS fecha_hora,
            p.nombre AS producto,
            dv.cantidad AS cantidad,
@@ -173,13 +285,14 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
          ORDER BY v.fecha_hora DESC`,
       )
       .map((fila) => ({
+        pedido: `V-${fila.id}`,
         fecha: fila.fecha_hora,
         producto: fila.producto,
         cantidad: fila.cantidad,
         precioUnitario: fila.precio_unitario,
         subtotal: fila.subtotal,
         metodoPago: fila.metodo_pago,
-        cliente: fila.cliente,
+        cliente: fila.cliente ?? 'Cliente Eventual',
       }));
   }
 

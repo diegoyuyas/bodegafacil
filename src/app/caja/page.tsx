@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import type { MetodoPagoSinFiado, MovimientoCaja } from '@/core/tipos';
 
@@ -12,6 +12,14 @@ const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
   { valor: 'tarjeta', etiqueta: 'Tarjeta' },
 ];
 
+const VISTAS = [
+  { valor: 'ingreso', etiqueta: 'Ingresos' },
+  { valor: 'egreso', etiqueta: 'Egresos' },
+  { valor: 'todo', etiqueta: 'Ver todo' },
+] as const;
+
+type Vista = (typeof VISTAS)[number]['valor'];
+
 function formatearSoles(monto: number): string {
   return `S/ ${monto.toFixed(2)}`;
 }
@@ -20,6 +28,7 @@ export default function PaginaCaja() {
   const { contenedor, cargando, error } = usarContenedor();
   const [saldo, setSaldo] = useState(0);
   const [movimientos, setMovimientos] = useState<MovimientoCaja[]>([]);
+  const [vista, setVista] = useState<Vista>('todo');
   const [mostrarFormulario, setMostrarFormulario] = useState<'ingreso' | 'egreso' | null>(null);
   const [monto, setMonto] = useState('');
   const [concepto, setConcepto] = useState('');
@@ -32,6 +41,29 @@ export default function PaginaCaja() {
   }
 
   useEffect(recargar, [contenedor]);
+
+  const movimientosVisibles = useMemo(
+    () => (vista === 'todo' ? movimientos : movimientos.filter((m) => m.tipo === vista)),
+    [movimientos, vista],
+  );
+
+  const totalVisible = useMemo(() => {
+    if (vista === 'ingreso') {
+      return movimientosVisibles.reduce((suma, m) => suma + m.monto, 0);
+    }
+    if (vista === 'egreso') {
+      return movimientosVisibles.reduce((suma, m) => suma + m.monto, 0);
+    }
+    // "Ver todo": el neto de hoy (ingresos - egresos), que es cuánto
+    // cambió la caja en el día.
+    return movimientosVisibles.reduce(
+      (suma, m) => suma + (m.tipo === 'ingreso' ? m.monto : -m.monto),
+      0,
+    );
+  }, [movimientosVisibles, vista]);
+
+  const etiquetaTotal =
+    vista === 'ingreso' ? 'Total de ingresos' : vista === 'egreso' ? 'Total de egresos' : 'Neto de hoy';
 
   async function confirmarMovimiento() {
     if (!contenedor || !mostrarFormulario || !monto || !concepto.trim()) return;
@@ -117,15 +149,35 @@ export default function PaginaCaja() {
         </section>
       )}
 
-      <section className="mt-6 flex-1">
-        <p className="text-sm text-tinta/60">Movimientos de hoy</p>
-        {movimientos.length === 0 ? (
+      {/* 3 vistas: Ingresos / Egresos / Ver todo, cada una con su propio total */}
+      <div className="mt-6 flex gap-2">
+        {VISTAS.map((v) => (
+          <button
+            key={v.valor}
+            onClick={() => setVista(v.valor)}
+            className={`h-9 flex-1 rounded-full border text-sm font-medium ${
+              vista === v.valor ? 'border-bodega bg-bodega text-white' : 'border-linea text-tinta/70'
+            }`}
+          >
+            {v.etiqueta}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-3 flex items-center justify-between rounded-xl bg-bodega-claro/40 px-4 py-3">
+        <span className="text-sm text-tinta/70">{etiquetaTotal}</span>
+        <span className="text-base font-extrabold text-tinta">{formatearSoles(totalVisible)}</span>
+      </div>
+
+      <section className="mt-4 flex-1">
+        {movimientosVisibles.length === 0 ? (
           <p className="mt-3 border-y border-linea py-6 text-center text-sm text-tinta/50">
-            Todavía no hay movimientos hoy.
+            No hay movimientos {vista !== 'todo' ? `de ${vista === 'ingreso' ? 'ingresos' : 'egresos'} ` : ''}
+            hoy.
           </p>
         ) : (
           <ul className="mt-3 divide-y divide-linea border-y border-linea">
-            {movimientos.map((mov) => (
+            {movimientosVisibles.map((mov) => (
               <li key={mov.id} className="flex items-center justify-between py-3 text-sm">
                 <span className="text-tinta/80">{mov.concepto}</span>
                 <span className={`font-semibold ${mov.tipo === 'ingreso' ? 'text-bodega-oscuro' : 'text-alerta'}`}>
