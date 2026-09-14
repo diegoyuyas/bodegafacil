@@ -1,4 +1,4 @@
-import type { CajaRepositorio, ProductoRepositorio, VentaRepositorio } from '@/core/repositorios';
+import type { CajaRepositorio, ConfiguracionRepositorio, ProductoRepositorio, VentaRepositorio } from '@/core/repositorios';
 import {
   ErrorDeNegocio,
   calcularDeudaNueva,
@@ -6,6 +6,7 @@ import {
   construirVenta,
   redondear,
 } from '@/core/reglas-negocio';
+import { calcularEstadoPlan, CLAVE_PLAN_VENCE_EN, LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
 import type {
   LineaVentaResumen,
   RegistrarVentaInput,
@@ -23,6 +24,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
     private readonly bd: BaseDatosLocal,
     private readonly productos: ProductoRepositorio,
     private readonly caja: CajaRepositorio,
+    private readonly configuracion: ConfiguracionRepositorio,
   ) {}
 
   /**
@@ -36,6 +38,13 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
     return this.bd.transaccion(() => {
       if (input.metodoPago === 'fiado' && !input.clienteId) {
         throw new ErrorDeNegocio('Una venta al fiado necesita un cliente.');
+      }
+
+      const estadoPlan = calcularEstadoPlan(this.configuracion.obtenerValor(CLAVE_PLAN_VENCE_EN), hoyLocalSql());
+      if (estadoPlan.tipo === 'gratis' && this.contarTotalHistorico() >= LIMITE_VENTAS_PLAN_GRATIS) {
+        throw new ErrorDeNegocio(
+          `Llegaste al límite de ${LIMITE_VENTAS_PLAN_GRATIS} pedidos del Plan Gratis. Activa Premium para seguir vendiendo.`,
+        );
       }
 
       const calculada = construirVenta(input.lineas, (id) => this.productos.obtenerPorId(id));
@@ -256,7 +265,19 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
     return fila?.total ?? 0;
   }
 
-  listarDetalleParaExportar(): FilaVentaDetallada[] {
+  listarDetalleParaExportar(desde?: string, hasta?: string): FilaVentaDetallada[] {
+    const condicionesFecha: string[] = [];
+    const parametros: string[] = [];
+    if (desde) {
+      condicionesFecha.push('substr(v.fecha_hora, 1, 10) >= ?');
+      parametros.push(desde);
+    }
+    if (hasta) {
+      condicionesFecha.push('substr(v.fecha_hora, 1, 10) <= ?');
+      parametros.push(hasta);
+    }
+    const clausulaFecha = condicionesFecha.length ? ` AND ${condicionesFecha.join(' AND ')}` : '';
+
     return this.bd
       .consultar<{
         id: number;
@@ -281,8 +302,9 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
          JOIN venta v ON v.id = dv.venta_id
          JOIN producto p ON p.id = dv.producto_id
          LEFT JOIN cliente c ON c.id = v.cliente_id
-         WHERE v.anulada = 0
+         WHERE v.anulada = 0${clausulaFecha}
          ORDER BY v.fecha_hora DESC`,
+        parametros,
       )
       .map((fila) => ({
         pedido: `V-${fila.id}`,

@@ -22,13 +22,18 @@ import type {
   VentaListaItem,
 } from './tipos';
 import type { FilaVentaDetallada } from './exportacion';
+import type { EstadoPlan } from './plan';
 
 export interface ProductoRepositorio {
   listarActivos(): Producto[];
+  /** Para la pantalla de administración: incluye también los inactivos. */
+  listarTodos(): Producto[];
   buscarPorNombre(texto: string): Producto[];
   obtenerPorId(id: number): Producto;
   crear(datos: DatosNuevoProducto): Producto;
   actualizarStock(id: number, nuevoStock: number): void;
+  /** Edita los datos del producto, incluyendo si está activo (los inactivos no salen a vender). */
+  actualizar(id: number, datos: DatosActualizarProducto): Producto;
 }
 
 export interface DatosNuevoProducto {
@@ -42,11 +47,33 @@ export interface DatosNuevoProducto {
   unidadMedida: string;
 }
 
+export interface DatosActualizarProducto {
+  nombre: string;
+  categoriaId?: number | null;
+  codigo?: string | null;
+  precioVenta: number;
+  costo: number;
+  stockMinimo: number;
+  unidadMedida: string;
+  activo: boolean;
+}
+
 export interface ClienteRepositorio {
   listarActivos(): Cliente[];
+  /** Para la pantalla de administración: incluye también los inactivos. */
+  listarTodos(): Cliente[];
   buscarPorTexto(texto: string): Cliente[];
   obtenerPorId(id: number): Cliente;
   crear(nombre: string, documento: string, telefono?: string | null): Cliente;
+  /** Edita los datos del cliente, incluyendo si está activo. */
+  actualizar(id: number, datos: DatosActualizarCliente): Cliente;
+}
+
+export interface DatosActualizarCliente {
+  nombre: string;
+  documento: string;
+  telefono?: string | null;
+  activo: boolean;
 }
 
 export interface VentaRepositorio {
@@ -62,8 +89,11 @@ export interface VentaRepositorio {
   resumenDelDia(fechaIso?: string): ResumenDia;
   /** Total histórico de ventas válidas (no anuladas) — para el umbral de Plan Pro. */
   contarTotalHistorico(): number;
-  /** Filas planas (venta + producto + cliente) listas para exportar a CSV. */
-  listarDetalleParaExportar(): FilaVentaDetallada[];
+  /**
+   * Filas planas (venta + producto + cliente) listas para exportar a CSV.
+   * `desde`/`hasta` son fechas 'YYYY-MM-DD' inclusivas; sin ellas, exporta todo el historial.
+   */
+  listarDetalleParaExportar(desde?: string, hasta?: string): FilaVentaDetallada[];
 }
 
 /**
@@ -84,14 +114,32 @@ export interface CajaRepositorio {
 }
 
 export interface FiadoRepositorio {
-  listarClientesConDeuda(): Cliente[];
+  /**
+   * Sin `desde`/`hasta`: todos los clientes con deuda activa hoy (para
+   * la pantalla de Fiados). Con el rango 'YYYY-MM-DD' inclusive: solo
+   * los clientes que generaron algún fiado dentro de ese período (para
+   * exportar), aunque el saldo mostrado siempre es el saldo actual.
+   */
+  listarClientesConDeuda(desde?: string, hasta?: string): Cliente[];
   registrarPago(clienteId: number, monto: number, metodoPago: MetodoPagoSinFiado): void;
 }
 
 export interface ProveedorRepositorio {
   listarActivos(): Proveedor[];
+  /** Para la pantalla de administración: incluye también los inactivos. */
+  listarTodos(): Proveedor[];
+  buscarPorTexto(texto: string): Proveedor[];
   obtenerPorId(id: number): Proveedor;
-  crear(nombre: string, telefono?: string | null): Proveedor;
+  crear(nombre: string, ruc?: string | null, telefono?: string | null): Proveedor;
+  /** Edita los datos del proveedor, incluyendo si está activo. */
+  actualizar(id: number, datos: DatosActualizarProveedor): Proveedor;
+}
+
+export interface DatosActualizarProveedor {
+  nombre: string;
+  ruc?: string | null;
+  telefono?: string | null;
+  activo: boolean;
 }
 
 export interface LineaCompraEntrada {
@@ -102,6 +150,10 @@ export interface LineaCompraEntrada {
 
 export interface RegistrarCompraInput {
   proveedorId?: number | null;
+  /** Nombre escrito al vuelo, usado solo si no se eligió proveedorId. */
+  proveedorNombreLibre?: string | null;
+  /** Serie-número del comprobante, libre, hasta 15 caracteres. */
+  comprobante?: string | null;
   lineas: LineaCompraEntrada[];
   metodoPago: MetodoPagoSinFiado;
 }
@@ -115,4 +167,28 @@ export interface CompraRepositorio {
    */
   registrarCompra(input: RegistrarCompraInput): Compra;
   listarRecientes(limite?: number): Compra[];
+}
+
+/** Acceso crudo clave-valor a la tabla configuracion_app. */
+export interface ConfiguracionRepositorio {
+  obtenerValor(clave: string): string | null;
+  establecerValor(clave: string, valor: string): void;
+  eliminarValor(clave: string): void;
+}
+
+/**
+ * Panel de administrador: activar/desactivar Premium y proteger todo
+ * eso con un PIN que solo conoce el dueño de la app (nunca se guarda
+ * en texto plano, solo su hash).
+ */
+export interface PlanRepositorio {
+  obtenerEstado(): EstadoPlan;
+  /** `dias` puede ser cualquiera de los presets o un número libre entre 1 y 365. */
+  activarPremium(dias: number): void;
+  desactivarPremium(): void;
+  tienePinConfigurado(): boolean;
+  configurarPin(pinNuevo: string): Promise<void>;
+  verificarPin(pin: string): Promise<boolean>;
+  /** Devuelve false (sin cambiar nada) si pinActual no es correcto. */
+  cambiarPin(pinActual: string, pinNuevo: string): Promise<boolean>;
 }

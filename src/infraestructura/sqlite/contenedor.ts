@@ -6,6 +6,8 @@ import { CajaRepositorioSqlite } from './caja.repositorio';
 import { FiadoRepositorioSqlite } from './fiado.repositorio';
 import { ProveedorRepositorioSqlite } from './proveedor.repositorio';
 import { CompraRepositorioSqlite } from './compra.repositorio';
+import { ConfiguracionRepositorioSqlite } from './configuracion.repositorio';
+import { PlanRepositorioSqlite } from './plan.repositorio';
 import { cargarBinario, guardarBinario } from '../persistencia/almacen-indexeddb';
 
 const CLAVE_PERSISTENCIA = 'bodega-facil-db';
@@ -18,6 +20,7 @@ export interface ContenedorRepositorios {
   fiados: FiadoRepositorioSqlite;
   proveedores: ProveedorRepositorioSqlite;
   compras: CompraRepositorioSqlite;
+  plan: PlanRepositorioSqlite;
   /** Guarda el estado actual de la base en IndexedDB. Llamar tras cada escritura. */
   persistir: () => Promise<void>;
   /** Bytes completos de la base, para el respaldo descargable (.sqlite). */
@@ -46,13 +49,15 @@ async function inicializar(): Promise<ContenedorRepositorios> {
     datosPrevios,
   });
 
+  const configuracion = new ConfiguracionRepositorioSqlite(bd);
   const productos = new ProductoRepositorioSqlite(bd);
   const clientes = new ClienteRepositorioSqlite(bd);
   const caja = new CajaRepositorioSqlite(bd);
-  const ventas = new VentaRepositorioSqlite(bd, productos, caja);
+  const ventas = new VentaRepositorioSqlite(bd, productos, caja, configuracion);
   const fiados = new FiadoRepositorioSqlite(bd, caja);
   const proveedores = new ProveedorRepositorioSqlite(bd);
   const compras = new CompraRepositorioSqlite(bd, productos, caja);
+  const plan = new PlanRepositorioSqlite(configuracion);
 
   const persistir = () => guardarBinario(CLAVE_PERSISTENCIA, bd.exportar());
 
@@ -69,6 +74,7 @@ async function inicializar(): Promise<ContenedorRepositorios> {
     fiados,
     proveedores,
     compras,
+    plan,
     persistir,
     exportarRespaldoCompleto: () => bd.exportar(),
   };
@@ -77,7 +83,7 @@ async function inicializar(): Promise<ContenedorRepositorios> {
 /**
  * Sobrescribe la base local con un respaldo (.sqlite) y recarga la
  * página. Antes de guardar, valida que el archivo sea realmente una
- * base de Bodega Fácil (evita dejar la app rota si suben un archivo
+ * base de Venta Fácil (evita dejar la app rota si suben un archivo
  * cualquiera). Se recarga en vez de reasignar en caliente porque todos
  * los repositorios ya instanciados quedarían apuntando a la base
  * vieja; un reload es más simple y a prueba de errores.
@@ -91,7 +97,7 @@ export async function restaurarRespaldo(datos: Uint8Array): Promise<void> {
     });
     bdDePrueba.consultar('SELECT id FROM producto LIMIT 1');
   } catch {
-    throw new Error('El archivo no es un respaldo válido de Bodega Fácil.');
+    throw new Error('El archivo no es un respaldo válido de Venta Fácil.');
   }
 
   await guardarBinario(CLAVE_PERSISTENCIA, datos);

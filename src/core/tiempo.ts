@@ -29,3 +29,25 @@ export function ahoraLocalSql(fecha: Date = new Date()): string {
 export function hoyLocalSql(fecha: Date = new Date()): string {
   return `${fecha.getFullYear()}-${dosDigitos(fecha.getMonth() + 1)}-${dosDigitos(fecha.getDate())}`;
 }
+
+/** Suma `dias` días a la fecha local de hoy y devuelve 'YYYY-MM-DD'. */
+export function sumarDiasLocalSql(dias: number, desde: Date = new Date()): string {
+  const resultado = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate() + dias);
+  return hoyLocalSql(resultado);
+}
+
+/**
+ * Diferencia en días de calendario entre dos fechas 'YYYY-MM-DD'
+ * (hasta - desde). Se parsean como fecha local a mediodía para
+ * evitar que un cambio de horario de verano corra el resultado en
+ * un día (Perú no tiene DST, pero esto lo hace robusto igual).
+ */
+export function diferenciaEnDiasSql(desde: string, hasta: string): number {
+  const partesDesde = desde.split('-').map(Number);
+  const partesHasta = hasta.split('-').map(Number);
+  const [añoD = 0, mesD = 1, diaD = 1] = partesDesde;
+  const [añoH = 0, mesH = 1, diaH = 1] = partesHasta;
+  const fechaDesde = new Date(añoD, mesD - 1, diaD, 12);
+  const fechaHasta = new Date(añoH, mesH - 1, diaH, 12);
+  return Math.round((fechaHasta.getTime() - fechaDesde.getTime()) / (1000 * 60 * 60 * 24));
+}

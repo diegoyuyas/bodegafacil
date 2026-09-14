@@ -214,6 +214,38 @@ export function validarDocumentoIdentidad(documento: string): void {
 }
 
 // ------------------------------------------------------------
+// Proveedores
+// ------------------------------------------------------------
+
+const PATRON_RUC = /^[A-Za-z0-9]{1,15}$/;
+const PATRON_CELULAR = /^[0-9]{6,12}$/;
+
+/** El RUC es opcional; cuando se da, hasta 15 caracteres alfanuméricos. */
+export function validarRuc(ruc: string): void {
+  if (!PATRON_RUC.test(ruc)) {
+    throw new ErrorDeNegocio('El RUC debe ser alfanumérico, de hasta 15 caracteres.');
+  }
+}
+
+/**
+ * El celular es opcional; cuando se da, solo dígitos, entre 6 y 12.
+ * No se exige una cantidad exacta: hay proveedores con fijo, anexo,
+ * u otros formatos que no son el celular móvil típico de 9 dígitos.
+ */
+export function validarCelular(celular: string): void {
+  if (!PATRON_CELULAR.test(celular)) {
+    throw new ErrorDeNegocio('El celular debe tener solo números, entre 6 y 12 dígitos.');
+  }
+}
+
+/** El comprobante es opcional y libre (ej: "F001-00000010"), hasta 15 caracteres. */
+export function validarComprobante(comprobante: string): void {
+  if (comprobante.length > 15) {
+    throw new ErrorDeNegocio('El comprobante debe tener hasta 15 caracteres.');
+  }
+}
+
+// ------------------------------------------------------------
 // Utilidades
 // ------------------------------------------------------------
 

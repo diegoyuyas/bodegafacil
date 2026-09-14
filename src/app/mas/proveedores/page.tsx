@@ -4,56 +4,57 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
-import type { Cliente } from '@/core/tipos';
+import type { Proveedor } from '@/core/tipos';
 
-export default function PaginaClientes() {
+export default function PaginaProveedores() {
   const { contenedor, cargando, error } = usarContenedor();
-  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [nombre, setNombre] = useState('');
-  const [documento, setDocumento] = useState('');
-  const [telefono, setTelefono] = useState('');
+  const [ruc, setRuc] = useState('');
+  const [celular, setCelular] = useState('');
   const [mensajeError, setMensajeError] = useState<string | null>(null);
 
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [nombreEdit, setNombreEdit] = useState('');
-  const [documentoEdit, setDocumentoEdit] = useState('');
-  const [telefonoEdit, setTelefonoEdit] = useState('');
+  const [rucEdit, setRucEdit] = useState('');
+  const [celularEdit, setCelularEdit] = useState('');
   const [activoEdit, setActivoEdit] = useState(true);
   const [mensajeErrorEdit, setMensajeErrorEdit] = useState<string | null>(null);
 
   function recargar() {
-    if (contenedor) setClientes(contenedor.clientes.listarTodos());
+    if (contenedor) setProveedores(contenedor.proveedores.listarTodos());
   }
 
   useEffect(recargar, [contenedor]);
 
-  const documentoValido = /^[A-Za-z0-9]{1,15}$/.test(documento.trim());
-  const formularioValido = nombre.trim().length > 0 && documentoValido;
+  const rucValido = ruc.trim() === '' || /^[A-Za-z0-9]{1,15}$/.test(ruc.trim());
+  const celularValido = celular.trim() === '' || /^[0-9]{6,12}$/.test(celular.trim());
+  const formularioValido = nombre.trim().length > 0 && rucValido && celularValido;
 
-  async function guardarCliente() {
+  async function guardarProveedor() {
     if (!contenedor) return;
     setMensajeError(null);
     try {
-      contenedor.clientes.crear(nombre.trim(), documento.trim(), telefono.trim() || null);
+      contenedor.proveedores.crear(nombre.trim(), ruc.trim() || null, celular.trim() || null);
       await contenedor.persistir();
       setNombre('');
-      setDocumento('');
-      setTelefono('');
+      setRuc('');
+      setCelular('');
       setMostrarFormulario(false);
       recargar();
     } catch (e) {
-      setMensajeError(e instanceof ErrorDeNegocio ? e.message : 'No se pudo guardar el cliente.');
+      setMensajeError(e instanceof ErrorDeNegocio ? e.message : 'No se pudo guardar el proveedor.');
     }
   }
 
-  function abrirEdicion(cliente: Cliente) {
+  function abrirEdicion(proveedor: Proveedor) {
     setMostrarFormulario(false);
-    setEditandoId(cliente.id);
-    setNombreEdit(cliente.nombre);
-    setDocumentoEdit(cliente.documento ?? '');
-    setTelefonoEdit(cliente.telefono ?? '');
-    setActivoEdit(cliente.activo);
+    setEditandoId(proveedor.id);
+    setNombreEdit(proveedor.nombre);
+    setRucEdit(proveedor.ruc ?? '');
+    setCelularEdit(proveedor.telefono ?? '');
+    setActivoEdit(proveedor.activo);
     setMensajeErrorEdit(null);
   }
 
@@ -62,24 +63,25 @@ export default function PaginaClientes() {
     setMensajeErrorEdit(null);
   }
 
-  const documentoEditValido = /^[A-Za-z0-9]{1,15}$/.test(documentoEdit.trim());
-  const formularioEditValido = nombreEdit.trim().length > 0 && documentoEditValido;
+  const rucEditValido = rucEdit.trim() === '' || /^[A-Za-z0-9]{1,15}$/.test(rucEdit.trim());
+  const celularEditValido = celularEdit.trim() === '' || /^[0-9]{6,12}$/.test(celularEdit.trim());
+  const formularioEditValido = nombreEdit.trim().length > 0 && rucEditValido && celularEditValido;
 
   async function guardarEdicion() {
     if (!contenedor || editandoId === null) return;
     setMensajeErrorEdit(null);
     try {
-      contenedor.clientes.actualizar(editandoId, {
+      contenedor.proveedores.actualizar(editandoId, {
         nombre: nombreEdit.trim(),
-        documento: documentoEdit.trim(),
-        telefono: telefonoEdit.trim() || null,
+        ruc: rucEdit.trim() || null,
+        telefono: celularEdit.trim() || null,
         activo: activoEdit,
       });
       await contenedor.persistir();
       setEditandoId(null);
       recargar();
     } catch (e) {
-      setMensajeErrorEdit(e instanceof ErrorDeNegocio ? e.message : 'No se pudo guardar el cliente.');
+      setMensajeErrorEdit(e instanceof ErrorDeNegocio ? e.message : 'No se pudo guardar el proveedor.');
     }
   }
 
@@ -89,7 +91,7 @@ export default function PaginaClientes() {
         <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver">
           ←
         </Link>
-        <h1 className="flex-1 text-lg font-extrabold text-bodega-oscuro">Clientes</h1>
+        <h1 className="flex-1 text-lg font-extrabold text-bodega-oscuro">Proveedores</h1>
         <button
           onClick={() => {
             setEditandoId(null);
@@ -106,36 +108,37 @@ export default function PaginaClientes() {
           <input
             value={nombre}
             onChange={(e) => setNombre(e.target.value)}
-            placeholder="Nombre completo (ej: Diego Carrasco)"
+            placeholder="Nombre del proveedor"
             className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
           />
           <div>
             <input
-              value={documento}
-              onChange={(e) => setDocumento(e.target.value)}
-              placeholder="Documento (hasta 15 caracteres, ej: 12345678)"
+              value={ruc}
+              onChange={(e) => setRuc(e.target.value)}
+              placeholder="RUC (opcional, hasta 15 caracteres)"
               maxLength={15}
               className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
             />
-            {documento.length > 0 && !documentoValido && (
-              <p className="mt-1 text-xs text-alerta">
-                Solo letras y números, hasta 15 caracteres ({documento.trim().length}/15)
-              </p>
-            )}
+            {!rucValido && <p className="mt-1 text-xs text-alerta">Solo letras y números, hasta 15 caracteres.</p>}
           </div>
-          <input
-            value={telefono}
-            onChange={(e) => setTelefono(e.target.value)}
-            placeholder="Teléfono (opcional)"
-            className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
-          />
+          <div>
+            <input
+              value={celular}
+              onChange={(e) => setCelular(e.target.value)}
+              inputMode="numeric"
+              placeholder="Celular (opcional)"
+              maxLength={12}
+              className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+            />
+            {!celularValido && <p className="mt-1 text-xs text-alerta">Solo números, entre 6 y 12 dígitos.</p>}
+          </div>
           {mensajeError && <p className="text-sm text-alerta">{mensajeError}</p>}
           <button
-            onClick={guardarCliente}
+            onClick={guardarProveedor}
             disabled={!formularioValido}
             className="h-11 w-full rounded-lg bg-bodega text-sm font-semibold text-white disabled:opacity-40"
           >
-            Guardar cliente
+            Guardar proveedor
           </button>
         </section>
       )}
@@ -144,71 +147,73 @@ export default function PaginaClientes() {
         {cargando && <p className="text-sm text-tinta/60">Cargando…</p>}
         {error && <p className="text-sm text-alerta">{error.message}</p>}
 
-        {!cargando && clientes.length === 0 && (
+        {!cargando && proveedores.length === 0 && (
           <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
-            Todavía no tienes clientes guardados. Agrega el primero arriba.
+            Todavía no tienes proveedores guardados. Agrega el primero arriba.
           </p>
         )}
 
         <ul className="divide-y divide-linea border-y border-linea">
-          {clientes.map((cliente) => (
-            <li key={cliente.id} className="py-3">
+          {proveedores.map((proveedor) => (
+            <li key={proveedor.id} className="py-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-sm text-tinta">
-                    {cliente.nombre}
-                    {!cliente.activo && (
+                    {proveedor.nombre}
+                    {!proveedor.activo && (
                       <span className="ml-2 rounded-full bg-alerta/10 px-2 py-0.5 text-xs font-semibold text-alerta">
                         Inactivo
                       </span>
                     )}
                   </p>
                   <p className="text-xs text-tinta/50">
-                    {cliente.documento ?? 'Sin documento'}
-                    {cliente.telefono && ` · ${cliente.telefono}`}
-                    {cliente.saldoPendiente > 0 && (
-                      <span className="text-alerta"> · Debe S/ {cliente.saldoPendiente.toFixed(2)}</span>
-                    )}
+                    {proveedor.ruc ? `RUC ${proveedor.ruc}` : 'Sin RUC'}
+                    {proveedor.telefono && ` · ${proveedor.telefono}`}
                   </p>
                 </div>
                 <button
                   onClick={() =>
-                    editandoId === cliente.id ? cancelarEdicion() : abrirEdicion(cliente)
+                    editandoId === proveedor.id ? cancelarEdicion() : abrirEdicion(proveedor)
                   }
                   className="shrink-0 text-sm font-semibold text-bodega-oscuro"
                 >
-                  {editandoId === cliente.id ? 'Cancelar' : 'Editar'}
+                  {editandoId === proveedor.id ? 'Cancelar' : 'Editar'}
                 </button>
               </div>
 
-              {editandoId === cliente.id && (
+              {editandoId === proveedor.id && (
                 <div className="mt-3 space-y-3 rounded-xl border border-linea p-4">
                   <input
                     value={nombreEdit}
                     onChange={(e) => setNombreEdit(e.target.value)}
-                    placeholder="Nombre completo"
+                    placeholder="Nombre del proveedor"
                     className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
                   />
                   <div>
                     <input
-                      value={documentoEdit}
-                      onChange={(e) => setDocumentoEdit(e.target.value)}
-                      placeholder="Documento (hasta 15 caracteres)"
+                      value={rucEdit}
+                      onChange={(e) => setRucEdit(e.target.value)}
+                      placeholder="RUC (opcional, hasta 15 caracteres)"
                       maxLength={15}
                       className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
                     />
-                    {documentoEdit.length > 0 && !documentoEditValido && (
-                      <p className="mt-1 text-xs text-alerta">
-                        Solo letras y números, hasta 15 caracteres ({documentoEdit.trim().length}/15)
-                      </p>
+                    {!rucEditValido && (
+                      <p className="mt-1 text-xs text-alerta">Solo letras y números, hasta 15 caracteres.</p>
                     )}
                   </div>
-                  <input
-                    value={telefonoEdit}
-                    onChange={(e) => setTelefonoEdit(e.target.value)}
-                    placeholder="Teléfono (opcional)"
-                    className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
-                  />
+                  <div>
+                    <input
+                      value={celularEdit}
+                      onChange={(e) => setCelularEdit(e.target.value)}
+                      inputMode="numeric"
+                      placeholder="Celular (opcional)"
+                      maxLength={12}
+                      className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+                    />
+                    {!celularEditValido && (
+                      <p className="mt-1 text-xs text-alerta">Solo números, entre 6 y 12 dígitos.</p>
+                    )}
+                  </div>
                   <div>
                     <label className="mb-1 block text-xs text-tinta/50">Estado</label>
                     <select

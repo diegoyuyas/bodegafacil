@@ -3,14 +3,14 @@ import { RegistrarServiceWorker } from '@/components/registrar-service-worker';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Bodega Fácil',
+  title: 'Venta Fácil',
   description:
     'Registra tus ventas, controla tu caja, sabe qué tienes, qué te deben y qué necesitas comprar — sin depender de internet.',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Bodega Fácil',
+    title: 'Venta Fácil',
   },
 };
 

@@ -16,6 +16,10 @@ const MIGRACIONES: string[] = [
   // 0001: campo documento de identidad en cliente (Nombre + DNI/CE).
   `ALTER TABLE cliente ADD COLUMN documento TEXT;`,
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_cliente_documento ON cliente(documento) WHERE documento IS NOT NULL;`,
+  // 0002: RUC en proveedor, y proveedor "al vuelo" + comprobante en compra.
+  `ALTER TABLE proveedor ADD COLUMN ruc TEXT;`,
+  `ALTER TABLE compra ADD COLUMN proveedor_nombre_libre TEXT;`,
+  `ALTER TABLE compra ADD COLUMN comprobante TEXT;`,
 ];
 
 export function aplicarMigraciones(bd: BaseDatosLocal): void {

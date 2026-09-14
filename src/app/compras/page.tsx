@@ -26,12 +26,19 @@ export default function PaginaCompras() {
   const { contenedor, cargando, error } = usarContenedor();
 
   const [productos, setProductos] = useState<Producto[]>([]);
-  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [texto, setTexto] = useState('');
   const [carrito, setCarrito] = useState<LineaCarritoCompra[]>([]);
-  const [proveedorId, setProveedorId] = useState<number | null>(null);
-  const [nombreProveedorNuevo, setNombreProveedorNuevo] = useState('');
   const [metodoPago, setMetodoPago] = useState<MetodoPagoSinFiado>('efectivo');
+
+  // Proveedor: buscar uno guardado (por RUC, nombre o celular) o
+  // simplemente escribir un nombre al vuelo, sin guardarlo.
+  const [busquedaProveedor, setBusquedaProveedor] = useState('');
+  const [proveedoresEncontrados, setProveedoresEncontrados] = useState<Proveedor[]>([]);
+  const [proveedorSeleccionado, setProveedorSeleccionado] = useState<Proveedor | null>(null);
+  const [proveedorNombreLibre, setProveedorNombreLibre] = useState('');
+
+  const [comprobante, setComprobante] = useState('');
+
   const [mensajeError, setMensajeError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [totalGuardado, setTotalGuardado] = useState<number | null>(null);
@@ -39,8 +46,15 @@ export default function PaginaCompras() {
   useEffect(() => {
     if (!contenedor) return;
     setProductos(contenedor.productos.listarActivos());
-    setProveedores(contenedor.proveedores.listarActivos());
   }, [contenedor]);
+
+  useEffect(() => {
+    if (!contenedor || !busquedaProveedor.trim()) {
+      setProveedoresEncontrados([]);
+      return;
+    }
+    setProveedoresEncontrados(contenedor.proveedores.buscarPorTexto(busquedaProveedor));
+  }, [contenedor, busquedaProveedor]);
 
   const resultadosBusqueda = useMemo(() => {
     if (!texto.trim()) return [];
@@ -74,13 +88,11 @@ export default function PaginaCompras() {
     setCarrito((actual) => actual.filter((l) => l.productoId !== productoId));
   }
 
-  async function crearProveedorRapido() {
-    if (!contenedor || !nombreProveedorNuevo.trim()) return;
-    const nuevo = contenedor.proveedores.crear(nombreProveedorNuevo.trim());
-    await contenedor.persistir();
-    setProveedores((actual) => [...actual, nuevo]);
-    setProveedorId(nuevo.id);
-    setNombreProveedorNuevo('');
+  function seleccionarProveedor(proveedor: Proveedor) {
+    setProveedorSeleccionado(proveedor);
+    setProveedorNombreLibre('');
+    setBusquedaProveedor('');
+    setProveedoresEncontrados([]);
   }
 
   async function confirmarCompra() {
@@ -89,7 +101,9 @@ export default function PaginaCompras() {
     setGuardando(true);
     try {
       const compra = contenedor.compras.registrarCompra({
-        proveedorId,
+        proveedorId: proveedorSeleccionado?.id ?? null,
+        proveedorNombreLibre: proveedorSeleccionado ? null : proveedorNombreLibre.trim() || null,
+        comprobante: comprobante.trim() || null,
         metodoPago,
         lineas: carrito.map(({ productoId, cantidad, costoUnitario }) => ({
           productoId,
@@ -100,6 +114,9 @@ export default function PaginaCompras() {
       await contenedor.persistir();
       setTotalGuardado(compra.total);
       setCarrito([]);
+      setProveedorSeleccionado(null);
+      setProveedorNombreLibre('');
+      setComprobante('');
       setProductos(contenedor.productos.listarActivos());
     } catch (e) {
       setMensajeError(e instanceof ErrorDeNegocio ? e.message : 'No se pudo guardar la compra.');
@@ -237,36 +254,83 @@ export default function PaginaCompras() {
         )}
       </section>
 
-      {/* Proveedor (opcional) */}
+      {/* Proveedor: buscar uno guardado, o escribir cualquier nombre */}
       <section className="mt-6">
         <p className="text-sm text-tinta/60">Proveedor (opcional)</p>
-        <select
-          value={proveedorId ?? ''}
-          onChange={(e) => setProveedorId(e.target.value ? Number(e.target.value) : null)}
-          className="mt-2 h-11 w-full rounded-xl border border-linea bg-white px-3 text-sm"
-        >
-          <option value="">Sin especificar</option>
-          {proveedores.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.nombre}
-            </option>
-          ))}
-        </select>
-        <div className="mt-2 flex gap-2">
-          <input
-            value={nombreProveedorNuevo}
-            onChange={(e) => setNombreProveedorNuevo(e.target.value)}
-            placeholder="O escribe un proveedor nuevo…"
-            className="h-10 flex-1 rounded-xl border border-linea bg-white px-3 text-sm"
-          />
-          <button
-            onClick={crearProveedorRapido}
-            disabled={!nombreProveedorNuevo.trim()}
-            className="h-10 rounded-xl border border-linea px-3 text-sm font-semibold text-bodega-oscuro disabled:opacity-40"
-          >
-            Agregar
-          </button>
-        </div>
+
+        {proveedorSeleccionado ? (
+          <div className="mt-2 flex items-center justify-between rounded-xl border border-linea bg-white px-4 py-3">
+            <div>
+              <p className="text-sm text-tinta">{proveedorSeleccionado.nombre}</p>
+              <p className="text-xs text-tinta/50">
+                {proveedorSeleccionado.ruc ? `RUC ${proveedorSeleccionado.ruc}` : 'Sin RUC'}
+                {proveedorSeleccionado.telefono && ` · ${proveedorSeleccionado.telefono}`}
+              </p>
+            </div>
+            <button
+              onClick={() => setProveedorSeleccionado(null)}
+              className="text-tinta/40"
+              aria-label="Quitar proveedor"
+            >
+              ✕
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="relative mt-2">
+              <input
+                value={busquedaProveedor}
+                onChange={(e) => setBusquedaProveedor(e.target.value)}
+                placeholder="Buscar por RUC, nombre o celular…"
+                className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+              />
+              {proveedoresEncontrados.length > 0 && (
+                <ul className="absolute inset-x-0 top-full z-10 mt-1 max-h-56 overflow-y-auto rounded-xl border border-linea bg-white shadow-sm">
+                  {proveedoresEncontrados.map((proveedor) => (
+                    <li key={proveedor.id}>
+                      <button
+                        onClick={() => seleccionarProveedor(proveedor)}
+                        className="flex w-full flex-col items-start px-4 py-2 text-left text-sm"
+                      >
+                        <span>{proveedor.nombre}</span>
+                        <span className="text-xs text-tinta/50">
+                          {proveedor.ruc ? `RUC ${proveedor.ruc}` : 'Sin RUC'}
+                          {proveedor.telefono && ` · ${proveedor.telefono}`}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <input
+              value={proveedorNombreLibre}
+              onChange={(e) => setProveedorNombreLibre(e.target.value)}
+              placeholder="O escribe cualquier nombre de proveedor (no se guarda)"
+              className="mt-2 h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+            />
+            <p className="mt-2 text-xs text-tinta/40">
+              ¿Vas a comprarle seguido? Guárdalo en{' '}
+              <Link href="/mas/proveedores" className="underline">
+                Más → Proveedores
+              </Link>{' '}
+              para poder buscarlo la próxima vez.
+            </p>
+          </>
+        )}
+      </section>
+
+      {/* Comprobante (opcional) */}
+      <section className="mt-6">
+        <p className="text-sm text-tinta/60">Comprobante (opcional)</p>
+        <input
+          value={comprobante}
+          onChange={(e) => setComprobante(e.target.value)}
+          placeholder="Ej: F001-00000010"
+          maxLength={15}
+          className="mt-2 h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+        />
       </section>
 
       {/* Método de pago */}

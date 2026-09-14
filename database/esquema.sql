@@ -145,20 +145,23 @@ CREATE INDEX idx_movimiento_caja_tipo  ON movimiento_caja(tipo);
 CREATE TABLE proveedor (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     nombre      TEXT NOT NULL,
+    ruc         TEXT,                  -- opcional, hasta 15 caracteres alfanuméricos
     contacto    TEXT,
-    telefono    TEXT,
+    telefono    TEXT,                  -- celular u otro teléfono, opcional, entre 6 y 12 dígitos
     direccion   TEXT,
     activo      INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE compra (
-    id              INTEGER PRIMARY KEY AUTOINCREMENT,
-    proveedor_id    INTEGER REFERENCES proveedor(id) ON DELETE SET NULL,
-    fecha           TEXT NOT NULL DEFAULT (datetime('now')),
-    total           REAL NOT NULL CHECK (total >= 0),
-    estado          TEXT NOT NULL DEFAULT 'recibida'
-                        CHECK (estado IN ('pendiente','recibida','anulada')),
-    nota            TEXT
+    id                          INTEGER PRIMARY KEY AUTOINCREMENT,
+    proveedor_id                INTEGER REFERENCES proveedor(id) ON DELETE SET NULL,
+    proveedor_nombre_libre      TEXT,      -- proveedor "al vuelo", sin guardar como registro
+    comprobante                 TEXT,      -- serie-número libre, ej: F001-00000010 (hasta 15 caracteres)
+    fecha                       TEXT NOT NULL DEFAULT (datetime('now')),
+    total                       REAL NOT NULL CHECK (total >= 0),
+    estado                      TEXT NOT NULL DEFAULT 'recibida'
+                                    CHECK (estado IN ('pendiente','recibida','anulada')),
+    nota                        TEXT
 );
 
 CREATE INDEX idx_compra_proveedor ON compra(proveedor_id);

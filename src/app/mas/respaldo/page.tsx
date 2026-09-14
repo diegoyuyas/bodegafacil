@@ -17,9 +17,15 @@ export default function PaginaRespaldo() {
   const [restaurando, setRestaurando] = useState(false);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
 
+  const [desde, setDesde] = useState('');
+  const [hasta, setHasta] = useState('');
+  const rangoInvalido = Boolean(desde && hasta && desde > hasta);
+
   function exportarVentas() {
-    if (!contenedor) return;
-    const csv = exportarVentasACsv(contenedor.ventas.listarDetalleParaExportar());
+    if (!contenedor || rangoInvalido) return;
+    const csv = exportarVentasACsv(
+      contenedor.ventas.listarDetalleParaExportar(desde || undefined, hasta || undefined),
+    );
     descargarTexto(`ventas-${fechaParaNombreArchivo()}.csv`, csv);
   }
 
@@ -30,15 +36,17 @@ export default function PaginaRespaldo() {
   }
 
   function exportarFiados() {
-    if (!contenedor) return;
-    const csv = exportarFiadosACsv(contenedor.fiados.listarClientesConDeuda());
+    if (!contenedor || rangoInvalido) return;
+    const csv = exportarFiadosACsv(
+      contenedor.fiados.listarClientesConDeuda(desde || undefined, hasta || undefined),
+    );
     descargarTexto(`fiados-${fechaParaNombreArchivo()}.csv`, csv);
   }
 
   function descargarRespaldoCompleto() {
     if (!contenedor) return;
     const bytes = contenedor.exportarRespaldoCompleto();
-    descargarBinario(`bodega-facil-respaldo-${fechaParaNombreArchivo()}.sqlite`, bytes);
+    descargarBinario(`venta-facil-respaldo-${fechaParaNombreArchivo()}.sqlite`, bytes);
   }
 
   async function manejarArchivoSeleccionado(archivos: FileList | null) {
@@ -81,10 +89,56 @@ export default function PaginaRespaldo() {
         <p className="mt-1 text-xs text-tinta/50">
           Ábrelos en Excel, Google Sheets o cualquier programa de hojas de cálculo.
         </p>
+
+        <div className="mt-3 rounded-xl border border-linea p-3">
+          <p className="text-xs font-semibold text-tinta/70">Rango de fechas (opcional)</p>
+          <p className="mt-1 text-xs text-tinta/50">
+            Filtra el Historial de ventas y los Fiados pendientes — por ejemplo, para ver un mes
+            completo. No afecta a Productos e inventario, que siempre muestra el stock actual.
+          </p>
+          <div className="mt-2 flex gap-2">
+            <div className="flex-1">
+              <label className="mb-1 block text-xs text-tinta/50">Desde</label>
+              <input
+                type="date"
+                value={desde}
+                onChange={(e) => setDesde(e.target.value)}
+                max={hasta || undefined}
+                className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="mb-1 block text-xs text-tinta/50">Hasta</label>
+              <input
+                type="date"
+                value={hasta}
+                onChange={(e) => setHasta(e.target.value)}
+                min={desde || undefined}
+                className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
+              />
+            </div>
+          </div>
+          {rangoInvalido && (
+            <p className="mt-2 text-xs text-alerta">La fecha "desde" no puede ser posterior a "hasta".</p>
+          )}
+          {(desde || hasta) && !rangoInvalido && (
+            <button
+              onClick={() => {
+                setDesde('');
+                setHasta('');
+              }}
+              className="mt-2 text-xs font-semibold text-bodega-oscuro"
+            >
+              Quitar filtro de fechas
+            </button>
+          )}
+        </div>
+
         <div className="mt-3 space-y-2">
           <button
             onClick={exportarVentas}
-            className="flex h-12 w-full items-center justify-between rounded-xl border border-linea px-4 text-sm font-medium text-tinta"
+            disabled={rangoInvalido}
+            className="flex h-12 w-full items-center justify-between rounded-xl border border-linea px-4 text-sm font-medium text-tinta disabled:opacity-40"
           >
             Historial de ventas <span className="text-tinta/40">↓</span>
           </button>
@@ -96,7 +150,8 @@ export default function PaginaRespaldo() {
           </button>
           <button
             onClick={exportarFiados}
-            className="flex h-12 w-full items-center justify-between rounded-xl border border-linea px-4 text-sm font-medium text-tinta"
+            disabled={rangoInvalido}
+            className="flex h-12 w-full items-center justify-between rounded-xl border border-linea px-4 text-sm font-medium text-tinta disabled:opacity-40"
           >
             Fiados pendientes <span className="text-tinta/40">↓</span>
           </button>

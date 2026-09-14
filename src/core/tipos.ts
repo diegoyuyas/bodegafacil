@@ -109,15 +109,18 @@ export interface MovimientoCaja {
 export interface Proveedor {
   id: number;
   nombre: string;
-  contacto: string | null;
+  ruc: string | null;
   telefono: string | null;
-  direccion: string | null;
   activo: boolean;
 }
 
 export interface Compra {
   id: number;
   proveedorId: number | null;
+  /** Nombre escrito al vuelo cuando no se elige un proveedor guardado. */
+  proveedorNombreLibre: string | null;
+  /** Serie-número del comprobante, libre, hasta 15 caracteres (ej: F001-00000010). */
+  comprobante: string | null;
   fecha: string;
   total: number;
   estado: EstadoCompra;

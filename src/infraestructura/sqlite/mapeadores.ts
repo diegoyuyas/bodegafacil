@@ -116,9 +116,8 @@ export function mapearVenta(fila: FilaVenta): Venta {
 export interface FilaProveedor {
   id: number;
   nombre: string;
-  contacto: string | null;
+  ruc: string | null;
   telefono: string | null;
-  direccion: string | null;
   activo: number;
 }
 
@@ -126,9 +125,8 @@ export function mapearProveedor(fila: FilaProveedor): Proveedor {
   return {
     id: fila.id,
     nombre: fila.nombre,
-    contacto: fila.contacto,
+    ruc: fila.ruc,
     telefono: fila.telefono,
-    direccion: fila.direccion,
     activo: fila.activo === 1,
   };
 }
@@ -136,6 +134,8 @@ export function mapearProveedor(fila: FilaProveedor): Proveedor {
 export interface FilaCompra {
   id: number;
   proveedor_id: number | null;
+  proveedor_nombre_libre: string | null;
+  comprobante: string | null;
   fecha: string;
   total: number;
   estado: Compra['estado'];
@@ -146,6 +146,8 @@ export function mapearCompra(fila: FilaCompra): Compra {
   return {
     id: fila.id,
     proveedorId: fila.proveedor_id,
+    proveedorNombreLibre: fila.proveedor_nombre_libre,
+    comprobante: fila.comprobante,
     fecha: fila.fecha,
     total: fila.total,
     estado: fila.estado,

@@ -4,7 +4,7 @@ import type {
   ProductoRepositorio,
   RegistrarCompraInput,
 } from '@/core/repositorios';
-import { ErrorDeNegocio, calcularStockNuevo, redondear } from '@/core/reglas-negocio';
+import { ErrorDeNegocio, calcularStockNuevo, redondear, validarComprobante } from '@/core/reglas-negocio';
 import type { Compra } from '@/core/tipos';
 import type { BaseDatosLocal } from './base-datos';
 import { mapearCompra, type FilaCompra } from './mapeadores';
@@ -20,6 +20,9 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
     if (input.lineas.length === 0) {
       throw new ErrorDeNegocio('Una compra debe tener al menos un producto.');
     }
+    if (input.comprobante) {
+      validarComprobante(input.comprobante);
+    }
 
     return this.bd.transaccion(() => {
       const total = redondear(
@@ -27,8 +30,14 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
       );
 
       this.bd.ejecutar(
-        `INSERT INTO compra (proveedor_id, total, estado) VALUES (?, ?, 'recibida')`,
-        [input.proveedorId ?? null, total],
+        `INSERT INTO compra (proveedor_id, proveedor_nombre_libre, comprobante, total, estado)
+         VALUES (?, ?, ?, ?, 'recibida')`,
+        [
+          input.proveedorId ?? null,
+          input.proveedorId ? null : input.proveedorNombreLibre || null,
+          input.comprobante || null,
+          total,
+        ],
       );
       const compraId = this.bd.ultimoIdInsertado();
 

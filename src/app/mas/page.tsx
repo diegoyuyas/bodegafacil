@@ -4,6 +4,7 @@ const OPCIONES = [
   { href: '/caja', etiqueta: 'Caja', descripcion: 'Saldo, ingresos y egresos' },
   { href: '/compras', etiqueta: 'Compras', descripcion: 'Reponer stock desde un proveedor' },
   { href: '/mas/clientes', etiqueta: 'Clientes', descripcion: 'Guardar clientes con su documento' },
+  { href: '/mas/proveedores', etiqueta: 'Proveedores', descripcion: 'Guardar proveedores con RUC y celular' },
   { href: '/mas/respaldo', etiqueta: 'Respaldo y exportación', descripcion: 'CSV, respaldo completo y restaurar' },
 ];
 

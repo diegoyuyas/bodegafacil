@@ -40,6 +40,26 @@ CREATE TABLE producto (
   creado_en TEXT NOT NULL DEFAULT (datetime('now')),
   actualizado_en TEXT NOT NULL DEFAULT (datetime('now'))
 );
+CREATE TABLE proveedor (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  nombre TEXT NOT NULL,
+  contacto TEXT,
+  telefono TEXT,
+  direccion TEXT,
+  activo INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE compra (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  proveedor_id INTEGER REFERENCES proveedor(id) ON DELETE SET NULL,
+  fecha TEXT NOT NULL DEFAULT (datetime('now')),
+  total REAL NOT NULL,
+  estado TEXT NOT NULL DEFAULT 'recibida',
+  nota TEXT
+);
+CREATE TABLE configuracion_app (
+  clave TEXT PRIMARY KEY,
+  valor TEXT NOT NULL
+);
 `;
 
 async function main() {
@@ -62,6 +82,8 @@ async function main() {
     5,
     3,
   ]);
+  dbVieja.run('INSERT INTO proveedor (nombre, telefono) VALUES (?, ?)', ['Proveedor viejo', '999111222']);
+  dbVieja.run('INSERT INTO compra (proveedor_id, total) VALUES (1, 50)');
   const bytesViejos = dbVieja.export();
   dbVieja.close();
 
@@ -79,6 +101,20 @@ async function main() {
   afirmar(clienteExistente?.documento === null, 'Su documento es null (no lo tenía) y no revienta');
 
   afirmar(productos.listarActivos().length === 1, 'El producto que ya existía también sigue ahí');
+
+  // El proveedor y la compra viejos (sin ruc/comprobante) deben seguir
+  // ahí, y ya se les puede leer las columnas nuevas (en null).
+  const filaProveedorVieja = bd.consultar<{ nombre: string; ruc: string | null }>(
+    'SELECT nombre, ruc FROM proveedor WHERE id = 1',
+  )[0];
+  afirmar(filaProveedorVieja?.nombre === 'Proveedor viejo', 'El proveedor que ya existía sigue ahí');
+  afirmar(filaProveedorVieja?.ruc === null, 'Su RUC es null (no existía la columna) y no revienta');
+
+  const filaCompraVieja = bd.consultar<{ total: number; comprobante: string | null }>(
+    'SELECT total, comprobante FROM compra WHERE id = 1',
+  )[0];
+  afirmar(filaCompraVieja?.total === 50, 'La compra que ya existía sigue ahí');
+  afirmar(filaCompraVieja?.comprobante === null, 'Su comprobante es null y no revienta');
 
   // 3. Ahora sí debe poder crear un cliente CON documento, usando el
   //    índice único que la migración acaba de agregar.

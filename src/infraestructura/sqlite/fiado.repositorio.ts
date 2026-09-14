@@ -10,12 +10,39 @@ export class FiadoRepositorioSqlite implements FiadoRepositorio {
     private readonly caja: CajaRepositorio,
   ) {}
 
-  listarClientesConDeuda(): Cliente[] {
+  listarClientesConDeuda(desde?: string, hasta?: string): Cliente[] {
+    if (!desde && !hasta) {
+      return this.bd
+        .consultar<FilaCliente>(
+          `SELECT * FROM cliente
+           WHERE activo = 1 AND saldo_pendiente > 0
+           ORDER BY saldo_pendiente DESC`,
+        )
+        .map(mapearCliente);
+    }
+
+    // Con rango de fechas: clientes que generaron al menos un fiado en
+    // ese período (para exportar). El saldo mostrado sigue siendo el
+    // saldo pendiente actual, no el de ese momento — es el dato útil
+    // para saber a quién cobrarle hoy.
+    const condicionesFecha: string[] = [];
+    const parametros: string[] = [];
+    if (desde) {
+      condicionesFecha.push('substr(d.fecha, 1, 10) >= ?');
+      parametros.push(desde);
+    }
+    if (hasta) {
+      condicionesFecha.push('substr(d.fecha, 1, 10) <= ?');
+      parametros.push(hasta);
+    }
+
     return this.bd
       .consultar<FilaCliente>(
-        `SELECT * FROM cliente
-         WHERE activo = 1 AND saldo_pendiente > 0
-         ORDER BY saldo_pendiente DESC`,
+        `SELECT DISTINCT c.* FROM cliente c
+         JOIN deuda_cliente d ON d.cliente_id = c.id
+         WHERE c.activo = 1 AND ${condicionesFecha.join(' AND ')}
+         ORDER BY c.saldo_pendiente DESC`,
+        parametros,
       )
       .map(mapearCliente);
   }

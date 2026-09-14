@@ -22,8 +22,16 @@ export default function PaginaProductos() {
   const [stockMinimo, setStockMinimo] = useState('');
   const [mensajeError, setMensajeError] = useState<string | null>(null);
 
+  const [editandoId, setEditandoId] = useState<number | null>(null);
+  const [nombreEdit, setNombreEdit] = useState('');
+  const [precioVentaEdit, setPrecioVentaEdit] = useState('');
+  const [costoEdit, setCostoEdit] = useState('');
+  const [stockMinimoEdit, setStockMinimoEdit] = useState('');
+  const [activoEdit, setActivoEdit] = useState(true);
+  const [mensajeErrorEdit, setMensajeErrorEdit] = useState<string | null>(null);
+
   function recargar() {
-    if (contenedor) setProductos(contenedor.productos.listarActivos());
+    if (contenedor) setProductos(contenedor.productos.listarTodos());
   }
 
   useEffect(recargar, [contenedor]);
@@ -53,8 +61,50 @@ export default function PaginaProductos() {
     }
   }
 
+  function abrirEdicion(producto: Producto) {
+    setMostrarFormulario(false);
+    setEditandoId(producto.id);
+    setNombreEdit(producto.nombre);
+    setPrecioVentaEdit(String(producto.precioVenta));
+    setCostoEdit(String(producto.costo));
+    setStockMinimoEdit(String(producto.stockMinimo));
+    setActivoEdit(producto.activo);
+    setMensajeErrorEdit(null);
+  }
+
+  function cancelarEdicion() {
+    setEditandoId(null);
+    setMensajeErrorEdit(null);
+  }
+
   const formularioValido =
     nombre.trim().length > 0 && Number(precioVenta) >= 0 && Number(costo) >= 0;
+
+  const formularioEditValido =
+    nombreEdit.trim().length > 0 && Number(precioVentaEdit) >= 0 && Number(costoEdit) >= 0;
+
+  async function guardarEdicion() {
+    if (!contenedor || editandoId === null) return;
+    setMensajeErrorEdit(null);
+    try {
+      const producto = contenedor.productos.obtenerPorId(editandoId);
+      contenedor.productos.actualizar(editandoId, {
+        nombre: nombreEdit.trim(),
+        categoriaId: producto.categoriaId,
+        codigo: producto.codigo,
+        precioVenta: Number(precioVentaEdit),
+        costo: Number(costoEdit),
+        stockMinimo: Number(stockMinimoEdit || 0),
+        unidadMedida: producto.unidadMedida,
+        activo: activoEdit,
+      });
+      await contenedor.persistir();
+      setEditandoId(null);
+      recargar();
+    } catch (e) {
+      setMensajeErrorEdit(e instanceof ErrorDeNegocio ? e.message : 'No se pudo guardar el producto.');
+    }
+  }
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
@@ -64,7 +114,10 @@ export default function PaginaProductos() {
         </Link>
         <h1 className="flex-1 text-lg font-extrabold text-bodega-oscuro">Productos</h1>
         <button
-          onClick={() => setMostrarFormulario((v) => !v)}
+          onClick={() => {
+            setEditandoId(null);
+            setMostrarFormulario((v) => !v);
+          }}
           className="text-sm font-semibold text-bodega-oscuro"
         >
           {mostrarFormulario ? 'Cancelar' : '+ Agregar'}
@@ -136,16 +189,88 @@ export default function PaginaProductos() {
           {productos.map((producto) => {
             const stockBajo = producto.stockActual <= producto.stockMinimo;
             return (
-              <li key={producto.id} className="flex items-center justify-between py-3">
-                <div>
-                  <p className="text-sm text-tinta">{producto.nombre}</p>
-                  <p className={`text-xs ${stockBajo ? 'text-alerta' : 'text-tinta/50'}`}>
-                    Stock: {producto.stockActual} {stockBajo && '· bajo'}
-                  </p>
+              <li key={producto.id} className="py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-tinta">
+                      {producto.nombre}
+                      {!producto.activo && (
+                        <span className="ml-2 rounded-full bg-alerta/10 px-2 py-0.5 text-xs font-semibold text-alerta">
+                          Inactivo
+                        </span>
+                      )}
+                    </p>
+                    <p className={`text-xs ${stockBajo ? 'text-alerta' : 'text-tinta/50'}`}>
+                      Stock: {producto.stockActual} {stockBajo && '· bajo'}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3">
+                    <span className="text-sm font-semibold text-tinta">
+                      {formatearSoles(producto.precioVenta)}
+                    </span>
+                    <button
+                      onClick={() =>
+                        editandoId === producto.id ? cancelarEdicion() : abrirEdicion(producto)
+                      }
+                      className="text-sm font-semibold text-bodega-oscuro"
+                    >
+                      {editandoId === producto.id ? 'Cancelar' : 'Editar'}
+                    </button>
+                  </div>
                 </div>
-                <span className="text-sm font-semibold text-tinta">
-                  {formatearSoles(producto.precioVenta)}
-                </span>
+
+                {editandoId === producto.id && (
+                  <div className="mt-3 space-y-3 rounded-xl border border-linea p-4">
+                    <input
+                      value={nombreEdit}
+                      onChange={(e) => setNombreEdit(e.target.value)}
+                      placeholder="Nombre del producto"
+                      className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+                    />
+                    <div className="flex gap-3">
+                      <input
+                        value={precioVentaEdit}
+                        onChange={(e) => setPrecioVentaEdit(e.target.value)}
+                        inputMode="decimal"
+                        placeholder="Precio de venta"
+                        className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+                      />
+                      <input
+                        value={costoEdit}
+                        onChange={(e) => setCostoEdit(e.target.value)}
+                        inputMode="decimal"
+                        placeholder="Costo"
+                        className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+                      />
+                    </div>
+                    <input
+                      value={stockMinimoEdit}
+                      onChange={(e) => setStockMinimoEdit(e.target.value)}
+                      inputMode="numeric"
+                      placeholder="Stock mínimo"
+                      className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+                    />
+                    <div>
+                      <label className="mb-1 block text-xs text-tinta/50">Estado</label>
+                      <select
+                        value={activoEdit ? 'activo' : 'inactivo'}
+                        onChange={(e) => setActivoEdit(e.target.value === 'activo')}
+                        className="h-11 w-full rounded-lg border border-linea bg-white px-3 text-sm"
+                      >
+                        <option value="activo">Activo</option>
+                        <option value="inactivo">Inactivo (no aparece para vender)</option>
+                      </select>
+                    </div>
+                    {mensajeErrorEdit && <p className="text-sm text-alerta">{mensajeErrorEdit}</p>}
+                    <button
+                      onClick={guardarEdicion}
+                      disabled={!formularioEditValido}
+                      className="h-11 w-full rounded-lg bg-bodega text-sm font-semibold text-white disabled:opacity-40"
+                    >
+                      Guardar cambios
+                    </button>
+                  </div>
+                )}
               </li>
             );
           })}

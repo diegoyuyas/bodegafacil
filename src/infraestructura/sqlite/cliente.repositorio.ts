@@ -1,4 +1,4 @@
-import type { ClienteRepositorio } from '@/core/repositorios';
+import type { ClienteRepositorio, DatosActualizarCliente } from '@/core/repositorios';
 import { ErrorDeNegocio, validarDocumentoIdentidad } from '@/core/reglas-negocio';
 import type { Cliente } from '@/core/tipos';
 import type { BaseDatosLocal } from './base-datos';
@@ -10,6 +10,12 @@ export class ClienteRepositorioSqlite implements ClienteRepositorio {
   listarActivos(): Cliente[] {
     return this.bd
       .consultar<FilaCliente>('SELECT * FROM cliente WHERE activo = 1 ORDER BY nombre')
+      .map(mapearCliente);
+  }
+
+  listarTodos(): Cliente[] {
+    return this.bd
+      .consultar<FilaCliente>('SELECT * FROM cliente ORDER BY nombre')
       .map(mapearCliente);
   }
 
@@ -53,5 +59,33 @@ export class ClienteRepositorioSqlite implements ClienteRepositorio {
       telefono,
     ]);
     return this.obtenerPorId(this.bd.ultimoIdInsertado());
+  }
+
+  actualizar(id: number, datos: DatosActualizarCliente): Cliente {
+    const actual = this.obtenerPorId(id); // valida que exista
+    if (!datos.nombre.trim()) {
+      throw new ErrorDeNegocio('El nombre del cliente es obligatorio.');
+    }
+    if (!datos.activo && actual.saldoPendiente > 0) {
+      throw new ErrorDeNegocio(
+        `No se puede inactivar a ${actual.nombre}: tiene una deuda pendiente de S/ ${actual.saldoPendiente.toFixed(2)}.`,
+      );
+    }
+    const documento = datos.documento.trim();
+    validarDocumentoIdentidad(documento);
+
+    const duplicado = this.bd.consultar<{ id: number }>(
+      'SELECT id FROM cliente WHERE documento = ? AND id != ?',
+      [documento, id],
+    )[0];
+    if (duplicado) {
+      throw new ErrorDeNegocio(`Ya existe un cliente con el documento ${documento}.`);
+    }
+
+    this.bd.ejecutar(
+      'UPDATE cliente SET nombre = ?, documento = ?, telefono = ?, activo = ? WHERE id = ?',
+      [datos.nombre.trim(), documento, datos.telefono?.trim() || null, datos.activo ? 1 : 0, id],
+    );
+    return this.obtenerPorId(id);
   }
 }

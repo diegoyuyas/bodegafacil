@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { construirVenta, ErrorDeNegocio } from '@/core/reglas-negocio';
+import { LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
 import type { Cliente, MetodoPago, Producto } from '@/core/tipos';
 
 interface LineaCarrito {
@@ -44,9 +45,16 @@ export default function PaginaNuevaVenta() {
   const [totalGuardado, setTotalGuardado] = useState(0);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
+  const [limiteAlcanzado, setLimiteAlcanzado] = useState(false);
+  const [ventasUsadas, setVentasUsadas] = useState(0);
 
   useEffect(() => {
-    if (contenedor) setProductos(contenedor.productos.listarActivos());
+    if (!contenedor) return;
+    setProductos(contenedor.productos.listarActivos());
+    const usadas = contenedor.ventas.contarTotalHistorico();
+    const esPremium = contenedor.plan.obtenerEstado().tipo === 'premium';
+    setVentasUsadas(usadas);
+    setLimiteAlcanzado(!esPremium && usadas >= LIMITE_VENTAS_PLAN_GRATIS);
   }, [contenedor]);
 
   useEffect(() => {
@@ -188,6 +196,25 @@ export default function PaginaNuevaVenta() {
     return <p className="p-5 text-sm text-alerta">No se pudo abrir la base de datos: {error.message}</p>;
   }
 
+  if (limiteAlcanzado) {
+    return (
+      <div className="mx-auto flex min-h-dvh max-w-app flex-col items-center justify-center gap-4 px-5 text-center">
+        <p className="text-5xl">🔒</p>
+        <h1 className="text-lg font-extrabold text-tinta">Límite del Plan Gratis alcanzado</h1>
+        <p className="text-sm text-tinta/60">
+          Ya registraste {ventasUsadas} de {LIMITE_VENTAS_PLAN_GRATIS} pedidos disponibles en el
+          Plan Gratis. Contacta a soporte para activar Premium y seguir vendiendo.
+        </p>
+        <Link
+          href="/"
+          className="mt-2 flex h-12 items-center justify-center rounded-full border border-linea px-6 text-sm font-semibold text-tinta"
+        >
+          Volver a inicio
+        </Link>
+      </div>
+    );
+  }
+
   if (etapa === 'guardada') {
     return (
       <div className="mx-auto flex min-h-dvh max-w-app flex-col items-center justify-center gap-6 px-5 text-center">
@@ -275,6 +302,12 @@ export default function PaginaNuevaVenta() {
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Nueva venta</h1>
       </header>
+
+      {!limiteAlcanzado && ventasUsadas >= LIMITE_VENTAS_PLAN_GRATIS - 20 && (
+        <p className="mt-3 rounded-lg bg-acento/10 px-3 py-2 text-xs text-tinta/70">
+          Te quedan {LIMITE_VENTAS_PLAN_GRATIS - ventasUsadas} pedidos en tu Plan Gratis.
+        </p>
+      )}
 
       {/* Buscador de productos */}
       <div className="relative mt-5">

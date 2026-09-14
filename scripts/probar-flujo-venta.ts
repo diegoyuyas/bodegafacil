@@ -16,6 +16,9 @@ import { CajaRepositorioSqlite } from '../src/infraestructura/sqlite/caja.reposi
 import { FiadoRepositorioSqlite } from '../src/infraestructura/sqlite/fiado.repositorio';
 import { ProveedorRepositorioSqlite } from '../src/infraestructura/sqlite/proveedor.repositorio';
 import { CompraRepositorioSqlite } from '../src/infraestructura/sqlite/compra.repositorio';
+import { ConfiguracionRepositorioSqlite } from '../src/infraestructura/sqlite/configuracion.repositorio';
+import { PlanRepositorioSqlite } from '../src/infraestructura/sqlite/plan.repositorio';
+import { LIMITE_VENTAS_PLAN_GRATIS } from '../src/core/plan';
 import { exportarProductosACsv, exportarVentasACsv } from '../src/core/exportacion';
 
 function afirmar(condicion: boolean, mensaje: string): void {
@@ -33,7 +36,9 @@ async function main() {
   const productos = new ProductoRepositorioSqlite(bd);
   const clientes = new ClienteRepositorioSqlite(bd);
   const caja = new CajaRepositorioSqlite(bd);
-  const ventas = new VentaRepositorioSqlite(bd, productos, caja);
+  const configuracion = new ConfiguracionRepositorioSqlite(bd);
+  const plan = new PlanRepositorioSqlite(configuracion);
+  const ventas = new VentaRepositorioSqlite(bd, productos, caja, configuracion);
   const fiados = new FiadoRepositorioSqlite(bd, caja);
   const proveedores = new ProveedorRepositorioSqlite(bd);
   const compras = new CompraRepositorioSqlite(bd, productos, caja);
@@ -246,6 +251,147 @@ async function main() {
   );
 
   console.log('\n🎉 Flujo completo de venta funciona de punta a punta.');
+
+  // --- Proveedores: RUC y celular opcionales, con sus validaciones ---
+  const proveedorCompleto = proveedores.crear('Distribuidora Norte', '20123456789', '9876543210');
+  afirmar(proveedorCompleto.ruc === '20123456789', 'El proveedor guarda su RUC');
+
+  const proveedorSinDatos = proveedores.crear('Vendedor ambulante');
+  afirmar(proveedorSinDatos.ruc === null, 'El RUC del proveedor es opcional');
+
+  let rucInvalidoFalló = false;
+  try {
+    proveedores.crear('Otro proveedor', '20-123-456'); // guiones no permitidos
+  } catch {
+    rucInvalidoFalló = true;
+  }
+  afirmar(rucInvalidoFalló, 'Un RUC con caracteres inválidos es rechazado');
+
+  let celularInvalidoFalló = false;
+  try {
+    proveedores.crear('Otro proveedor', null, '99999'); // menos de 10 dígitos
+  } catch {
+    celularInvalidoFalló = true;
+  }
+  afirmar(celularInvalidoFalló, 'Un celular que no tiene 10 dígitos es rechazado');
+
+  const encontrados = proveedores.buscarPorTexto('Norte');
+  afirmar(
+    encontrados.some((p) => p.id === proveedorCompleto.id),
+    'Se puede buscar un proveedor por nombre',
+  );
+  afirmar(
+    proveedores.buscarPorTexto('20123456789').some((p) => p.id === proveedorCompleto.id),
+    'Se puede buscar un proveedor por RUC',
+  );
+
+  // --- Compras: proveedor guardado, proveedor "al vuelo", y comprobante ---
+  const compraConProveedorGuardado = compras.registrarCompra({
+    proveedorId: proveedorCompleto.id,
+    comprobante: 'F001-00000010',
+    metodoPago: 'efectivo',
+    lineas: [{ productoId: incaKola.id, cantidad: 1, costoUnitario: 3.0 }],
+  });
+  afirmar(
+    compraConProveedorGuardado.proveedorId === proveedorCompleto.id,
+    'La compra guarda el proveedor seleccionado',
+  );
+  afirmar(
+    compraConProveedorGuardado.comprobante === 'F001-00000010',
+    'La compra guarda el comprobante',
+  );
+
+  const compraConProveedorLibre = compras.registrarCompra({
+    proveedorNombreLibre: 'Señor de la esquina',
+    metodoPago: 'efectivo',
+    lineas: [{ productoId: incaKola.id, cantidad: 1, costoUnitario: 3.0 }],
+  });
+  afirmar(
+    compraConProveedorLibre.proveedorId === null &&
+      compraConProveedorLibre.proveedorNombreLibre === 'Señor de la esquina',
+    'La compra acepta un proveedor escrito al vuelo, sin guardarlo como registro',
+  );
+
+  let comprobanteLargoFalló = false;
+  try {
+    compras.registrarCompra({
+      comprobante: 'ESTO-TIENE-MAS-DE-QUINCE-CARACTERES',
+      metodoPago: 'efectivo',
+      lineas: [{ productoId: incaKola.id, cantidad: 1, costoUnitario: 3.0 }],
+    });
+  } catch {
+    comprobanteLargoFalló = true;
+  }
+  afirmar(comprobanteLargoFalló, 'Un comprobante de más de 15 caracteres es rechazado');
+
+  // --- Plan Free / Premium ---
+  afirmar(plan.obtenerEstado().tipo === 'gratis', 'Sin nada configurado, el plan es Gratis');
+  afirmar(!plan.tienePinConfigurado(), 'Al inicio no hay PIN configurado');
+
+  await plan.configurarPin('1234');
+  afirmar(plan.tienePinConfigurado(), 'El PIN queda configurado');
+  afirmar(await plan.verificarPin('1234'), 'El PIN correcto se verifica');
+  afirmar(!(await plan.verificarPin('0000')), 'Un PIN incorrecto no pasa la verificación');
+
+  const cambioConPinMalo = await plan.cambiarPin('9999', '5555');
+  afirmar(!cambioConPinMalo, 'No se puede cambiar el PIN sin saber el actual');
+  const cambioConPinBueno = await plan.cambiarPin('1234', '5555');
+  afirmar(cambioConPinBueno && (await plan.verificarPin('5555')), 'Cambiar el PIN funciona');
+
+  plan.activarPremium(30);
+  const estadoTrasActivar = plan.obtenerEstado();
+  afirmar(
+    estadoTrasActivar.tipo === 'premium' && estadoTrasActivar.diasRestantes === 30,
+    `Activar Premium por 30 días deja 30 días restantes (obtenido: ${estadoTrasActivar.diasRestantes})`,
+  );
+
+  plan.desactivarPremium();
+  afirmar(plan.obtenerEstado().tipo === 'gratis', 'Desactivar Premium vuelve a Gratis inmediatamente');
+
+  // --- Límite de 250 pedidos del Plan Gratis (y cómo Premium lo destraba) ---
+  const productoBarato = productos.crear({
+    nombre: 'Caramelo suelto',
+    precioVenta: 0.1,
+    costo: 0.05,
+    stockActual: 1000,
+    stockMinimo: 0,
+    unidadMedida: 'unidad',
+  });
+
+  const faltantesParaElLimite = LIMITE_VENTAS_PLAN_GRATIS - ventas.contarTotalHistorico();
+  for (let i = 0; i < faltantesParaElLimite; i++) {
+    ventas.registrarVenta({ lineas: [{ productoId: productoBarato.id, cantidad: 1 }], metodoPago: 'efectivo' });
+  }
+  afirmar(
+    ventas.contarTotalHistorico() === LIMITE_VENTAS_PLAN_GRATIS,
+    `Se llegó exactamente al límite de ${LIMITE_VENTAS_PLAN_GRATIS} pedidos`,
+  );
+
+  let bloqueadoPorLimite = false;
+  try {
+    ventas.registrarVenta({ lineas: [{ productoId: productoBarato.id, cantidad: 1 }], metodoPago: 'efectivo' });
+  } catch {
+    bloqueadoPorLimite = true;
+  }
+  afirmar(bloqueadoPorLimite, 'Al llegar al límite del Plan Gratis, una venta más es rechazada');
+
+  plan.activarPremium(30);
+  const ventaConPremium = ventas.registrarVenta({
+    lineas: [{ productoId: productoBarato.id, cantidad: 1 }],
+    metodoPago: 'efectivo',
+  });
+  afirmar(ventaConPremium.id > 0, 'Con Premium activo, se puede seguir vendiendo pasado el límite');
+
+  plan.desactivarPremium();
+  let bloqueadoDeNuevo = false;
+  try {
+    ventas.registrarVenta({ lineas: [{ productoId: productoBarato.id, cantidad: 1 }], metodoPago: 'efectivo' });
+  } catch {
+    bloqueadoDeNuevo = true;
+  }
+  afirmar(bloqueadoDeNuevo, 'Al desactivar Premium (o vencer), el límite vuelve a aplicar');
+
+  console.log('\n🎉 Plan Free/Premium, proveedores y compras con comprobante funcionan correctamente.');
 }
 
 main().catch((error) => {

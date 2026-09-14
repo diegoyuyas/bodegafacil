@@ -1,9 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import type { LineaVentaResumen, ResumenDia, VentaListaItem } from '@/core/tipos';
-import { useEffect, useMemo, useState } from 'react';
+import { LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
+import type { EstadoPlan } from '@/core/plan';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 /**
  * Pantalla de inicio — resumen del día (sección 7 del documento maestro),
@@ -19,27 +22,46 @@ const ETIQUETAS_METODO_PAGO: Record<string, string> = {
   fiado: 'Fiado',
 };
 
-const UMBRAL_PLAN_PRO = 500;
-
 function formatearSoles(monto: number): string {
   return `S/ ${monto.toFixed(2)}`;
 }
 
 export default function PaginaInicio() {
+  const router = useRouter();
   const { contenedor, error, cargando } = usarContenedor();
   const [resumen, setResumen] = useState<ResumenDia | null>(null);
   const [ventasDeHoy, setVentasDeHoy] = useState<VentaListaItem[]>([]);
   const [totalHistorico, setTotalHistorico] = useState(0);
+  const [estadoPlan, setEstadoPlan] = useState<EstadoPlan | null>(null);
   const [ventaExpandida, setVentaExpandida] = useState<number | null>(null);
   const [lineasPorVenta, setLineasPorVenta] = useState<Record<number, LineaVentaResumen[]>>({});
   const [pedidosAbiertos, setPedidosAbiertos] = useState(false);
   const [busquedaPedidos, setBusquedaPedidos] = useState('');
+
+  // Gesto secreto: tocar 5 veces el título entra al panel de administrador.
+  // No aparece en ningún menú a propósito — es solo para el dueño de la app.
+  const toquesTitulo = useRef(0);
+  const temporizadorToques = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function tocarTitulo() {
+    toquesTitulo.current += 1;
+    if (temporizadorToques.current) clearTimeout(temporizadorToques.current);
+    if (toquesTitulo.current >= 5) {
+      toquesTitulo.current = 0;
+      router.push('/admin');
+      return;
+    }
+    temporizadorToques.current = setTimeout(() => {
+      toquesTitulo.current = 0;
+    }, 2000);
+  }
 
   function recargar() {
     if (!contenedor) return;
     setResumen(contenedor.ventas.resumenDelDia());
     setVentasDeHoy(contenedor.ventas.listarDeHoyConDetalle());
     setTotalHistorico(contenedor.ventas.contarTotalHistorico());
+    setEstadoPlan(contenedor.plan.obtenerEstado());
   }
 
   useEffect(recargar, [contenedor]);
@@ -93,8 +115,11 @@ export default function PaginaInicio() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col">
       <header className="flex items-baseline justify-between px-5 pt-6">
-        <h1 className="text-lg font-extrabold tracking-tight text-bodega-oscuro">
-          Bodega Fácil
+        <h1
+          onClick={tocarTitulo}
+          className="text-lg font-extrabold tracking-tight text-bodega-oscuro select-none"
+        >
+          Venta Fácil
         </h1>
         <span className="text-sm text-tinta/60">
           {new Date().toLocaleDateString('es-PE', { day: 'numeric', month: 'long' })}
@@ -109,11 +134,41 @@ export default function PaginaInicio() {
           </p>
         )}
 
-        {totalHistorico >= UMBRAL_PLAN_PRO && (
-          <div className="mb-4 rounded-xl border border-acento bg-acento/10 px-4 py-3 text-sm text-tinta">
-            Ya llevas <span className="font-semibold">{totalHistorico} ventas</span> registradas.
-            Es un buen momento para pasar a{' '}
-            <span className="font-semibold text-bodega-oscuro">Bodega Fácil Pro</span>.
+        {estadoPlan && estadoPlan.tipo === 'premium' && (
+          <div className="mb-4 rounded-xl border border-bodega bg-bodega-claro/40 px-4 py-3 text-sm text-tinta">
+            <span className="font-semibold text-bodega-oscuro">Plan Premium</span> — te quedan{' '}
+            <span className="font-semibold">
+              {estadoPlan.diasRestantes} {estadoPlan.diasRestantes === 1 ? 'día' : 'días'}
+            </span>
+            .
+          </div>
+        )}
+
+        {estadoPlan && estadoPlan.tipo === 'gratis' && (
+          <div
+            className={`mb-4 rounded-xl border px-4 py-3 text-sm text-tinta ${
+              totalHistorico >= LIMITE_VENTAS_PLAN_GRATIS
+                ? 'border-alerta bg-alerta/10'
+                : totalHistorico >= LIMITE_VENTAS_PLAN_GRATIS - 20
+                  ? 'border-acento bg-acento/10'
+                  : 'border-linea'
+            }`}
+          >
+            {totalHistorico >= LIMITE_VENTAS_PLAN_GRATIS ? (
+              <>
+                Llegaste al límite de{' '}
+                <span className="font-semibold">{LIMITE_VENTAS_PLAN_GRATIS} pedidos</span> del Plan
+                Gratis. Contacta a soporte para activar Premium.
+              </>
+            ) : (
+              <>
+                Plan Gratis:{' '}
+                <span className="font-semibold">
+                  {totalHistorico}/{LIMITE_VENTAS_PLAN_GRATIS}
+                </span>{' '}
+                pedidos usados.
+              </>
+            )}
           </div>
         )}
 
