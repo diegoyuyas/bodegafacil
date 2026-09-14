@@ -3,12 +3,17 @@ import Link from 'next/link';
 const OPCIONES = [
   { href: '/caja', etiqueta: 'Caja', descripcion: 'Saldo, ingresos y egresos' },
   { href: '/compras', etiqueta: 'Compras', descripcion: 'Reponer stock desde un proveedor' },
+  {
+    href: '/mas/reportes',
+    etiqueta: 'Reportes',
+    descripcion: 'Caja, compras y más vendidos por rango de fechas (Premium)',
+  },
   { href: '/mas/clientes', etiqueta: 'Clientes', descripcion: 'Guardar clientes con su documento' },
   { href: '/mas/proveedores', etiqueta: 'Proveedores', descripcion: 'Guardar proveedores con RUC y celular' },
   { href: '/mas/respaldo', etiqueta: 'Respaldo y exportación', descripcion: 'CSV, respaldo completo y restaurar' },
 ];
 
-const PROXIMAMENTE = ['Reportes (Plan Pro)', 'Configuración'];
+const PROXIMAMENTE = ['Configuración'];
 
 export default function PaginaMas() {
   return (

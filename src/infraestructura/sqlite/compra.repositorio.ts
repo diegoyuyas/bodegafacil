@@ -5,7 +5,7 @@ import type {
   RegistrarCompraInput,
 } from '@/core/repositorios';
 import { ErrorDeNegocio, calcularStockNuevo, redondear, validarComprobante } from '@/core/reglas-negocio';
-import type { Compra } from '@/core/tipos';
+import type { Compra, CompraListaItem } from '@/core/tipos';
 import type { BaseDatosLocal } from './base-datos';
 import { mapearCompra, type FilaCompra } from './mapeadores';
 
@@ -78,6 +78,37 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
     return this.bd
       .consultar<FilaCompra>('SELECT * FROM compra ORDER BY id DESC LIMIT ?', [limite])
       .map(mapearCompra);
+  }
+
+  listarPorRango(desde: string, hasta: string): CompraListaItem[] {
+    return this.bd
+      .consultar<{
+        id: number;
+        fecha: string;
+        proveedor_nombre_libre: string | null;
+        proveedor_nombre_guardado: string | null;
+        comprobante: string | null;
+        total: number;
+        estado: Compra['estado'];
+      }>(
+        `SELECT c.id AS id, c.fecha AS fecha,
+                c.proveedor_nombre_libre AS proveedor_nombre_libre,
+                pv.nombre AS proveedor_nombre_guardado,
+                c.comprobante AS comprobante, c.total AS total, c.estado AS estado
+         FROM compra c
+         LEFT JOIN proveedor pv ON pv.id = c.proveedor_id
+         WHERE substr(c.fecha, 1, 10) >= ? AND substr(c.fecha, 1, 10) <= ?
+         ORDER BY c.fecha DESC`,
+        [desde, hasta],
+      )
+      .map((fila) => ({
+        id: fila.id,
+        fecha: fila.fecha,
+        proveedorNombre: fila.proveedor_nombre_guardado ?? fila.proveedor_nombre_libre,
+        comprobante: fila.comprobante,
+        total: fila.total,
+        estado: fila.estado,
+      }));
   }
 
   private obtenerPorId(id: number): Compra {

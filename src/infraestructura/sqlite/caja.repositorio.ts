@@ -48,4 +48,15 @@ export class CajaRepositorioSqlite implements CajaRepositorio {
       )
       .map(mapearMovimientoCaja);
   }
+
+  listarMovimientosPorRango(desde: string, hasta: string): MovimientoCaja[] {
+    return this.bd
+      .consultar<FilaMovimientoCaja>(
+        `SELECT * FROM movimiento_caja
+         WHERE substr(fecha_hora, 1, 10) >= ? AND substr(fecha_hora, 1, 10) <= ?
+         ORDER BY fecha_hora DESC`,
+        [desde, hasta],
+      )
+      .map(mapearMovimientoCaja);
+  }
 }

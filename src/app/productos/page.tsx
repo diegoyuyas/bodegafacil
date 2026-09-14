@@ -30,6 +30,14 @@ export default function PaginaProductos() {
   const [activoEdit, setActivoEdit] = useState(true);
   const [mensajeErrorEdit, setMensajeErrorEdit] = useState<string | null>(null);
 
+  // Ajuste manual de stock (conteo físico, merma, corrección) — no pasa
+  // por una compra. Se registra en movimiento_inventario con trazabilidad.
+  const [ajustandoId, setAjustandoId] = useState<number | null>(null);
+  const [tipoAjuste, setTipoAjuste] = useState<'sumar' | 'restar'>('sumar');
+  const [cantidadAjuste, setCantidadAjuste] = useState('');
+  const [motivoAjuste, setMotivoAjuste] = useState('');
+  const [mensajeErrorAjuste, setMensajeErrorAjuste] = useState<string | null>(null);
+
   function recargar() {
     if (contenedor) setProductos(contenedor.productos.listarTodos());
   }
@@ -75,6 +83,37 @@ export default function PaginaProductos() {
   function cancelarEdicion() {
     setEditandoId(null);
     setMensajeErrorEdit(null);
+  }
+
+  function abrirAjuste(producto: Producto) {
+    setMostrarFormulario(false);
+    setEditandoId(null);
+    setAjustandoId(producto.id);
+    setTipoAjuste('sumar');
+    setCantidadAjuste('');
+    setMotivoAjuste('');
+    setMensajeErrorAjuste(null);
+  }
+
+  function cancelarAjuste() {
+    setAjustandoId(null);
+    setMensajeErrorAjuste(null);
+  }
+
+  const formularioAjusteValido = Number(cantidadAjuste) > 0 && motivoAjuste.trim().length > 0;
+
+  async function confirmarAjuste() {
+    if (!contenedor || ajustandoId === null) return;
+    setMensajeErrorAjuste(null);
+    try {
+      const delta = tipoAjuste === 'sumar' ? Number(cantidadAjuste) : -Number(cantidadAjuste);
+      contenedor.productos.ajustarStock(ajustandoId, delta, motivoAjuste.trim());
+      await contenedor.persistir();
+      setAjustandoId(null);
+      recargar();
+    } catch (e) {
+      setMensajeErrorAjuste(e instanceof ErrorDeNegocio ? e.message : 'No se pudo ajustar el stock.');
+    }
   }
 
   const formularioValido =
@@ -210,6 +249,14 @@ export default function PaginaProductos() {
                     </span>
                     <button
                       onClick={() =>
+                        ajustandoId === producto.id ? cancelarAjuste() : abrirAjuste(producto)
+                      }
+                      className="text-sm font-semibold text-tinta/70"
+                    >
+                      {ajustandoId === producto.id ? 'Cancelar' : 'Ajustar'}
+                    </button>
+                    <button
+                      onClick={() =>
                         editandoId === producto.id ? cancelarEdicion() : abrirEdicion(producto)
                       }
                       className="text-sm font-semibold text-bodega-oscuro"
@@ -218,6 +265,59 @@ export default function PaginaProductos() {
                     </button>
                   </div>
                 </div>
+
+                {ajustandoId === producto.id && (
+                  <div className="mt-3 space-y-3 rounded-xl border border-linea p-4">
+                    <p className="text-xs text-tinta/50">
+                      Stock actual: <span className="font-semibold text-tinta">{producto.stockActual}</span>{' '}
+                      {producto.unidadMedida}. Usa esto para conteos físicos o mermas — no para
+                      reponer stock de una compra (eso va en Compras).
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setTipoAjuste('sumar')}
+                        className={`h-9 flex-1 rounded-full border text-sm font-medium ${
+                          tipoAjuste === 'sumar'
+                            ? 'border-bodega bg-bodega text-white'
+                            : 'border-linea text-tinta/70'
+                        }`}
+                      >
+                        + Sumar
+                      </button>
+                      <button
+                        onClick={() => setTipoAjuste('restar')}
+                        className={`h-9 flex-1 rounded-full border text-sm font-medium ${
+                          tipoAjuste === 'restar'
+                            ? 'border-alerta bg-alerta text-white'
+                            : 'border-linea text-tinta/70'
+                        }`}
+                      >
+                        − Restar
+                      </button>
+                    </div>
+                    <input
+                      value={cantidadAjuste}
+                      onChange={(e) => setCantidadAjuste(e.target.value)}
+                      inputMode="decimal"
+                      placeholder="Cantidad"
+                      className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+                    />
+                    <input
+                      value={motivoAjuste}
+                      onChange={(e) => setMotivoAjuste(e.target.value)}
+                      placeholder="Motivo (ej: conteo físico, producto vencido)"
+                      className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+                    />
+                    {mensajeErrorAjuste && <p className="text-sm text-alerta">{mensajeErrorAjuste}</p>}
+                    <button
+                      onClick={confirmarAjuste}
+                      disabled={!formularioAjusteValido}
+                      className="h-11 w-full rounded-lg bg-bodega text-sm font-semibold text-white disabled:opacity-40"
+                    >
+                      Confirmar ajuste
+                    </button>
+                  </div>
+                )}
 
                 {editandoId === producto.id && (
                   <div className="mt-3 space-y-3 rounded-xl border border-linea p-4">

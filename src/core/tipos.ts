@@ -219,3 +219,22 @@ export interface LineaVentaResumen {
   producto: string;
   cantidad: number;
 }
+
+/** Una fila del reporte de compras por rango de fechas (con proveedor ya resuelto). */
+export interface CompraListaItem {
+  id: number;
+  fecha: string;
+  proveedorNombre: string | null;
+  comprobante: string | null;
+  total: number;
+  estado: EstadoCompra;
+}
+
+/** Una fila del reporte "productos más vendidos" por rango de fechas. */
+export interface ProductoMasVendidoItem {
+  productoId: number;
+  nombre: string;
+  cantidadVendida: number;
+  totalVendido: number;
+  gananciaTotal: number;
+}

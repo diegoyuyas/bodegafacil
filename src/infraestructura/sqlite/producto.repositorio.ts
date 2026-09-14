@@ -1,6 +1,7 @@
 import type { DatosActualizarProducto, DatosNuevoProducto, ProductoRepositorio } from '@/core/repositorios';
-import { ErrorDeNegocio } from '@/core/reglas-negocio';
+import { ErrorDeNegocio, calcularStockNuevo } from '@/core/reglas-negocio';
 import type { Producto } from '@/core/tipos';
+import { ahoraLocalSql } from '@/core/tiempo';
 import type { BaseDatosLocal } from './base-datos';
 import { mapearProducto, type FilaProducto } from './mapeadores';
 
@@ -91,5 +92,31 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
       ],
     );
     return this.obtenerPorId(id);
+  }
+
+  ajustarStock(id: number, delta: number, motivo: string): Producto {
+    if (!Number.isFinite(delta) || delta === 0) {
+      throw new ErrorDeNegocio('El ajuste debe ser distinto de cero.');
+    }
+    if (!motivo.trim()) {
+      throw new ErrorDeNegocio('Indica un motivo para el ajuste de stock.');
+    }
+
+    return this.bd.transaccion(() => {
+      const producto = this.obtenerPorId(id);
+      const stockNuevo = calcularStockNuevo(
+        producto.stockActual,
+        delta > 0 ? delta : 0,
+        delta < 0 ? -delta : 0,
+      );
+      this.actualizarStock(id, stockNuevo);
+      this.bd.ejecutar(
+        `INSERT INTO movimiento_inventario
+           (producto_id, tipo, cantidad, motivo, stock_resultante, fecha_hora)
+         VALUES (?, 'ajuste', ?, ?, ?, ?)`,
+        [id, delta, motivo.trim(), stockNuevo, ahoraLocalSql()],
+      );
+      return this.obtenerPorId(id);
+    });
   }
 }

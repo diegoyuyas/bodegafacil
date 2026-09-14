@@ -11,10 +11,12 @@
 import type {
   Cliente,
   Compra,
+  CompraListaItem,
   LineaVentaResumen,
   MetodoPagoSinFiado,
   MovimientoCaja,
   Producto,
+  ProductoMasVendidoItem,
   Proveedor,
   RegistrarVentaInput,
   ResumenDia,
@@ -34,6 +36,14 @@ export interface ProductoRepositorio {
   actualizarStock(id: number, nuevoStock: number): void;
   /** Edita los datos del producto, incluyendo si está activo (los inactivos no salen a vender). */
   actualizar(id: number, datos: DatosActualizarProducto): Producto;
+  /**
+   * Ajuste manual de stock (conteo físico, merma, corrección), sin pasar
+   * por una compra. `delta` puede ser positivo (sumar) o negativo
+   * (restar); se registra en movimiento_inventario con tipo 'ajuste'
+   * para mantener la trazabilidad. Lanza ErrorDeNegocio si el ajuste
+   * dejaría el stock en negativo o si no se da un motivo.
+   */
+  ajustarStock(id: number, delta: number, motivo: string): Producto;
 }
 
 export interface DatosNuevoProducto {
@@ -94,6 +104,12 @@ export interface VentaRepositorio {
    * `desde`/`hasta` son fechas 'YYYY-MM-DD' inclusivas; sin ellas, exporta todo el historial.
    */
   listarDetalleParaExportar(desde?: string, hasta?: string): FilaVentaDetallada[];
+  /**
+   * Productos más vendidos (cantidad, monto y ganancia) dentro de un
+   * rango de fechas 'YYYY-MM-DD' inclusive, de mayor a menor cantidad
+   * (Premium).
+   */
+  listarProductosMasVendidos(desde: string, hasta: string, limite?: number): ProductoMasVendidoItem[];
 }
 
 /**
@@ -111,6 +127,8 @@ export interface CajaRepositorio {
   ): void;
   registrarEgreso(monto: number, concepto: string, metodoPago: MetodoPagoSinFiado): void;
   listarMovimientosDeHoy(): MovimientoCaja[];
+  /** Movimientos dentro de un rango de fechas 'YYYY-MM-DD' inclusive, para el reporte de caja (Premium). */
+  listarMovimientosPorRango(desde: string, hasta: string): MovimientoCaja[];
 }
 
 export interface FiadoRepositorio {
@@ -167,6 +185,8 @@ export interface CompraRepositorio {
    */
   registrarCompra(input: RegistrarCompraInput): Compra;
   listarRecientes(limite?: number): Compra[];
+  /** Compras dentro de un rango de fechas 'YYYY-MM-DD' inclusive, con proveedor resuelto, para el reporte (Premium). */
+  listarPorRango(desde: string, hasta: string): CompraListaItem[];
 }
 
 /** Acceso crudo clave-valor a la tabla configuracion_app. */

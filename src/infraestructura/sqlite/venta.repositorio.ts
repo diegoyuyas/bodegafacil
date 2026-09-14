@@ -9,6 +9,7 @@ import {
 import { calcularEstadoPlan, CLAVE_PLAN_VENCE_EN, LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
 import type {
   LineaVentaResumen,
+  ProductoMasVendidoItem,
   RegistrarVentaInput,
   ResumenDia,
   Venta,
@@ -315,6 +316,45 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         subtotal: fila.subtotal,
         metodoPago: fila.metodo_pago,
         cliente: fila.cliente ?? 'Cliente Eventual',
+      }));
+  }
+
+  listarProductosMasVendidos(
+    desde: string,
+    hasta: string,
+    limite = 20,
+  ): ProductoMasVendidoItem[] {
+    return this.bd
+      .consultar<{
+        producto_id: number;
+        nombre: string;
+        cantidad_vendida: number;
+        total_vendido: number;
+        ganancia_total: number;
+      }>(
+        `SELECT
+           p.id AS producto_id,
+           p.nombre AS nombre,
+           SUM(dv.cantidad) AS cantidad_vendida,
+           SUM(dv.subtotal) AS total_vendido,
+           SUM(dv.ganancia_linea) AS ganancia_total
+         FROM detalle_venta dv
+         JOIN venta v ON v.id = dv.venta_id
+         JOIN producto p ON p.id = dv.producto_id
+         WHERE v.anulada = 0
+           AND substr(v.fecha_hora, 1, 10) >= ?
+           AND substr(v.fecha_hora, 1, 10) <= ?
+         GROUP BY p.id, p.nombre
+         ORDER BY cantidad_vendida DESC
+         LIMIT ?`,
+        [desde, hasta, limite],
+      )
+      .map((fila) => ({
+        productoId: fila.producto_id,
+        nombre: fila.nombre,
+        cantidadVendida: fila.cantidad_vendida,
+        totalVendido: fila.total_vendido,
+        gananciaTotal: fila.ganancia_total,
       }));
   }
 

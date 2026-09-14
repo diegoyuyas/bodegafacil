@@ -6,6 +6,7 @@ import { usarContenedor } from '@/hooks/usar-contenedor';
 import { restaurarRespaldo } from '@/infraestructura/sqlite/contenedor';
 import { descargarBinario, descargarTexto, leerArchivoComoBytes } from '@/infraestructura/exportacion/descargas';
 import { exportarFiadosACsv, exportarProductosACsv, exportarVentasACsv } from '@/core/exportacion';
+import { hoyLocalSql } from '@/core/tiempo';
 
 function fechaParaNombreArchivo(): string {
   return new Date().toISOString().slice(0, 10);
@@ -17,8 +18,11 @@ export default function PaginaRespaldo() {
   const [restaurando, setRestaurando] = useState(false);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
 
-  const [desde, setDesde] = useState('');
-  const [hasta, setHasta] = useState('');
+  // Por defecto, "Desde" y "Hasta" arrancan en la fecha actual del
+  // dispositivo (misma fecha local que usa el resto de la app — ver
+  // core/tiempo.ts), no vacíos.
+  const [desde, setDesde] = useState(hoyLocalSql());
+  const [hasta, setHasta] = useState(hoyLocalSql());
   const rangoInvalido = Boolean(desde && hasta && desde > hasta);
 
   function exportarVentas() {
@@ -92,10 +96,6 @@ export default function PaginaRespaldo() {
 
         <div className="mt-3 rounded-xl border border-linea p-3">
           <p className="text-xs font-semibold text-tinta/70">Rango de fechas (opcional)</p>
-          <p className="mt-1 text-xs text-tinta/50">
-            Filtra el Historial de ventas y los Fiados pendientes — por ejemplo, para ver un mes
-            completo. No afecta a Productos e inventario, que siempre muestra el stock actual.
-          </p>
           <div className="mt-2 flex gap-2">
             <div className="flex-1">
               <label className="mb-1 block text-xs text-tinta/50">Desde</label>
