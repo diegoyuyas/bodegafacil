@@ -1,6 +1,6 @@
 import type { CajaRepositorio, FiadoRepositorio } from '@/core/repositorios';
 import { ErrorDeNegocio, calcularDeudaNueva } from '@/core/reglas-negocio';
-import type { Cliente, MetodoPagoSinFiado } from '@/core/tipos';
+import type { Cliente, DeudaPendienteDetalle, MetodoPagoSinFiado } from '@/core/tipos';
 import type { BaseDatosLocal } from './base-datos';
 import { mapearCliente, type FilaCliente } from './mapeadores';
 
@@ -81,5 +81,34 @@ export class FiadoRepositorioSqlite implements FiadoRepositorio {
 
       this.caja.registrarIngreso(monto, `Pago de deuda — ${clienteId}`, metodoPago);
     });
+  }
+
+  listarDeudasPendientesDetalladas(clienteId: number): DeudaPendienteDetalle[] {
+    const deudas = this.bd.consultar<{
+      id: number;
+      fecha: string;
+      saldo_pendiente: number;
+      venta_id: number | null;
+    }>(
+      `SELECT id, fecha, saldo_pendiente, venta_id FROM deuda_cliente
+       WHERE cliente_id = ? AND saldo_pendiente > 0
+       ORDER BY fecha ASC`,
+      [clienteId],
+    );
+
+    return deudas.map((d) => ({
+      fecha: d.fecha,
+      saldoPendiente: d.saldo_pendiente,
+      lineas: d.venta_id
+        ? this.bd.consultar<{ producto: string; cantidad: number }>(
+            `SELECT p.nombre AS producto, dv.cantidad AS cantidad
+             FROM detalle_venta dv
+             JOIN producto p ON p.id = dv.producto_id
+             WHERE dv.venta_id = ?
+             ORDER BY dv.id`,
+            [d.venta_id],
+          )
+        : [],
+    }));
   }
 }

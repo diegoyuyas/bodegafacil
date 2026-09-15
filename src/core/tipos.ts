@@ -220,6 +220,16 @@ export interface LineaVentaResumen {
   cantidad: number;
 }
 
+/**
+ * Una deuda pendiente individual (una venta al fiado, con sus
+ * productos), para armar el mensaje de WhatsApp de cobranza.
+ */
+export interface DeudaPendienteDetalle {
+  fecha: string;
+  saldoPendiente: number;
+  lineas: LineaVentaResumen[];
+}
+
 /** Una fila del reporte de compras por rango de fechas (con proveedor ya resuelto). */
 export interface CompraListaItem {
   id: number;

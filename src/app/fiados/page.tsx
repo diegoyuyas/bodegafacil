@@ -5,6 +5,9 @@ import { useEffect, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
 import type { Cliente, MetodoPagoSinFiado } from '@/core/tipos';
+import type { EstadoPlan } from '@/core/plan';
+import { construirMensajeDeuda } from '@/core/whatsapp';
+import { construirEnlaceWhatsApp } from '@/infraestructura/whatsapp/enlace';
 
 const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
   { valor: 'efectivo', etiqueta: 'Efectivo' },
@@ -20,6 +23,7 @@ function formatearSoles(monto: number): string {
 export default function PaginaFiados() {
   const { contenedor, cargando, error } = usarContenedor();
   const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [estadoPlan, setEstadoPlan] = useState<EstadoPlan | null>(null);
   const [clienteAbierto, setClienteAbierto] = useState<number | null>(null);
   const [monto, setMonto] = useState('');
   const [metodo, setMetodo] = useState<MetodoPagoSinFiado>('efectivo');
@@ -30,6 +34,12 @@ export default function PaginaFiados() {
   }
 
   useEffect(recargar, [contenedor]);
+  useEffect(() => {
+  if (!contenedor) return;
+  setEstadoPlan(contenedor.plan.obtenerEstado());
+}, [contenedor]);
+
+const esPremium = estadoPlan?.tipo === 'premium';
 
   function abrirPago(cliente: Cliente) {
     setClienteAbierto(cliente.id);
@@ -48,6 +58,14 @@ export default function PaginaFiados() {
     } catch (e) {
       setMensajeError(e instanceof ErrorDeNegocio ? e.message : 'No se pudo registrar el pago.');
     }
+  }
+
+  function enviarRecordatorioWhatsApp(cliente: Cliente) {
+    if (!contenedor || !cliente.telefono) return;
+    const deudas = contenedor.fiados.listarDeudasPendientesDetalladas(cliente.id);
+    const mensaje = construirMensajeDeuda(cliente, deudas);
+    const enlace = construirEnlaceWhatsApp(cliente.telefono, mensaje);
+    window.open(enlace, '_blank');
   }
 
   const totalPorCobrar = clientes.reduce((suma, c) => suma + c.saldoPendiente, 0);
@@ -87,6 +105,20 @@ export default function PaginaFiados() {
                   <span className="text-sm font-semibold text-alerta">
                     {formatearSoles(cliente.saldoPendiente)}
                   </span>
+                  <button
+                    onClick={() => enviarRecordatorioWhatsApp(cliente)}
+                    disabled={!cliente.telefono || !esPremium}
+                    title={
+                      !cliente.telefono
+                        ? 'Este cliente no tiene teléfono registrado'
+                        : !esPremium
+                          ? 'Función Premium'
+                          : undefined
+                    }
+                    className="text-xs font-semibold text-bodega-oscuro disabled:text-tinta/30"
+                  >
+                    WhatsApp
+                  </button>
                   <button
                     onClick={() =>
                       clienteAbierto === cliente.id ? setClienteAbierto(null) : abrirPago(cliente)

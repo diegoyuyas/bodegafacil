@@ -99,13 +99,19 @@ export default function PaginaCaja() {
       <div className="mt-4 flex gap-3">
         <button
           onClick={() => setMostrarFormulario(mostrarFormulario === 'ingreso' ? null : 'ingreso')}
-          className="h-10 flex-1 rounded-full border border-bodega text-sm font-semibold text-bodega-oscuro"
+          className={`h-10 flex-1 rounded-full border text-sm font-semibold ${
+            mostrarFormulario === 'ingreso'
+              ? 'border-bodega bg-bodega text-white'
+              : 'border-bodega text-bodega-oscuro'
+          }`}
         >
           + Ingreso
         </button>
         <button
           onClick={() => setMostrarFormulario(mostrarFormulario === 'egreso' ? null : 'egreso')}
-          className="h-10 flex-1 rounded-full border border-alerta text-sm font-semibold text-alerta"
+          className={`h-10 flex-1 rounded-full border text-sm font-semibold ${
+            mostrarFormulario === 'egreso' ? 'border-alerta bg-alerta text-white' : 'border-alerta text-alerta'
+          }`}
         >
           − Egreso
         </button>

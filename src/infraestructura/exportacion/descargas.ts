@@ -15,6 +15,13 @@ export function descargarBinario(nombreArchivo: string, datos: Uint8Array): void
   disparaDescarga(blob, nombreArchivo);
 }
 
+export function descargarExcel(nombreArchivo: string, datos: Uint8Array): void {
+  const blob = new Blob([datos], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+  disparaDescarga(blob, nombreArchivo);
+}
+
 function disparaDescarga(blob: Blob, nombreArchivo: string): void {
   const url = URL.createObjectURL(blob);
   const enlace = document.createElement('a');

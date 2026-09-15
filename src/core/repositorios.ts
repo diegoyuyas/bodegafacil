@@ -12,6 +12,7 @@ import type {
   Cliente,
   Compra,
   CompraListaItem,
+  DeudaPendienteDetalle,
   LineaVentaResumen,
   MetodoPagoSinFiado,
   MovimientoCaja,
@@ -23,7 +24,7 @@ import type {
   Venta,
   VentaListaItem,
 } from './tipos';
-import type { FilaVentaDetallada } from './exportacion';
+import type { FilaVentaDetallada, FilaCompraDetallada } from './exportacion';
 import type { EstadoPlan } from './plan';
 
 export interface ProductoRepositorio {
@@ -140,6 +141,12 @@ export interface FiadoRepositorio {
    */
   listarClientesConDeuda(desde?: string, hasta?: string): Cliente[];
   registrarPago(clienteId: number, monto: number, metodoPago: MetodoPagoSinFiado): void;
+  /**
+   * Deudas pendientes de un cliente (una por cada venta al fiado no
+   * pagada del todo), con sus productos y fecha — para armar el
+   * mensaje de cobranza por WhatsApp.
+   */
+  listarDeudasPendientesDetalladas(clienteId: number): DeudaPendienteDetalle[];
 }
 
 export interface ProveedorRepositorio {
@@ -187,6 +194,12 @@ export interface CompraRepositorio {
   listarRecientes(limite?: number): Compra[];
   /** Compras dentro de un rango de fechas 'YYYY-MM-DD' inclusive, con proveedor resuelto, para el reporte (Premium). */
   listarPorRango(desde: string, hasta: string): CompraListaItem[];
+  /**
+   * Filas planas (compra + producto) listas para exportar a Excel, con
+   * el total de la compra repetido en cada línea. Sin `desde`/`hasta`,
+   * exporta todo el historial.
+   */
+  listarDetalleParaExportar(desde?: string, hasta?: string): FilaCompraDetallada[];
 }
 
 /** Acceso crudo clave-valor a la tabla configuracion_app. */

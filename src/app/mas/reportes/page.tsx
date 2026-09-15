@@ -6,6 +6,9 @@ import { usarContenedor } from '@/hooks/usar-contenedor';
 import type { EstadoPlan } from '@/core/plan';
 import type { CompraListaItem, MovimientoCaja, ProductoMasVendidoItem } from '@/core/tipos';
 import { hoyLocalSql } from '@/core/tiempo';
+import { construirHojaCaja, construirHojaCompras, construirHojaMasVendidos } from '@/core/exportacion';
+import { generarLibroExcel } from '@/infraestructura/exportacion/excel';
+import { descargarExcel } from '@/infraestructura/exportacion/descargas';
 
 const PESTANAS = [
   { valor: 'caja', etiqueta: 'Caja' },
@@ -40,13 +43,25 @@ export default function PaginaReportes() {
   const esPremium = estadoPlan?.tipo === 'premium';
 
   function consultar() {
-    if (!contenedor || !esPremium || rangoInvalido || !desde || !hasta) return;
+    if (!contenedor || rangoInvalido || !desde || !hasta) return;
     setMovimientosCaja(contenedor.caja.listarMovimientosPorRango(desde, hasta));
     setCompras(contenedor.compras.listarPorRango(desde, hasta));
     setMasVendidos(contenedor.ventas.listarProductosMasVendidos(desde, hasta));
   }
 
-  useEffect(consultar, [contenedor, esPremium, desde, hasta, rangoInvalido]);
+  useEffect(consultar, [contenedor, desde, hasta, rangoInvalido]);
+
+  function descargarExcelDelReporte() {
+    if (!esPremium) return;
+    const hoja =
+      pestana === 'caja'
+        ? construirHojaCaja(movimientosCaja)
+        : pestana === 'compras'
+          ? construirHojaCompras(compras)
+          : construirHojaMasVendidos(masVendidos);
+    const libro = generarLibroExcel([hoja]);
+    descargarExcel(`reporte-${pestana}-${desde}-a-${hasta}.xlsx`, libro);
+  }
 
   const totalesCaja = useMemo(() => {
     const ingresos = movimientosCaja
@@ -75,18 +90,7 @@ export default function PaginaReportes() {
       {cargando && <p className="mt-4 text-sm text-tinta/60">Cargando…</p>}
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
-      {estadoPlan && !esPremium && (
-        <section className="mt-6 rounded-xl border border-linea p-5 text-center">
-          <p className="text-sm font-semibold text-tinta">Reportes es una función Premium</p>
-          <p className="mt-2 text-xs text-tinta/60">
-            Caja, compras y productos más vendidos por rango de fechas están disponibles al
-            activar el Plan Premium.
-          </p>
-        </section>
-      )}
-
-      {esPremium && (
-        <>
+      <>
           <div className="mt-4 flex gap-2">
             {PESTANAS.map((p) => (
               <button
@@ -131,6 +135,16 @@ export default function PaginaReportes() {
               <p className="mt-2 text-xs text-alerta">La fecha "desde" no puede ser posterior a "hasta".</p>
             )}
           </div>
+
+          <button
+            onClick={descargarExcelDelReporte}
+            disabled={!esPremium || rangoInvalido}
+            className={`mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold disabled:opacity-40 ${
+              esPremium ? 'bg-bodega text-white active:bg-bodega-oscuro' : 'border border-linea text-tinta/60'
+            }`}
+          >
+            {esPremium ? 'Descargar Excel ↓' : '🔒 Descargar Excel (Premium)'}
+          </button>
 
           {pestana === 'caja' && (
             <section className="mt-4">
@@ -245,7 +259,6 @@ export default function PaginaReportes() {
             </section>
           )}
         </>
-      )}
     </div>
   );
 }

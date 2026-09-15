@@ -6,6 +6,7 @@ import type {
 } from '@/core/repositorios';
 import { ErrorDeNegocio, calcularStockNuevo, redondear, validarComprobante } from '@/core/reglas-negocio';
 import type { Compra, CompraListaItem } from '@/core/tipos';
+import type { FilaCompraDetallada } from '@/core/exportacion';
 import type { BaseDatosLocal } from './base-datos';
 import { mapearCompra, type FilaCompra } from './mapeadores';
 
@@ -107,6 +108,67 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
         proveedorNombre: fila.proveedor_nombre_guardado ?? fila.proveedor_nombre_libre,
         comprobante: fila.comprobante,
         total: fila.total,
+        estado: fila.estado,
+      }));
+  }
+
+  listarDetalleParaExportar(desde?: string, hasta?: string): FilaCompraDetallada[] {
+    const condicionesFecha: string[] = [];
+    const parametros: string[] = [];
+    if (desde) {
+      condicionesFecha.push('substr(c.fecha, 1, 10) >= ?');
+      parametros.push(desde);
+    }
+    if (hasta) {
+      condicionesFecha.push('substr(c.fecha, 1, 10) <= ?');
+      parametros.push(hasta);
+    }
+    const clausulaFecha = condicionesFecha.length ? ` AND ${condicionesFecha.join(' AND ')}` : '';
+
+    return this.bd
+      .consultar<{
+        id: number;
+        fecha: string;
+        proveedor_nombre_libre: string | null;
+        proveedor_nombre_guardado: string | null;
+        producto: string;
+        cantidad: number;
+        costo_unitario: number;
+        subtotal: number;
+        total_compra: number;
+        comprobante: string | null;
+        estado: Compra['estado'];
+      }>(
+        `SELECT
+           c.id AS id,
+           c.fecha AS fecha,
+           c.proveedor_nombre_libre AS proveedor_nombre_libre,
+           pv.nombre AS proveedor_nombre_guardado,
+           p.nombre AS producto,
+           dc.cantidad AS cantidad,
+           dc.costo_unitario AS costo_unitario,
+           dc.subtotal AS subtotal,
+           c.total AS total_compra,
+           c.comprobante AS comprobante,
+           c.estado AS estado
+         FROM detalle_compra dc
+         JOIN compra c ON c.id = dc.compra_id
+         JOIN producto p ON p.id = dc.producto_id
+         LEFT JOIN proveedor pv ON pv.id = c.proveedor_id
+         WHERE 1 = 1${clausulaFecha}
+         ORDER BY c.fecha DESC`,
+        parametros,
+      )
+      .map((fila) => ({
+        compra: `C-${fila.id}`,
+        fecha: fila.fecha,
+        proveedor: fila.proveedor_nombre_guardado ?? fila.proveedor_nombre_libre ?? 'Sin especificar',
+        producto: fila.producto,
+        cantidad: fila.cantidad,
+        precioUnitario: fila.costo_unitario,
+        subtotal: fila.subtotal,
+        totalCompra: fila.total_compra,
+        comprobante: fila.comprobante,
         estado: fila.estado,
       }));
   }
