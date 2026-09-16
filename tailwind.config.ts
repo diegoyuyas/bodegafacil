@@ -5,19 +5,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        papel: '#F6F5F0',       // fondo — papel de ticket, no el crema genérico de IA
-        tinta: '#1C1F1B',       // texto principal, casi negro con tinte verde
+        papel: '#F4FAF9',       // fondo — blanco con tinte menta, del logo de Vende Fácil
+        tinta: '#12262A',       // texto principal, casi negro con tinte turquesa oscuro
         bodega: {
-          DEFAULT: '#2F6F4E',  // verde toldo — color de marca
-          oscuro: '#1F4E36',
-          claro: '#DCEAE1',
+          DEFAULT: '#0C6B7D',  // turquesa oscuro — color de marca (Vende Fácil), botones sólidos
+          oscuro: '#06424D',
+          claro: '#DCF3F1',
         },
         acento: {
-          DEFAULT: '#D9A62E',  // mostaza — acento cálido, mercado peruano
+          DEFAULT: '#D9A62E',  // dorado — distintivo de funciones Premium
           oscuro: '#B3841E',
         },
         alerta: '#B24C3C',      // alertas de stock bajo / deuda
-        linea: '#DAD6C8',       // hairlines / divisores
+        linea: '#D7E6E5',       // hairlines / divisores
       },
       fontFamily: {
         // Pila de fuentes del sistema: geométrica y redondeada donde esté

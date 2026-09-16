@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
 import type { Proveedor } from '@/core/tipos';
@@ -10,6 +10,7 @@ export default function PaginaProveedores() {
   const { contenedor, cargando, error } = usarContenedor();
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [busqueda, setBusqueda] = useState('');
   const [nombre, setNombre] = useState('');
   const [ruc, setRuc] = useState('');
   const [celular, setCelular] = useState('');
@@ -27,6 +28,17 @@ export default function PaginaProveedores() {
   }
 
   useEffect(recargar, [contenedor]);
+
+  const proveedoresFiltrados = useMemo(() => {
+    const texto = busqueda.trim().toLowerCase();
+    if (!texto) return proveedores;
+    return proveedores.filter((p) => {
+      if (p.nombre.toLowerCase().includes(texto)) return true;
+      if ((p.ruc ?? '').toLowerCase().includes(texto)) return true;
+      if ((p.telefono ?? '').toLowerCase().includes(texto)) return true;
+      return false;
+    });
+  }, [proveedores, busqueda]);
 
   const rucValido = ruc.trim() === '' || /^[A-Za-z0-9]{1,15}$/.test(ruc.trim());
   const celularValido = celular.trim() === '' || /^[0-9]{6,12}$/.test(celular.trim());
@@ -143,6 +155,17 @@ export default function PaginaProveedores() {
         </section>
       )}
 
+      {proveedores.length > 0 && (
+        <div className="mt-4">
+          <input
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar por nombre, RUC o celular…"
+            className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+          />
+        </div>
+      )}
+
       <main className="mt-6 flex-1">
         {cargando && <p className="text-sm text-tinta/60">Cargando…</p>}
         {error && <p className="text-sm text-alerta">{error.message}</p>}
@@ -153,8 +176,14 @@ export default function PaginaProveedores() {
           </p>
         )}
 
+        {!cargando && proveedores.length > 0 && proveedoresFiltrados.length === 0 && (
+          <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
+            Ningún proveedor coincide con &quot;{busqueda}&quot;.
+          </p>
+        )}
+
         <ul className="divide-y divide-linea border-y border-linea">
-          {proveedores.map((proveedor) => (
+          {proveedoresFiltrados.map((proveedor) => (
             <li key={proveedor.id} className="py-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">

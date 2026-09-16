@@ -1,5 +1,5 @@
 /**
- * Bodega Fácil — Enlace de WhatsApp
+ * Vende Fácil — Enlace de WhatsApp
  * ------------------------------------------------------------
  * No existe una API gratuita para enviar mensajes automáticamente:
  * lo único disponible sin costo es abrir WhatsApp con el mensaje ya

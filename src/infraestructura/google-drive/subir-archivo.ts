@@ -1,10 +1,10 @@
 /**
- * Bodega Fácil — Subida a Google Drive
+ * Vende Fácil — Subida a Google Drive
  * ------------------------------------------------------------
  * Sube el .xlsx ya generado (ver `infraestructura/exportacion/excel.ts`)
  * directamente al Drive personal del usuario autenticado, usando una
  * subida "multipart" simple contra la API REST de Drive v3. No pasa
- * por ningún servidor de Bodega Fácil — el navegador habla directo
+ * por ningún servidor de Vende Fácil — el navegador habla directo
  * con Google.
  */
 
@@ -22,7 +22,7 @@ export interface ArchivoSubido {
  * archivo) porque no hay SDK de Google cargado — solo `fetch`.
  */
 function construirCuerpoMultipart(nombreArchivo: string, datos: Uint8Array): { cuerpo: Blob; limite: string } {
-  const limite = 'bodega_facil_' + Math.random().toString(36).slice(2);
+  const limite = 'vende_facil_' + Math.random().toString(36).slice(2);
   const metadata = JSON.stringify({ name: nombreArchivo, mimeType: MIME_XLSX });
 
   const partes: BlobPart[] = [

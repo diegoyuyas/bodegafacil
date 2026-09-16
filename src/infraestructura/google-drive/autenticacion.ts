@@ -1,5 +1,5 @@
 /**
- * Bodega Fácil — Autenticación con Google (solo para exportar a Drive)
+ * Vende Fácil — Autenticación con Google (solo para exportar a Drive)
  * ------------------------------------------------------------
  * No hay backend, así que usamos el flujo 100% client-side de Google
  * Identity Services (GIS): el usuario toca "Conectar con Google", se

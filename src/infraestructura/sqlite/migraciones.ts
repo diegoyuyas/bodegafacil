@@ -1,5 +1,5 @@
 /**
- * Bodega Fácil — Migraciones
+ * Vende Fácil — Migraciones
  * ------------------------------------------------------------
  * `esquema.sql` solo se ejecuta en una base NUEVA (vacía). Si el
  * dispositivo ya tenía datos guardados de una versión anterior, hay

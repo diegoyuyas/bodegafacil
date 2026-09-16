@@ -1,18 +1,41 @@
 /** @type {import('next').NextConfig} */
+
+// Capacitor no corre un servidor Next.js dentro del celular: necesita
+// HTML/JS/CSS estáticos que pueda copiar tal cual al proyecto Android
+// (ver android/app/src/main/assets/public tras `npx cap sync`). Por
+// eso el build para el APK usa `output: 'export'` (genera la carpeta
+// /out), mientras que `npm run dev` y un build "normal" (por si en
+// algún momento se hostea la PWA en una URL) siguen funcionando igual
+// que antes. Se activa solo con la variable BUILD_CAPACITOR=1 (ver
+// script "build:apk" en package.json) para no romper nada existente.
+const paraCapacitor = process.env.BUILD_CAPACITOR === '1';
+
 const nextConfig = {
   reactStrictMode: true,
-  // La app debe funcionar instalada como PWA y operar sin conexión
-  // (ver sección 4 del documento maestro). El manifest y el service
-  // worker viven en /public y se registran desde el layout raíz.
-  headers: async () => [
-    {
-      source: '/sw.js',
-      headers: [
-        { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
-        { key: 'Service-Worker-Allowed', value: '/' },
-      ],
-    },
-  ],
+  ...(paraCapacitor
+    ? {
+        // Export estático: sin servidor, sin optimizador de imágenes
+        // en runtime (no se usa next/image en el proyecto, así que
+        // esto no cambia nada visualmente).
+        output: 'export',
+        images: { unoptimized: true },
+      }
+    : {
+        // La app debe funcionar instalada como PWA y operar sin conexión
+        // (ver sección 4 del documento maestro). El manifest y el service
+        // worker viven en /public y se registran desde el layout raíz.
+        // (Estos headers no aplican con `output: 'export'`, por eso solo
+        // se agregan en el build "normal".)
+        headers: async () => [
+          {
+            source: '/sw.js',
+            headers: [
+              { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+              { key: 'Service-Worker-Allowed', value: '/' },
+            ],
+          },
+        ],
+      }),
   webpack: (config, { isServer, webpack }) => {
     if (!isServer) {
       // sql.js (dist/sql-wasm.js) es un build "isomórfico": tiene una

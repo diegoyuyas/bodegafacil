@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
 import type { Cliente } from '@/core/tipos';
@@ -10,6 +10,7 @@ export default function PaginaClientes() {
   const { contenedor, cargando, error } = usarContenedor();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [busqueda, setBusqueda] = useState('');
   const [nombre, setNombre] = useState('');
   const [documento, setDocumento] = useState('');
   const [telefono, setTelefono] = useState('');
@@ -27,6 +28,17 @@ export default function PaginaClientes() {
   }
 
   useEffect(recargar, [contenedor]);
+
+  const clientesFiltrados = useMemo(() => {
+    const texto = busqueda.trim().toLowerCase();
+    if (!texto) return clientes;
+    return clientes.filter((c) => {
+      if (c.nombre.toLowerCase().includes(texto)) return true;
+      if ((c.documento ?? '').toLowerCase().includes(texto)) return true;
+      if ((c.telefono ?? '').toLowerCase().includes(texto)) return true;
+      return false;
+    });
+  }, [clientes, busqueda]);
 
   const documentoValido = /^[A-Za-z0-9]{1,15}$/.test(documento.trim());
   const formularioValido = nombre.trim().length > 0 && documentoValido;
@@ -140,6 +152,17 @@ export default function PaginaClientes() {
         </section>
       )}
 
+      {clientes.length > 0 && (
+        <div className="mt-4">
+          <input
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar por nombre, DNI o celular…"
+            className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+          />
+        </div>
+      )}
+
       <main className="mt-6 flex-1">
         {cargando && <p className="text-sm text-tinta/60">Cargando…</p>}
         {error && <p className="text-sm text-alerta">{error.message}</p>}
@@ -150,8 +173,14 @@ export default function PaginaClientes() {
           </p>
         )}
 
+        {!cargando && clientes.length > 0 && clientesFiltrados.length === 0 && (
+          <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
+            Ningún cliente coincide con &quot;{busqueda}&quot;.
+          </p>
+        )}
+
         <ul className="divide-y divide-linea border-y border-linea">
-          {clientes.map((cliente) => (
+          {clientesFiltrados.map((cliente) => (
             <li key={cliente.id} className="py-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">

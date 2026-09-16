@@ -1,5 +1,5 @@
 /**
- * Bodega Fácil — Tipos del núcleo de negocio
+ * Vende Fácil — Tipos del núcleo de negocio
  * ------------------------------------------------------------
  * Estas interfaces reflejan 1 a 1 las tablas de `esquema.sql`.
  * Se usan en la capa de negocio y en los repositorios de acceso
@@ -170,6 +170,12 @@ export interface MetadatoRespaldo {
 export interface LineaVentaEntrada {
   productoId: number;
   cantidad: number;
+  /**
+   * Precio a cobrar por unidad, si se quiere anular el precioVenta
+   * del catálogo (switch "Precio editable al vender" en Más >
+   * Configuración). Si se omite, se usa el precioVenta del producto.
+   */
+  precioUnitario?: number;
 }
 
 /**
@@ -247,4 +253,17 @@ export interface ProductoMasVendidoItem {
   cantidadVendida: number;
   totalVendido: number;
   gananciaTotal: number;
+}
+
+/**
+ * Una entrada del historial de costos de un producto: lo que costó
+ * cada vez que se compró, tomado de las compras registradas
+ * (Premium, sección "Historial de costos" dentro de Reportes).
+ */
+export interface HistorialCostoItem {
+  fecha: string;
+  costoUnitario: number;
+  cantidad: number;
+  proveedorNombre: string | null;
+  compraId: number;
 }

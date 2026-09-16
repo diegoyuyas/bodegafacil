@@ -1,5 +1,5 @@
 /**
- * Bodega Fácil — Service worker mínimo (offline-first)
+ * Vende Fácil — Service worker mínimo (offline-first)
  * ------------------------------------------------------------
  * No usa una lista de precache fija porque los assets de Next.js
  * cambian de nombre en cada build. En su lugar:
@@ -14,8 +14,8 @@
  * estrategia de arriba.
  */
 
-const CACHE_ESTATICO = 'bodega-facil-estatico-v1';
-const CACHE_PAGINAS = 'bodega-facil-paginas-v1';
+const CACHE_ESTATICO = 'vende-facil-estatico-v1';
+const CACHE_PAGINAS = 'vende-facil-paginas-v1';
 
 self.addEventListener('install', (evento) => {
   self.skipWaiting();

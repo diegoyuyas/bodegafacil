@@ -1,5 +1,5 @@
 /**
- * Bodega Fácil — Reglas de negocio
+ * Vende Fácil — Reglas de negocio
  * ------------------------------------------------------------
  * Núcleo de negocio independiente de la interfaz (sección 5.1
  * del documento maestro). Estas funciones son PURAS: reciben
@@ -69,16 +69,36 @@ export function verificarStockDisponible(producto: Producto, cantidad: number): 
 }
 
 /**
+ * Valida un precio unitario ingresado a mano (switch "Precio editable
+ * al vender"). Debe ser un número finito y no negativo — sí se
+ * permiten descuentos hasta S/ 0, pero no precios inválidos.
+ */
+export function validarPrecioUnitario(precio: number, nombreProducto: string): void {
+  if (!Number.isFinite(precio) || precio < 0) {
+    throw new ErrorDeNegocio(`El precio de "${nombreProducto}" debe ser un número mayor o igual a 0.`);
+  }
+}
+
+/**
  * Construye el detalle de una línea de venta a partir de un producto
  * y una cantidad. No modifica stock ni persiste nada: solo calcula.
+ *
+ * `precioUnitarioPersonalizado` permite anular el precioVenta del
+ * catálogo (switch "Precio editable al vender"); si se omite, se usa
+ * el precio del producto tal como está guardado.
  */
 export function construirDetalleVenta(
   producto: Producto,
   cantidad: number,
+  precioUnitarioPersonalizado?: number,
 ): Omit<DetalleVenta, 'id' | 'ventaId'> {
   verificarStockDisponible(producto, cantidad);
 
-  const precioUnitario = producto.precioVenta;
+  if (precioUnitarioPersonalizado !== undefined) {
+    validarPrecioUnitario(precioUnitarioPersonalizado, producto.nombre);
+  }
+
+  const precioUnitario = precioUnitarioPersonalizado ?? producto.precioVenta;
   const costoUnitario = producto.costo;
   const subtotal = calcularSubtotalLinea(precioUnitario, cantidad);
   const gananciaLinea = calcularGananciaLinea(precioUnitario, costoUnitario, cantidad);
@@ -110,7 +130,7 @@ export function construirVenta(
 
   const detalles: DetalleVenta[] = lineas.map((linea) => {
     const producto = obtenerProducto(linea.productoId);
-    const detalle = construirDetalleVenta(producto, linea.cantidad);
+    const detalle = construirDetalleVenta(producto, linea.cantidad, linea.precioUnitario);
     return { ...detalle, id: 0, ventaId: 0 }; // ids reales los asigna el repositorio al guardar
   });
 

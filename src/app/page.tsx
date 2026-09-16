@@ -6,6 +6,10 @@ import { usarContenedor } from '@/hooks/usar-contenedor';
 import type { LineaVentaResumen, ResumenDia, VentaListaItem } from '@/core/tipos';
 import { LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
 import type { EstadoPlan } from '@/core/plan';
+import {
+  CLAVE_NOMBRE_TIENDA,
+  obtenerNombreTienda,
+} from '@/core/configuracion';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 /**
@@ -37,6 +41,7 @@ export default function PaginaInicio() {
   const [lineasPorVenta, setLineasPorVenta] = useState<Record<number, LineaVentaResumen[]>>({});
   const [pedidosAbiertos, setPedidosAbiertos] = useState(false);
   const [busquedaPedidos, setBusquedaPedidos] = useState('');
+  const [nombreTienda, setNombreTienda] = useState(obtenerNombreTienda(null));
 
   // Gesto secreto: tocar 5 veces el título entra al panel de administrador.
   // No aparece en ningún menú a propósito — es solo para el dueño de la app.
@@ -58,10 +63,12 @@ export default function PaginaInicio() {
 
   function recargar() {
     if (!contenedor) return;
-    setResumen(contenedor.ventas.resumenDelDia());
+    const resumenDelDia = contenedor.ventas.resumenDelDia();
+    setResumen(resumenDelDia);
     setVentasDeHoy(contenedor.ventas.listarDeHoyConDetalle());
     setTotalHistorico(contenedor.ventas.contarTotalHistorico());
     setEstadoPlan(contenedor.plan.obtenerEstado());
+    setNombreTienda(obtenerNombreTienda(contenedor.configuracion.obtenerValor(CLAVE_NOMBRE_TIENDA)));
   }
 
   useEffect(recargar, [contenedor]);
@@ -119,7 +126,7 @@ export default function PaginaInicio() {
           onClick={tocarTitulo}
           className="text-lg font-extrabold tracking-tight text-bodega-oscuro select-none"
         >
-          Venta Fácil
+          {nombreTienda}
         </h1>
         <span className="text-sm text-tinta/60">
           {new Date().toLocaleDateString('es-PE', { day: 'numeric', month: 'long' })}

@@ -1,5 +1,5 @@
 /**
- * Bodega Fácil — Exportación a CSV
+ * Vende Fácil — Exportación a CSV
  * ------------------------------------------------------------
  * Funciones puras: reciben datos ya consultados y devuelven un string
  * CSV. El efecto de lado (descargar el archivo) vive en
@@ -10,6 +10,7 @@
 import type {
   Cliente,
   CompraListaItem,
+  HistorialCostoItem,
   MovimientoCaja,
   Producto,
   ProductoMasVendidoItem,
@@ -77,7 +78,7 @@ export function exportarFiadosACsv(clientes: Cliente[]): string {
 }
 
 /**
- * Bodega Fácil — Exportación a Excel (.xlsx)
+ * Vende Fácil — Exportación a Excel (.xlsx)
  * ------------------------------------------------------------
  * Estas funciones son puras: arman encabezados + filas a partir de
  * datos ya consultados, sin depender de ninguna librería de Excel.
@@ -230,5 +231,28 @@ export function construirHojaProveedores(proveedores: Proveedor[]): HojaExcel {
     nombre: 'Proveedores',
     encabezados: ['Nombre', 'RUC', 'Teléfono', 'Activo'],
     filas: proveedores.map((p) => [p.nombre, p.ruc, p.telefono, p.activo ? 'Sí' : 'No']),
+  };
+}
+
+/**
+ * Historial de costos de un producto puntual (Premium, dentro de
+ * Reportes). `nombreProducto` va como prefijo del nombre de la
+ * pestaña para identificar de qué producto se trata al abrir el
+ * Excel descargado.
+ */
+export function construirHojaHistorialCostos(
+  nombreProducto: string,
+  items: HistorialCostoItem[],
+): HojaExcel {
+  return {
+    nombre: `Costos - ${nombreProducto}`.slice(0, 31),
+    encabezados: ['Fecha', 'Costo unitario', 'Cantidad', 'Proveedor', 'Compra'],
+    filas: items.map((i) => [
+      i.fecha,
+      i.costoUnitario,
+      i.cantidad,
+      i.proveedorNombre ?? 'Sin especificar',
+      `C-${i.compraId}`,
+    ]),
   };
 }

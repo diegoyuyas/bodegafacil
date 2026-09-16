@@ -10,7 +10,7 @@ import { ConfiguracionRepositorioSqlite } from './configuracion.repositorio';
 import { PlanRepositorioSqlite } from './plan.repositorio';
 import { cargarBinario, guardarBinario } from '../persistencia/almacen-indexeddb';
 
-const CLAVE_PERSISTENCIA = 'bodega-facil-db';
+const CLAVE_PERSISTENCIA = 'vende-facil-db';
 
 export interface ContenedorRepositorios {
   productos: ProductoRepositorioSqlite;
@@ -21,6 +21,8 @@ export interface ContenedorRepositorios {
   proveedores: ProveedorRepositorioSqlite;
   compras: CompraRepositorioSqlite;
   plan: PlanRepositorioSqlite;
+  /** Acceso crudo clave-valor, usado por la pantalla Más > Configuración para sus switches. */
+  configuracion: ConfiguracionRepositorioSqlite;
   /** Guarda el estado actual de la base en IndexedDB. Llamar tras cada escritura. */
   persistir: () => Promise<void>;
   /** Bytes completos de la base, para el respaldo descargable (.sqlite). */
@@ -75,6 +77,7 @@ async function inicializar(): Promise<ContenedorRepositorios> {
     proveedores,
     compras,
     plan,
+    configuracion,
     persistir,
     exportarRespaldoCompleto: () => bd.exportar(),
   };
@@ -83,7 +86,7 @@ async function inicializar(): Promise<ContenedorRepositorios> {
 /**
  * Sobrescribe la base local con un respaldo (.sqlite) y recarga la
  * página. Antes de guardar, valida que el archivo sea realmente una
- * base de Venta Fácil (evita dejar la app rota si suben un archivo
+ * base de Vende Fácil (evita dejar la app rota si suben un archivo
  * cualquiera). Se recarga en vez de reasignar en caliente porque todos
  * los repositorios ya instanciados quedarían apuntando a la base
  * vieja; un reload es más simple y a prueba de errores.
@@ -97,7 +100,7 @@ export async function restaurarRespaldo(datos: Uint8Array): Promise<void> {
     });
     bdDePrueba.consultar('SELECT id FROM producto LIMIT 1');
   } catch {
-    throw new Error('El archivo no es un respaldo válido de Venta Fácil.');
+    throw new Error('El archivo no es un respaldo válido de Vende Fácil.');
   }
 
   await guardarBinario(CLAVE_PERSISTENCIA, datos);

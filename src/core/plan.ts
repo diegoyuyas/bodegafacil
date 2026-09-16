@@ -1,5 +1,5 @@
 /**
- * Bodega Fácil — Plan Free / Premium
+ * Vende Fácil — Plan Free / Premium
  * ------------------------------------------------------------
  * No hay backend ni Play Store todavía: el dueño de la app instala
  * cada APK a mano, tienda por tienda, y activa Premium localmente

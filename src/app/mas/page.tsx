@@ -16,9 +16,14 @@ const OPCIONES = [
     etiqueta: 'Exportar todo a Excel',
     descripcion: 'Un solo Excel con todo tu negocio (Premium)',
   },
+  {
+    href: '/mas/configuracion',
+    etiqueta: 'Configuración',
+    descripcion: 'Precio editable, notificación de stock bajo y nombre de tienda',
+  },
 ];
 
-const PROXIMAMENTE = ['Configuración'];
+const PROXIMAMENTE: string[] = [];
 
 export default function PaginaMas() {
   return (
@@ -44,14 +49,18 @@ export default function PaginaMas() {
         ))}
       </ul>
 
-      <p className="mt-6 text-xs uppercase tracking-wide text-tinta/40">Próximamente</p>
-      <ul className="mt-2 divide-y divide-linea border-y border-linea opacity-50">
-        {PROXIMAMENTE.map((etiqueta) => (
-          <li key={etiqueta} className="py-3 text-sm text-tinta/60">
-            {etiqueta}
-          </li>
-        ))}
-      </ul>
+      {PROXIMAMENTE.length > 0 && (
+        <>
+          <p className="mt-6 text-xs uppercase tracking-wide text-tinta/40">Próximamente</p>
+          <ul className="mt-2 divide-y divide-linea border-y border-linea opacity-50">
+            {PROXIMAMENTE.map((etiqueta) => (
+              <li key={etiqueta} className="py-3 text-sm text-tinta/60">
+                {etiqueta}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </div>
   );
 }

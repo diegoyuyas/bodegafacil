@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import type { Producto } from '@/core/tipos';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
@@ -14,6 +14,7 @@ export default function PaginaProductos() {
   const { contenedor, cargando, error } = usarContenedor();
   const [productos, setProductos] = useState<Producto[]>([]);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
+  const [busqueda, setBusqueda] = useState('');
 
   const [nombre, setNombre] = useState('');
   const [precioVenta, setPrecioVenta] = useState('');
@@ -116,6 +117,17 @@ export default function PaginaProductos() {
     }
   }
 
+  const productosFiltrados = useMemo(() => {
+    const texto = busqueda.trim().toLowerCase();
+    if (!texto) return productos;
+    return productos.filter((p) => {
+      if (p.nombre.toLowerCase().includes(texto)) return true;
+      if (p.precioVenta.toFixed(2).includes(texto)) return true;
+      if (String(p.precioVenta).includes(texto)) return true;
+      return false;
+    });
+  }, [productos, busqueda]);
+
   const formularioValido =
     nombre.trim().length > 0 && Number(precioVenta) >= 0 && Number(costo) >= 0;
 
@@ -214,6 +226,17 @@ export default function PaginaProductos() {
         </section>
       )}
 
+      {productos.length > 0 && (
+        <div className="mt-4">
+          <input
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar por nombre o precio…"
+            className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+          />
+        </div>
+      )}
+
       <main className="mt-6 flex-1">
         {cargando && <p className="text-sm text-tinta/60">Cargando…</p>}
         {error && <p className="text-sm text-alerta">{error.message}</p>}
@@ -224,8 +247,14 @@ export default function PaginaProductos() {
           </p>
         )}
 
+        {!cargando && productos.length > 0 && productosFiltrados.length === 0 && (
+          <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
+            Ningún producto coincide con &quot;{busqueda}&quot;.
+          </p>
+        )}
+
         <ul className="divide-y divide-linea border-y border-linea">
-          {productos.map((producto) => {
+          {productosFiltrados.map((producto) => {
             const stockBajo = producto.stockActual <= producto.stockMinimo;
             return (
               <li key={producto.id} className="py-3">

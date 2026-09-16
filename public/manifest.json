@@ -1,16 +1,23 @@
 {
-  "name": "Venta Fácil",
-  "short_name": "Venta Fácil",
+  "name": "Vende Fácil",
+  "short_name": "Vende Fácil",
   "description": "Registra tus ventas, controla tu caja y sabe qué tienes, qué te deben y qué necesitas comprar — sin internet.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#F6F5F0",
-  "theme_color": "#2F6F4E",
+  "background_color": "#F4FAF9",
+  "theme_color": "#0C6B7D",
   "lang": "es-PE",
   "icons": [
     { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+    { "src": "/icons/icon-48.webp", "type": "image/webp", "sizes": "48x48", "purpose": "any maskable" },
+    { "src": "/icons/icon-72.webp", "type": "image/webp", "sizes": "72x72", "purpose": "any maskable" },
+    { "src": "/icons/icon-96.webp", "type": "image/webp", "sizes": "96x96", "purpose": "any maskable" },
+    { "src": "/icons/icon-128.webp", "type": "image/webp", "sizes": "128x128", "purpose": "any maskable" },
+    { "src": "/icons/icon-192.webp", "type": "image/webp", "sizes": "192x192", "purpose": "any maskable" },
+    { "src": "/icons/icon-256.webp", "type": "image/webp", "sizes": "256x256", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.webp", "type": "image/webp", "sizes": "512x512", "purpose": "any maskable" },
+    { "src": "/logo-vende-facil.png", "sizes": "1080x1080", "type": "image/png", "purpose": "any" }
   ]
 }

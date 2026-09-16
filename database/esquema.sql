@@ -1,5 +1,5 @@
 -- ============================================================
--- Bodega Fácil — Esquema de base de datos local (SQLite)
+-- Vende Fácil — Esquema de base de datos local (SQLite)
 -- ------------------------------------------------------------
 -- Convención: todas las tablas, columnas y relaciones están
 -- nombradas en español para mantener consistencia en todo

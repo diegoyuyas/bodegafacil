@@ -118,7 +118,7 @@ export default function PaginaExportarDrive() {
           </button>
 
           <p className="mt-3 text-center text-xs text-tinta/40">
-            Al conectar, Google te pedirá iniciar sesión o elegir tu cuenta. Bodega Fácil solo
+            Al conectar, Google te pedirá iniciar sesión o elegir tu cuenta. Vende Fácil solo
             recibe permiso para crear este archivo en tu Drive — nunca ve tu contraseña ni el
             resto de tus archivos.
           </p>

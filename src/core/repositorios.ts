@@ -1,5 +1,5 @@
 /**
- * Bodega Fácil — Puertos de repositorio
+ * Vende Fácil — Puertos de repositorio
  * ------------------------------------------------------------
  * La UI y la capa de negocio dependen de estas interfaces, nunca
  * de SQLite directamente (sección 5 del documento maestro: "la capa
@@ -13,6 +13,7 @@ import type {
   Compra,
   CompraListaItem,
   DeudaPendienteDetalle,
+  HistorialCostoItem,
   LineaVentaResumen,
   MetodoPagoSinFiado,
   MovimientoCaja,
@@ -200,6 +201,13 @@ export interface CompraRepositorio {
    * exporta todo el historial.
    */
   listarDetalleParaExportar(desde?: string, hasta?: string): FilaCompraDetallada[];
+  /**
+   * Historial de costos de un producto específico: una fila por cada
+   * vez que se compró, de más reciente a más antigua (Premium, dentro
+   * de Reportes). `desde`/`hasta` ('YYYY-MM-DD') son opcionales; sin
+   * ellos, devuelve todo el historial del producto.
+   */
+  listarHistorialCostos(productoId: number, desde?: string, hasta?: string): HistorialCostoItem[];
 }
 
 /** Acceso crudo clave-valor a la tabla configuracion_app. */
@@ -224,4 +232,14 @@ export interface PlanRepositorio {
   verificarPin(pin: string): Promise<boolean>;
   /** Devuelve false (sin cambiar nada) si pinActual no es correcto. */
   cambiarPin(pinActual: string, pinNuevo: string): Promise<boolean>;
+  /** ID único de este dispositivo, listo para mostrar/copiar. Se genera y guarda solo, la primera vez que se pide. */
+  obtenerIdDispositivoTexto(): string;
+  /**
+   * Valida un código de activación firmado (ver core/activacion.ts e
+   * infraestructura/seguridad/activacion.ts) y, si es válido y no fue
+   * usado antes en este dispositivo, activa Premium por los días que
+   * trae adentro — reutilizando `activarPremium`. Lanza ErrorDeNegocio
+   * con un mensaje amigable si el código no sirve.
+   */
+  activarConCodigo(codigoTexto: string): Promise<void>;
 }

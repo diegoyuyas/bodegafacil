@@ -25,32 +25,32 @@ export default function PaginaRespaldo() {
   const [hasta, setHasta] = useState(hoyLocalSql());
   const rangoInvalido = Boolean(desde && hasta && desde > hasta);
 
-  function exportarVentas() {
+  async function exportarVentas() {
     if (!contenedor || rangoInvalido) return;
     const csv = exportarVentasACsv(
       contenedor.ventas.listarDetalleParaExportar(desde || undefined, hasta || undefined),
     );
-    descargarTexto(`ventas-${fechaParaNombreArchivo()}.csv`, csv);
+    await descargarTexto(`ventas-${fechaParaNombreArchivo()}.csv`, csv);
   }
 
-  function exportarProductos() {
+  async function exportarProductos() {
     if (!contenedor) return;
     const csv = exportarProductosACsv(contenedor.productos.listarActivos());
-    descargarTexto(`productos-${fechaParaNombreArchivo()}.csv`, csv);
+    await descargarTexto(`productos-${fechaParaNombreArchivo()}.csv`, csv);
   }
 
-  function exportarFiados() {
+  async function exportarFiados() {
     if (!contenedor || rangoInvalido) return;
     const csv = exportarFiadosACsv(
       contenedor.fiados.listarClientesConDeuda(desde || undefined, hasta || undefined),
     );
-    descargarTexto(`fiados-${fechaParaNombreArchivo()}.csv`, csv);
+    await descargarTexto(`fiados-${fechaParaNombreArchivo()}.csv`, csv);
   }
 
-  function descargarRespaldoCompleto() {
+  async function descargarRespaldoCompleto() {
     if (!contenedor) return;
     const bytes = contenedor.exportarRespaldoCompleto();
-    descargarBinario(`venta-facil-respaldo-${fechaParaNombreArchivo()}.sqlite`, bytes);
+    await descargarBinario(`venta-facil-respaldo-${fechaParaNombreArchivo()}.sqlite`, bytes);
   }
 
   async function manejarArchivoSeleccionado(archivos: FileList | null) {

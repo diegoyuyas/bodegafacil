@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 
 /**
- * Registra el service worker que permite que Venta Fácil funcione
+ * Registra el service worker que permite que Vende Fácil funcione
  * instalada y sin conexión (principio "offline-first", sección 2
  * del documento maestro). No renderiza nada visible.
  *

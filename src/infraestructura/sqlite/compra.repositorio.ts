@@ -5,7 +5,7 @@ import type {
   RegistrarCompraInput,
 } from '@/core/repositorios';
 import { ErrorDeNegocio, calcularStockNuevo, redondear, validarComprobante } from '@/core/reglas-negocio';
-import type { Compra, CompraListaItem } from '@/core/tipos';
+import type { Compra, CompraListaItem, HistorialCostoItem } from '@/core/tipos';
 import type { FilaCompraDetallada } from '@/core/exportacion';
 import type { BaseDatosLocal } from './base-datos';
 import { mapearCompra, type FilaCompra } from './mapeadores';
@@ -170,6 +170,51 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
         totalCompra: fila.total_compra,
         comprobante: fila.comprobante,
         estado: fila.estado,
+      }));
+  }
+
+  listarHistorialCostos(productoId: number, desde?: string, hasta?: string): HistorialCostoItem[] {
+    const condicionesFecha: string[] = [];
+    const parametros: (string | number)[] = [productoId];
+    if (desde) {
+      condicionesFecha.push('substr(c.fecha, 1, 10) >= ?');
+      parametros.push(desde);
+    }
+    if (hasta) {
+      condicionesFecha.push('substr(c.fecha, 1, 10) <= ?');
+      parametros.push(hasta);
+    }
+    const clausulaFecha = condicionesFecha.length ? ` AND ${condicionesFecha.join(' AND ')}` : '';
+
+    return this.bd
+      .consultar<{
+        compra_id: number;
+        fecha: string;
+        costo_unitario: number;
+        cantidad: number;
+        proveedor_nombre_libre: string | null;
+        proveedor_nombre_guardado: string | null;
+      }>(
+        `SELECT
+           dc.compra_id AS compra_id,
+           c.fecha AS fecha,
+           dc.costo_unitario AS costo_unitario,
+           dc.cantidad AS cantidad,
+           c.proveedor_nombre_libre AS proveedor_nombre_libre,
+           pv.nombre AS proveedor_nombre_guardado
+         FROM detalle_compra dc
+         JOIN compra c ON c.id = dc.compra_id
+         LEFT JOIN proveedor pv ON pv.id = c.proveedor_id
+         WHERE dc.producto_id = ? AND c.estado != 'anulada'${clausulaFecha}
+         ORDER BY c.fecha DESC`,
+        parametros,
+      )
+      .map((fila) => ({
+        fecha: fila.fecha,
+        costoUnitario: fila.costo_unitario,
+        cantidad: fila.cantidad,
+        proveedorNombre: fila.proveedor_nombre_guardado ?? fila.proveedor_nombre_libre,
+        compraId: fila.compra_id,
       }));
   }
 

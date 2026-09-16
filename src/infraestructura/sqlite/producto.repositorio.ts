@@ -21,12 +21,13 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
   }
 
   buscarPorNombre(texto: string): Producto[] {
+    const patron = `%${texto.trim()}%`;
     return this.bd
       .consultar<FilaProducto>(
         `SELECT * FROM producto
-         WHERE activo = 1 AND nombre LIKE ?
+         WHERE activo = 1 AND (nombre LIKE ? OR CAST(precio_venta AS TEXT) LIKE ?)
          ORDER BY nombre LIMIT 20`,
-        [`%${texto}%`],
+        [patron, patron],
       )
       .map(mapearProducto);
   }

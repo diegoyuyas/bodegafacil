@@ -1,5 +1,5 @@
 /**
- * Bodega Fácil — Generación del binario .xlsx
+ * Vende Fácil — Generación del binario .xlsx
  * ------------------------------------------------------------
  * Único lugar del proyecto que depende de la librería `xlsx`
  * (SheetJS). Recibe el formato neutral `HojaExcel` (definido en

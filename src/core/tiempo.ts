@@ -1,5 +1,5 @@
 /**
- * Bodega Fácil — Fecha y hora local
+ * Vende Fácil — Fecha y hora local
  * ------------------------------------------------------------
  * SQLite (`datetime('now')`, `date('now')`) trabaja en UTC por
  * defecto. Perú está en UTC-5 sin horario de verano: una venta hecha

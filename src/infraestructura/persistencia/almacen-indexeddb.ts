@@ -6,7 +6,7 @@
  * guardar un solo blob binario bajo una clave fija.
  */
 
-const NOMBRE_BASE_INDEXEDDB = 'bodega-facil';
+const NOMBRE_BASE_INDEXEDDB = 'vende-facil';
 const VERSION_BASE_INDEXEDDB = 1;
 const NOMBRE_ALMACEN = 'sqlite';
 

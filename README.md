@@ -1,12 +1,17 @@
-# Bodega Fácil
+# Vende Fácil
 
-Proyecto base de **Bodega Fácil**: app offline-first para bodegueros,
+Proyecto base de **Vende Fácil**: app offline-first para bodegueros,
 según el documento maestro del proyecto.
+
+> ¿Buscas cómo generar el .apk para instalar en un celular? Ver
+> [`GENERAR_APK.md`](./GENERAR_APK.md). ¿Cómo activar Premium a
+> distancia con un código? Ver
+> [`scripts/activacion/README.md`](./scripts/activacion/README.md).
 
 ## Contenido
 
 ```text
-bodega-facil/
+vende-facil/
 ├── database/
 │   └── esquema.sql                        # Esquema SQLite, en español — fuente única de verdad
 ├── scripts/

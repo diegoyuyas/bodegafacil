@@ -4,9 +4,14 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import type { EstadoPlan } from '@/core/plan';
-import type { CompraListaItem, MovimientoCaja, ProductoMasVendidoItem } from '@/core/tipos';
+import type { CompraListaItem, HistorialCostoItem, MovimientoCaja, Producto, ProductoMasVendidoItem } from '@/core/tipos';
 import { hoyLocalSql } from '@/core/tiempo';
-import { construirHojaCaja, construirHojaCompras, construirHojaMasVendidos } from '@/core/exportacion';
+import {
+  construirHojaCaja,
+  construirHojaCompras,
+  construirHojaHistorialCostos,
+  construirHojaMasVendidos,
+} from '@/core/exportacion';
 import { generarLibroExcel } from '@/infraestructura/exportacion/excel';
 import { descargarExcel } from '@/infraestructura/exportacion/descargas';
 
@@ -14,6 +19,7 @@ const PESTANAS = [
   { valor: 'caja', etiqueta: 'Caja' },
   { valor: 'compras', etiqueta: 'Compras' },
   { valor: 'productos', etiqueta: 'Más vendidos' },
+  { valor: 'costos', etiqueta: 'Costos' },
 ] as const;
 
 type Pestana = (typeof PESTANAS)[number]['valor'];
@@ -35,9 +41,17 @@ export default function PaginaReportes() {
   const [compras, setCompras] = useState<CompraListaItem[]>([]);
   const [masVendidos, setMasVendidos] = useState<ProductoMasVendidoItem[]>([]);
 
+  // Historial de costos (Premium): elige un producto y ve lo que costó
+  // cada vez que se compró, dentro del mismo rango de fechas de arriba.
+  const [productos, setProductos] = useState<Producto[]>([]);
+  const [busquedaProducto, setBusquedaProducto] = useState('');
+  const [productoElegido, setProductoElegido] = useState<Producto | null>(null);
+  const [historialCostos, setHistorialCostos] = useState<HistorialCostoItem[]>([]);
+
   useEffect(() => {
     if (!contenedor) return;
     setEstadoPlan(contenedor.plan.obtenerEstado());
+    setProductos(contenedor.productos.listarTodos());
   }, [contenedor]);
 
   const esPremium = estadoPlan?.tipo === 'premium';
@@ -51,8 +65,34 @@ export default function PaginaReportes() {
 
   useEffect(consultar, [contenedor, desde, hasta, rangoInvalido]);
 
-  function descargarExcelDelReporte() {
+  useEffect(() => {
+    if (!contenedor || !esPremium || !productoElegido || rangoInvalido || !desde || !hasta) {
+      setHistorialCostos([]);
+      return;
+    }
+    setHistorialCostos(contenedor.compras.listarHistorialCostos(productoElegido.id, desde, hasta));
+  }, [contenedor, esPremium, productoElegido, desde, hasta, rangoInvalido]);
+
+  const resultadosBusquedaProducto = useMemo(() => {
+    const texto = busquedaProducto.trim().toLowerCase();
+    if (!texto) return [];
+    return productos.filter((p) => p.nombre.toLowerCase().includes(texto)).slice(0, 8);
+  }, [busquedaProducto, productos]);
+
+  function elegirProducto(producto: Producto) {
+    setProductoElegido(producto);
+    setBusquedaProducto('');
+  }
+
+  async function descargarExcelDelReporte() {
     if (!esPremium) return;
+    if (pestana === 'costos') {
+      if (!productoElegido || historialCostos.length === 0) return;
+      const hoja = construirHojaHistorialCostos(productoElegido.nombre, historialCostos);
+      const libro = generarLibroExcel([hoja]);
+      await descargarExcel(`costos-${productoElegido.nombre}-${desde}-a-${hasta}.xlsx`, libro);
+      return;
+    }
     const hoja =
       pestana === 'caja'
         ? construirHojaCaja(movimientosCaja)
@@ -60,7 +100,7 @@ export default function PaginaReportes() {
           ? construirHojaCompras(compras)
           : construirHojaMasVendidos(masVendidos);
     const libro = generarLibroExcel([hoja]);
-    descargarExcel(`reporte-${pestana}-${desde}-a-${hasta}.xlsx`, libro);
+    await descargarExcel(`reporte-${pestana}-${desde}-a-${hasta}.xlsx`, libro);
   }
 
   const totalesCaja = useMemo(() => {
@@ -78,6 +118,9 @@ export default function PaginaReportes() {
     [compras],
   );
 
+  const botonExcelDeshabilitado =
+    !esPremium || rangoInvalido || (pestana === 'costos' && (!productoElegido || historialCostos.length === 0));
+
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
@@ -91,7 +134,7 @@ export default function PaginaReportes() {
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       <>
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex flex-wrap gap-2">
             {PESTANAS.map((p) => (
               <button
                 key={p.valor}
@@ -136,15 +179,17 @@ export default function PaginaReportes() {
             )}
           </div>
 
-          <button
-            onClick={descargarExcelDelReporte}
-            disabled={!esPremium || rangoInvalido}
-            className={`mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold disabled:opacity-40 ${
-              esPremium ? 'bg-bodega text-white active:bg-bodega-oscuro' : 'border border-linea text-tinta/60'
-            }`}
-          >
-            {esPremium ? 'Descargar Excel ↓' : '🔒 Descargar Excel (Premium)'}
-          </button>
+          {pestana !== 'costos' && (
+            <button
+              onClick={descargarExcelDelReporte}
+              disabled={botonExcelDeshabilitado}
+              className={`mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold disabled:opacity-40 ${
+                esPremium ? 'bg-bodega text-white active:bg-bodega-oscuro' : 'border border-linea text-tinta/60'
+              }`}
+            >
+              {esPremium ? 'Descargar Excel ↓' : '🔒 Descargar Excel (Premium)'}
+            </button>
+          )}
 
           {pestana === 'caja' && (
             <section className="mt-4">
@@ -255,6 +300,99 @@ export default function PaginaReportes() {
                     </li>
                   ))}
                 </ul>
+              )}
+            </section>
+          )}
+
+          {pestana === 'costos' && (
+            <section className="mt-4">
+              {!esPremium ? (
+                <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
+                  🔒 El historial de costos es una función Premium.
+                </p>
+              ) : (
+                <>
+                  <div className="relative">
+                    {productoElegido ? (
+                      <div className="flex items-center justify-between rounded-xl border border-linea bg-white px-4 py-3">
+                        <div>
+                          <p className="text-sm text-tinta">{productoElegido.nombre}</p>
+                          <p className="text-xs text-tinta/50">
+                            Costo actual: {formatearSoles(productoElegido.costo)}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => setProductoElegido(null)}
+                          className="text-tinta/40"
+                          aria-label="Quitar producto"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <input
+                          value={busquedaProducto}
+                          onChange={(e) => setBusquedaProducto(e.target.value)}
+                          placeholder="Buscar producto…"
+                          className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+                        />
+                        {resultadosBusquedaProducto.length > 0 && (
+                          <ul className="absolute inset-x-0 top-full z-10 mt-1 max-h-64 overflow-y-auto rounded-xl border border-linea bg-white shadow-sm">
+                            {resultadosBusquedaProducto.map((producto) => (
+                              <li key={producto.id}>
+                                <button
+                                  onClick={() => elegirProducto(producto)}
+                                  className="flex w-full items-center justify-between px-4 py-3 text-left text-sm"
+                                >
+                                  <span>{producto.nombre}</span>
+                                  <span className="text-tinta/60">{formatearSoles(producto.costo)}</span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  {productoElegido && (
+                    <>
+                      <button
+                        onClick={descargarExcelDelReporte}
+                        disabled={botonExcelDeshabilitado}
+                        className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-bodega text-sm font-semibold text-white active:bg-bodega-oscuro disabled:opacity-40"
+                      >
+                        Descargar Excel ↓
+                      </button>
+
+                      {historialCostos.length === 0 ? (
+                        <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                          No hay compras registradas de este producto en el rango elegido.
+                        </p>
+                      ) : (
+                        <ul className="mt-4 divide-y divide-linea border-y border-linea">
+                          {historialCostos.map((item, indice) => (
+                            <li key={`${item.compraId}-${indice}`} className="py-3">
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-tinta/80">
+                                  {item.proveedorNombre ?? 'Proveedor no especificado'}
+                                </span>
+                                <span className="font-semibold text-tinta">
+                                  {formatearSoles(item.costoUnitario)} c/u
+                                </span>
+                              </div>
+                              <p className="mt-0.5 text-xs text-tinta/40">
+                                {new Date(item.fecha).toLocaleDateString('es-PE')} · {item.cantidad}{' '}
+                                {productoElegido.unidadMedida} · C-{item.compraId}
+                              </p>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
+                  )}
+                </>
               )}
             </section>
           )}

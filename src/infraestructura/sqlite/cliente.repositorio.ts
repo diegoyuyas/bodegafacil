@@ -24,9 +24,9 @@ export class ClienteRepositorioSqlite implements ClienteRepositorio {
     return this.bd
       .consultar<FilaCliente>(
         `SELECT * FROM cliente
-         WHERE activo = 1 AND (nombre LIKE ? OR documento LIKE ?)
+         WHERE activo = 1 AND (nombre LIKE ? OR documento LIKE ? OR telefono LIKE ?)
          ORDER BY nombre LIMIT 20`,
-        [patron, patron],
+        [patron, patron, patron],
       )
       .map(mapearCliente);
   }

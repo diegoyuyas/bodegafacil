@@ -1,5 +1,5 @@
 /**
- * Bodega Fácil — Mensaje de cobranza por WhatsApp
+ * Vende Fácil — Mensaje de cobranza por WhatsApp
  * ------------------------------------------------------------
  * Función pura: arma el texto del mensaje a partir de datos ya
  * consultados. No sabe nada de WhatsApp ni de números de teléfono —

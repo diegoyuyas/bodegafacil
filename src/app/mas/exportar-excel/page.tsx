@@ -31,7 +31,7 @@ export default function PaginaExportarExcel() {
 
   const esPremium = estadoPlan?.tipo === 'premium';
 
-  function exportarTodo() {
+  async function exportarTodo() {
     if (!contenedor || !esPremium) return;
     const hoy = hoyLocalSql();
     const libro = generarLibroExcel([
@@ -42,7 +42,7 @@ export default function PaginaExportarExcel() {
       construirHojaClientes(contenedor.clientes.listarTodos()),
       construirHojaProveedores(contenedor.proveedores.listarTodos()),
     ]);
-    descargarExcel(`venta-facil-completo-${fechaParaNombreArchivo()}.xlsx`, libro);
+    await descargarExcel(`venta-facil-completo-${fechaParaNombreArchivo()}.xlsx`, libro);
   }
 
   return (

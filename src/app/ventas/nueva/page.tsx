@@ -5,7 +5,13 @@ import { useMemo, useState, useEffect, useRef } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { construirVenta, ErrorDeNegocio } from '@/core/reglas-negocio';
 import { LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
+import { CLAVE_NOMBRE_TIENDA, CLAVE_NOTIFICAR_STOCK_BAJO, CLAVE_PRECIO_EDITABLE_VENTA, estaActivado, obtenerNombreTienda } from '@/core/configuracion';
 import type { Cliente, MetodoPago, Producto } from '@/core/tipos';
+import {
+  mostrarNotificacionSinStock,
+  mostrarNotificacionStockBajoProducto,
+  soportaNotificaciones,
+} from '@/infraestructura/notificaciones/notificaciones-navegador';
 
 interface LineaCarrito {
   productoId: number;
@@ -47,14 +53,22 @@ export default function PaginaNuevaVenta() {
   const [guardando, setGuardando] = useState(false);
   const [limiteAlcanzado, setLimiteAlcanzado] = useState(false);
   const [ventasUsadas, setVentasUsadas] = useState(0);
+  const [precioEditable, setPrecioEditable] = useState(false);
+  const [esPremium, setEsPremium] = useState(false);
+  const [notificarStockBajo, setNotificarStockBajo] = useState(false);
 
   useEffect(() => {
     if (!contenedor) return;
     setProductos(contenedor.productos.listarActivos());
     const usadas = contenedor.ventas.contarTotalHistorico();
-    const esPremium = contenedor.plan.obtenerEstado().tipo === 'premium';
+    const premium = contenedor.plan.obtenerEstado().tipo === 'premium';
     setVentasUsadas(usadas);
-    setLimiteAlcanzado(!esPremium && usadas >= LIMITE_VENTAS_PLAN_GRATIS);
+    setLimiteAlcanzado(!premium && usadas >= LIMITE_VENTAS_PLAN_GRATIS);
+    setPrecioEditable(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_PRECIO_EDITABLE_VENTA)));
+    setEsPremium(premium);
+    setNotificarStockBajo(
+      estaActivado(contenedor.configuracion.obtenerValor(CLAVE_NOTIFICAR_STOCK_BAJO)),
+    );
   }, [contenedor]);
 
   useEffect(() => {
@@ -77,7 +91,11 @@ export default function PaginaNuevaVenta() {
     if (carrito.length === 0) return null;
     try {
       return construirVenta(
-        carrito.map((l) => ({ productoId: l.productoId, cantidad: l.cantidad })),
+        carrito.map((l) => ({
+          productoId: l.productoId,
+          cantidad: l.cantidad,
+          precioUnitario: precioEditable ? l.precioVenta : undefined,
+        })),
         (id) => {
           const producto = productos.find((p) => p.id === id);
           if (!producto) throw new ErrorDeNegocio(`Producto ${id} ya no existe.`);
@@ -87,7 +105,7 @@ export default function PaginaNuevaVenta() {
     } catch (e) {
       return e instanceof ErrorDeNegocio ? e.message : 'No se pudo calcular la venta.';
     }
-  }, [carrito, productos]);
+  }, [carrito, productos, precioEditable]);
 
   const calculoValido = calculo && typeof calculo !== 'string' ? calculo : null;
   const errorCalculo = typeof calculo === 'string' ? calculo : null;
@@ -133,6 +151,15 @@ export default function PaginaNuevaVenta() {
     );
   }
 
+  /** Solo tiene efecto si el switch "Precio editable al vender" está activo. */
+  function cambiarPrecioLinea(productoId: number, nuevoPrecioTexto: string) {
+    const nuevoPrecio = nuevoPrecioTexto.trim() === '' ? 0 : Number(nuevoPrecioTexto);
+    if (!Number.isFinite(nuevoPrecio) || nuevoPrecio < 0) return;
+    setCarrito((actual) =>
+      actual.map((l) => (l.productoId === productoId ? { ...l, precioVenta: nuevoPrecio } : l)),
+    );
+  }
+
   function quitarProducto(productoId: number) {
     setCarrito((actual) => actual.filter((l) => l.productoId !== productoId));
   }
@@ -154,6 +181,34 @@ export default function PaginaNuevaVenta() {
     setClientesEncontrados([]);
   }
 
+  /**
+   * Punto 8 (notificación de stock bajo), rediseñado: en vez de avisar
+   * una vez al día desde Inicio, se dispara justo aquí, por cada
+   * producto cuya venta lo dejó por debajo de su stock mínimo — que es
+   * exactamente cuándo "siempre que el stock disponible sea menor al
+   * mínimo y se haga una venta que lo disminuya" pide que se avise. Si
+   * el producto queda en 0, esa es la última alerta para él: como no
+   * se puede vender con stock 0, no vuelve a dispararse sola hasta que
+   * haya una próxima venta real de ese producto (tras reponer stock).
+   */
+  function notificarStockBajoTrasVenta(lineasVendidas: LineaCarrito[]) {
+    if (!contenedor || !esPremium || !notificarStockBajo || !soportaNotificaciones()) return;
+    const nombreTienda = obtenerNombreTienda(contenedor.configuracion.obtenerValor(CLAVE_NOMBRE_TIENDA));
+    for (const linea of lineasVendidas) {
+      let producto: Producto;
+      try {
+        producto = contenedor.productos.obtenerPorId(linea.productoId);
+      } catch {
+        continue;
+      }
+      if (producto.stockActual === 0) {
+        mostrarNotificacionSinStock(producto.nombre, nombreTienda);
+      } else if (producto.stockActual < producto.stockMinimo) {
+        mostrarNotificacionStockBajoProducto(producto.nombre, producto.stockActual, nombreTienda);
+      }
+    }
+  }
+
   async function confirmarVenta() {
     if (!contenedor || !calculoValido) return;
     if (metodoPago === 'fiado' && !clienteSeleccionado) {
@@ -165,11 +220,16 @@ export default function PaginaNuevaVenta() {
     setMensajeError(null);
     try {
       const venta = contenedor.ventas.registrarVenta({
-        lineas: carrito.map((l) => ({ productoId: l.productoId, cantidad: l.cantidad })),
+        lineas: carrito.map((l) => ({
+          productoId: l.productoId,
+          cantidad: l.cantidad,
+          precioUnitario: precioEditable ? l.precioVenta : undefined,
+        })),
         metodoPago,
         clienteId: clienteSeleccionado?.id ?? null,
       });
       await contenedor.persistir();
+      notificarStockBajoTrasVenta(carrito);
       setTotalGuardado(venta.total);
       setEtapa('guardada');
     } catch (e) {
@@ -350,7 +410,24 @@ export default function PaginaNuevaVenta() {
               <li key={linea.productoId} className="flex items-center gap-3 py-3">
                 <div className="flex-1">
                   <p className="text-sm text-tinta">{linea.nombre}</p>
-                  <p className="text-xs text-tinta/50">{formatearSoles(linea.precioVenta)} c/u</p>
+                  {precioEditable ? (
+                    <label className="mt-1 flex items-center gap-1 text-xs text-tinta/50">
+                      S/
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        step="0.1"
+                        value={linea.precioVenta}
+                        onChange={(e) => cambiarPrecioLinea(linea.productoId, e.target.value)}
+                        aria-label={`Precio de ${linea.nombre}`}
+                        className="h-7 w-20 rounded-md border border-linea px-2 text-xs text-tinta outline-none focus:border-bodega"
+                      />
+                      c/u
+                    </label>
+                  ) : (
+                    <p className="text-xs text-tinta/50">{formatearSoles(linea.precioVenta)} c/u</p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <button

@@ -264,6 +264,14 @@ export default function PaginaAdmin() {
         {mensajeErrorPlan && <p className="mt-2 text-sm text-alerta">{mensajeErrorPlan}</p>}
       </section>
 
+      <p className="mt-6 text-xs text-tinta/50">
+        ¿Vas a activar Premium a distancia con un código? Eso se hace desde{' '}
+        <Link href="/mas/configuracion" className="font-semibold text-bodega-oscuro">
+          Más → Configuración
+        </Link>{' '}
+        — no hace falta el PIN para esa parte, así el bodeguero puede hacerlo solo.
+      </p>
+
       {estadoPlan?.tipo === 'premium' && (
         <button
           onClick={desactivarPremium}
