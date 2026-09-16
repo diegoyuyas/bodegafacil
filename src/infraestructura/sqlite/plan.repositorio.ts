@@ -27,6 +27,17 @@ const MENSAJES_ERROR_CODIGO: Record<'formato' | 'firma' | 'dispositivo' | 'expir
 };
 
 /**
+ * Hash SHA-256 del PIN de fábrica del panel de administrador. Así,
+ * en una instalación nueva (donde `configuracion_app` todavía no
+ * tiene ningún hash guardado), el panel pide directamente ese PIN en
+ * vez de mostrar la pantalla de "configurar tu PIN" — el dueño de la
+ * app es el único que conoce el PIN real; acá solo vive su hash
+ * (irreversible), igual que con cualquier PIN que el dueño configure
+ * después a mano.
+ */
+const HASH_PIN_POR_DEFECTO = '085b8afcdc8c13982c3ec1b7f41aaef2776d427052aba533b7066e3c917fa3b5';
+
+/**
  * No hay backend: esto vive enteramente en el dispositivo. El dueño
  * de la app activa Premium a mano en cada visita a una tienda, desde
  * un panel oculto protegido por un PIN (nunca se guarda en texto
@@ -55,7 +66,10 @@ export class PlanRepositorioSqlite implements PlanRepositorio {
   }
 
   tienePinConfigurado(): boolean {
-    return this.configuracion.obtenerValor(CLAVE_ADMIN_PIN_HASH) !== null;
+    // Siempre "true": si no hay un hash guardado todavía, el PIN de
+    // fábrica (ver HASH_PIN_POR_DEFECTO) cuenta como ya configurado —
+    // así el panel nunca ofrece la pantalla de "crear tu propio PIN".
+    return true;
   }
 
   async configurarPin(pinNuevo: string): Promise<void> {
@@ -63,8 +77,7 @@ export class PlanRepositorioSqlite implements PlanRepositorio {
   }
 
   async verificarPin(pin: string): Promise<boolean> {
-    const hashGuardado = this.configuracion.obtenerValor(CLAVE_ADMIN_PIN_HASH);
-    if (!hashGuardado) return false;
+    const hashGuardado = this.configuracion.obtenerValor(CLAVE_ADMIN_PIN_HASH) ?? HASH_PIN_POR_DEFECTO;
     return (await sha256Hex(pin)) === hashGuardado;
   }
 
