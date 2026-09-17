@@ -7,10 +7,7 @@
  */
 
 import type { Cliente, DeudaPendienteDetalle } from './tipos';
-
-function formatearSoles(monto: number): string {
-  return `S/ ${monto.toFixed(2)}`;
-}
+import { formatearMonto } from './moneda';
 
 function formatearFecha(fechaIso: string): string {
   // fechaIso viene como 'YYYY-MM-DD HH:MM:SS' o similar de SQLite.
@@ -21,18 +18,22 @@ function formatearFecha(fechaIso: string): string {
   });
 }
 
-export function construirMensajeDeuda(cliente: Cliente, deudas: DeudaPendienteDetalle[]): string {
+export function construirMensajeDeuda(
+  cliente: Cliente,
+  deudas: DeudaPendienteDetalle[],
+  simboloMoneda: string,
+): string {
   const lineas = [`Hola ${cliente.nombre}, este es tu saldo pendiente en la tienda:`, ''];
 
   for (const deuda of deudas) {
-    lineas.push(`📅 ${formatearFecha(deuda.fecha)} — ${formatearSoles(deuda.saldoPendiente)}`);
+    lineas.push(`📅 ${formatearFecha(deuda.fecha)} — ${formatearMonto(deuda.saldoPendiente, simboloMoneda)}`);
     for (const linea of deuda.lineas) {
       lineas.push(`   • ${linea.producto} x${linea.cantidad}`);
     }
   }
 
   lineas.push('');
-  lineas.push(`*Total pendiente: ${formatearSoles(cliente.saldoPendiente)}*`);
+  lineas.push(`*Total pendiente: ${formatearMonto(cliente.saldoPendiente, simboloMoneda)}*`);
   lineas.push('');
   lineas.push('¡Gracias por tu preferencia! 🙌');
 

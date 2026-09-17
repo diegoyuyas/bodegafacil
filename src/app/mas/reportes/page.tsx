@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
+import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import type { EstadoPlan } from '@/core/plan';
 import type { CompraListaItem, HistorialCostoItem, MovimientoCaja, Producto, ProductoMasVendidoItem } from '@/core/tipos';
 import { hoyLocalSql } from '@/core/tiempo';
@@ -24,12 +25,14 @@ const PESTANAS = [
 
 type Pestana = (typeof PESTANAS)[number]['valor'];
 
-function formatearSoles(monto: number): string {
-  return `S/ ${monto.toFixed(2)}`;
-}
-
 export default function PaginaReportes() {
   const { contenedor, cargando, error } = usarContenedor();
+  const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
+
+  useEffect(() => {
+    if (!contenedor) return;
+    setSimboloMoneda(obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)));
+  }, [contenedor]);
   const [estadoPlan, setEstadoPlan] = useState<EstadoPlan | null>(null);
   const [pestana, setPestana] = useState<Pestana>('caja');
 
@@ -197,19 +200,19 @@ export default function PaginaReportes() {
                 <div className="rounded-xl bg-bodega-claro/40 px-3 py-3 text-center">
                   <p className="text-xs text-tinta/60">Ingresos</p>
                   <p className="text-sm font-extrabold text-bodega-oscuro">
-                    {formatearSoles(totalesCaja.ingresos)}
+                    {formatearMonto(totalesCaja.ingresos, simboloMoneda)}
                   </p>
                 </div>
                 <div className="rounded-xl bg-alerta/10 px-3 py-3 text-center">
                   <p className="text-xs text-tinta/60">Egresos</p>
                   <p className="text-sm font-extrabold text-alerta">
-                    {formatearSoles(totalesCaja.egresos)}
+                    {formatearMonto(totalesCaja.egresos, simboloMoneda)}
                   </p>
                 </div>
                 <div className="rounded-xl border border-linea px-3 py-3 text-center">
                   <p className="text-xs text-tinta/60">Neto</p>
                   <p className="text-sm font-extrabold text-tinta">
-                    {formatearSoles(totalesCaja.neto)}
+                    {formatearMonto(totalesCaja.neto, simboloMoneda)}
                   </p>
                 </div>
               </div>
@@ -227,7 +230,7 @@ export default function PaginaReportes() {
                         <span
                           className={`font-semibold ${mov.tipo === 'ingreso' ? 'text-bodega-oscuro' : 'text-alerta'}`}
                         >
-                          {mov.tipo === 'ingreso' ? '+' : '−'} {formatearSoles(mov.monto)}
+                          {mov.tipo === 'ingreso' ? '+' : '−'} {formatearMonto(mov.monto, simboloMoneda)}
                         </span>
                       </div>
                       <p className="mt-0.5 text-xs text-tinta/40">
@@ -244,7 +247,7 @@ export default function PaginaReportes() {
             <section className="mt-4">
               <div className="rounded-xl border border-linea px-4 py-3">
                 <p className="text-xs text-tinta/60">Total comprado en el rango</p>
-                <p className="text-2xl font-extrabold text-tinta">{formatearSoles(totalCompras)}</p>
+                <p className="text-2xl font-extrabold text-tinta">{formatearMonto(totalCompras, simboloMoneda)}</p>
               </div>
 
               {compras.length === 0 ? (
@@ -259,7 +262,7 @@ export default function PaginaReportes() {
                         <span className="text-tinta/80">
                           {compra.proveedorNombre ?? 'Proveedor no especificado'}
                         </span>
-                        <span className="font-semibold text-tinta">{formatearSoles(compra.total)}</span>
+                        <span className="font-semibold text-tinta">{formatearMonto(compra.total, simboloMoneda)}</span>
                       </div>
                       <p className="mt-0.5 text-xs text-tinta/40">
                         {new Date(compra.fecha).toLocaleDateString('es-PE')}
@@ -290,12 +293,12 @@ export default function PaginaReportes() {
                         <div className="min-w-0">
                           <p className="truncate text-sm text-tinta">{item.nombre}</p>
                           <p className="text-xs text-tinta/50">
-                            {item.cantidadVendida} vendidas · ganancia {formatearSoles(item.gananciaTotal)}
+                            {item.cantidadVendida} vendidas · ganancia {formatearMonto(item.gananciaTotal, simboloMoneda)}
                           </p>
                         </div>
                       </div>
                       <span className="shrink-0 text-sm font-semibold text-tinta">
-                        {formatearSoles(item.totalVendido)}
+                        {formatearMonto(item.totalVendido, simboloMoneda)}
                       </span>
                     </li>
                   ))}
@@ -318,7 +321,7 @@ export default function PaginaReportes() {
                         <div>
                           <p className="text-sm text-tinta">{productoElegido.nombre}</p>
                           <p className="text-xs text-tinta/50">
-                            Costo actual: {formatearSoles(productoElegido.costo)}
+                            Costo actual: {formatearMonto(productoElegido.costo, simboloMoneda)}
                           </p>
                         </div>
                         <button
@@ -346,7 +349,7 @@ export default function PaginaReportes() {
                                   className="flex w-full items-center justify-between px-4 py-3 text-left text-sm"
                                 >
                                   <span>{producto.nombre}</span>
-                                  <span className="text-tinta/60">{formatearSoles(producto.costo)}</span>
+                                  <span className="text-tinta/60">{formatearMonto(producto.costo, simboloMoneda)}</span>
                                 </button>
                               </li>
                             ))}
@@ -379,7 +382,7 @@ export default function PaginaReportes() {
                                   {item.proveedorNombre ?? 'Proveedor no especificado'}
                                 </span>
                                 <span className="font-semibold text-tinta">
-                                  {formatearSoles(item.costoUnitario)} c/u
+                                  {formatearMonto(item.costoUnitario, simboloMoneda)} c/u
                                 </span>
                               </div>
                               <p className="mt-0.5 text-xs text-tinta/40">

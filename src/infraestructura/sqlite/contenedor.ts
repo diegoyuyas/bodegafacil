@@ -53,7 +53,7 @@ async function inicializar(): Promise<ContenedorRepositorios> {
 
   const configuracion = new ConfiguracionRepositorioSqlite(bd);
   const productos = new ProductoRepositorioSqlite(bd);
-  const clientes = new ClienteRepositorioSqlite(bd);
+  const clientes = new ClienteRepositorioSqlite(bd, configuracion);
   const caja = new CajaRepositorioSqlite(bd);
   const ventas = new VentaRepositorioSqlite(bd, productos, caja, configuracion);
   const fiados = new FiadoRepositorioSqlite(bd, caja);

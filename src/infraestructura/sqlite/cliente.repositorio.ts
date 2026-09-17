@@ -1,11 +1,15 @@
-import type { ClienteRepositorio, DatosActualizarCliente } from '@/core/repositorios';
+import type { ClienteRepositorio, ConfiguracionRepositorio, DatosActualizarCliente } from '@/core/repositorios';
 import { ErrorDeNegocio, validarDocumentoIdentidad } from '@/core/reglas-negocio';
+import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import type { Cliente } from '@/core/tipos';
 import type { BaseDatosLocal } from './base-datos';
 import { mapearCliente, type FilaCliente } from './mapeadores';
 
 export class ClienteRepositorioSqlite implements ClienteRepositorio {
-  constructor(private readonly bd: BaseDatosLocal) {}
+  constructor(
+    private readonly bd: BaseDatosLocal,
+    private readonly configuracion: ConfiguracionRepositorio,
+  ) {}
 
   listarActivos(): Cliente[] {
     return this.bd
@@ -67,8 +71,9 @@ export class ClienteRepositorioSqlite implements ClienteRepositorio {
       throw new ErrorDeNegocio('El nombre del cliente es obligatorio.');
     }
     if (!datos.activo && actual.saldoPendiente > 0) {
+      const simbolo = obtenerSimboloMoneda(this.configuracion.obtenerValor(CLAVE_MONEDA));
       throw new ErrorDeNegocio(
-        `No se puede inactivar a ${actual.nombre}: tiene una deuda pendiente de S/ ${actual.saldoPendiente.toFixed(2)}.`,
+        `No se puede inactivar a ${actual.nombre}: tiene una deuda pendiente de ${formatearMonto(actual.saldoPendiente, simbolo)}.`,
       );
     }
     const documento = datos.documento.trim();

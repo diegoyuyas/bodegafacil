@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
+import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
 import type { LineaCompraEntrada } from '@/core/repositorios';
 import type { MetodoPagoSinFiado, Producto, Proveedor } from '@/core/tipos';
@@ -18,12 +19,14 @@ const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
   { valor: 'tarjeta', etiqueta: 'Tarjeta' },
 ];
 
-function formatearSoles(monto: number): string {
-  return `S/ ${monto.toFixed(2)}`;
-}
-
 export default function PaginaCompras() {
   const { contenedor, cargando, error } = usarContenedor();
+  const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
+
+  useEffect(() => {
+    if (!contenedor) return;
+    setSimboloMoneda(obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)));
+  }, [contenedor]);
 
   const [productos, setProductos] = useState<Producto[]>([]);
   const [texto, setTexto] = useState('');
@@ -133,7 +136,7 @@ export default function PaginaCompras() {
         </div>
         <div>
           <p className="text-sm text-tinta/60">Compra registrada</p>
-          <p className="text-4xl font-extrabold text-tinta">{formatearSoles(totalGuardado)}</p>
+          <p className="text-4xl font-extrabold text-tinta">{formatearMonto(totalGuardado, simboloMoneda)}</p>
           <p className="mt-1 text-sm text-tinta/60">El stock ya quedó actualizado.</p>
         </div>
         <div className="flex w-full flex-col gap-3">
@@ -245,7 +248,7 @@ export default function PaginaCompras() {
                     />
                   </label>
                   <span className="w-16 pt-4 text-right text-sm font-semibold">
-                    {formatearSoles(linea.cantidad * linea.costoUnitario)}
+                    {formatearMonto(linea.cantidad * linea.costoUnitario, simboloMoneda)}
                   </span>
                 </div>
               </li>
@@ -360,7 +363,7 @@ export default function PaginaCompras() {
             disabled={guardando}
             className="flex h-14 w-full items-center justify-center rounded-full bg-bodega text-base font-semibold text-white active:bg-bodega-oscuro disabled:opacity-60"
           >
-            {guardando ? 'Guardando…' : `Registrar compra — ${formatearSoles(total)}`}
+            {guardando ? 'Guardando…' : `Registrar compra — ${formatearMonto(total, simboloMoneda)}`}
           </button>
         </div>
       )}

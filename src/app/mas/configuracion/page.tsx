@@ -12,6 +12,8 @@ import {
   obtenerNombreTienda,
   valorParaGuardar,
 } from '@/core/configuracion';
+import { CLAVE_MONEDA, MONEDAS_DISPONIBLES, obtenerMoneda } from '@/core/moneda';
+import { CLAVE_PREFIJO_PAIS, PAISES_AMERICA, obtenerPrefijoPais } from '@/core/paises';
 import type { EstadoPlan } from '@/core/plan';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
 import { solicitarPermisoNotificaciones } from '@/infraestructura/notificaciones/notificaciones-navegador';
@@ -63,6 +65,9 @@ export default function PaginaConfiguracion() {
   const [guardandoNombre, setGuardandoNombre] = useState(false);
   const [nombreGuardado, setNombreGuardado] = useState(false);
 
+  const [codigoMoneda, setCodigoMoneda] = useState(obtenerMoneda(null).codigo);
+  const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
+
   const [idDispositivo, setIdDispositivo] = useState('');
   const [codigoActivacion, setCodigoActivacion] = useState('');
   const [activandoCodigo, setActivandoCodigo] = useState(false);
@@ -77,6 +82,8 @@ export default function PaginaConfiguracion() {
       estaActivado(contenedor.configuracion.obtenerValor(CLAVE_NOTIFICAR_STOCK_BAJO)),
     );
     setNombreTienda(obtenerNombreTienda(contenedor.configuracion.obtenerValor(CLAVE_NOMBRE_TIENDA)));
+    setCodigoMoneda(obtenerMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)).codigo);
+    setPrefijoPais(obtenerPrefijoPais(contenedor.configuracion.obtenerValor(CLAVE_PREFIJO_PAIS)));
 
     const id = contenedor.plan.obtenerIdDispositivoTexto();
     setIdDispositivo(id);
@@ -135,6 +142,20 @@ export default function PaginaConfiguracion() {
     setNombreTienda(limpio || NOMBRE_TIENDA_PREDETERMINADO);
     setGuardandoNombre(false);
     setNombreGuardado(true);
+  }
+
+  async function cambiarMoneda(nuevoCodigo: string) {
+    if (!contenedor) return;
+    setCodigoMoneda(nuevoCodigo);
+    contenedor.configuracion.establecerValor(CLAVE_MONEDA, nuevoCodigo);
+    await contenedor.persistir();
+  }
+
+  async function cambiarPrefijoPais(nuevoPrefijo: string) {
+    if (!contenedor) return;
+    setPrefijoPais(nuevoPrefijo);
+    contenedor.configuracion.establecerValor(CLAVE_PREFIJO_PAIS, nuevoPrefijo);
+    await contenedor.persistir();
   }
 
   async function activarPremiumConCodigo() {
@@ -227,6 +248,45 @@ export default function PaginaConfiguracion() {
           </button>
         </div>
         {nombreGuardado && <p className="mt-2 text-xs text-bodega-oscuro">Nombre guardado.</p>}
+      </section>
+
+      <section className="mt-6">
+        <p className="text-sm font-semibold text-tinta">Tipo de moneda</p>
+        <p className="mt-0.5 text-xs text-tinta/50">
+          Cambia el símbolo que se muestra en toda la app (ventas, caja, reportes, fiados...).
+        </p>
+        <select
+          value={codigoMoneda}
+          onChange={(e) => cambiarMoneda(e.target.value)}
+          disabled={!contenedor}
+          className="mt-3 h-11 w-full rounded-xl border border-linea bg-white px-3 text-sm disabled:opacity-40"
+        >
+          {MONEDAS_DISPONIBLES.map((m) => (
+            <option key={m.codigo} value={m.codigo}>
+              {m.etiqueta}
+            </option>
+          ))}
+        </select>
+      </section>
+
+      <section className="mt-6">
+        <p className="text-sm font-semibold text-tinta">Prefijo país</p>
+        <p className="mt-0.5 text-xs text-tinta/50">
+          El código con el que se arma el número de celular de tus clientes, para los avisos de
+          fiado por WhatsApp.
+        </p>
+        <select
+          value={prefijoPais}
+          onChange={(e) => cambiarPrefijoPais(e.target.value)}
+          disabled={!contenedor}
+          className="mt-3 h-11 w-full rounded-xl border border-linea bg-white px-3 text-sm disabled:opacity-40"
+        >
+          {PAISES_AMERICA.map((p) => (
+            <option key={p.prefijo} value={p.prefijo}>
+              +{p.prefijo} {p.nombre}
+            </option>
+          ))}
+        </select>
       </section>
 
       <section className="mt-6 rounded-xl border border-linea p-4">

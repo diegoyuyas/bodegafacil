@@ -8,6 +8,8 @@ import type { Cliente, MetodoPagoSinFiado } from '@/core/tipos';
 import type { EstadoPlan } from '@/core/plan';
 import { construirMensajeDeuda } from '@/core/whatsapp';
 import { construirEnlaceWhatsApp } from '@/infraestructura/whatsapp/enlace';
+import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
+import { CLAVE_PREFIJO_PAIS, obtenerPrefijoPais } from '@/core/paises';
 
 const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
   { valor: 'efectivo', etiqueta: 'Efectivo' },
@@ -16,14 +18,12 @@ const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
   { valor: 'tarjeta', etiqueta: 'Tarjeta' },
 ];
 
-function formatearSoles(monto: number): string {
-  return `S/ ${monto.toFixed(2)}`;
-}
-
 export default function PaginaFiados() {
   const { contenedor, cargando, error } = usarContenedor();
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [estadoPlan, setEstadoPlan] = useState<EstadoPlan | null>(null);
+  const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
+  const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
   const [clienteAbierto, setClienteAbierto] = useState<number | null>(null);
   const [monto, setMonto] = useState('');
   const [metodo, setMetodo] = useState<MetodoPagoSinFiado>('efectivo');
@@ -35,9 +35,11 @@ export default function PaginaFiados() {
 
   useEffect(recargar, [contenedor]);
   useEffect(() => {
-  if (!contenedor) return;
-  setEstadoPlan(contenedor.plan.obtenerEstado());
-}, [contenedor]);
+    if (!contenedor) return;
+    setEstadoPlan(contenedor.plan.obtenerEstado());
+    setSimboloMoneda(obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)));
+    setPrefijoPais(obtenerPrefijoPais(contenedor.configuracion.obtenerValor(CLAVE_PREFIJO_PAIS)));
+  }, [contenedor]);
 
 const esPremium = estadoPlan?.tipo === 'premium';
 
@@ -63,8 +65,8 @@ const esPremium = estadoPlan?.tipo === 'premium';
   function enviarRecordatorioWhatsApp(cliente: Cliente) {
     if (!contenedor || !cliente.telefono) return;
     const deudas = contenedor.fiados.listarDeudasPendientesDetalladas(cliente.id);
-    const mensaje = construirMensajeDeuda(cliente, deudas);
-    const enlace = construirEnlaceWhatsApp(cliente.telefono, mensaje);
+    const mensaje = construirMensajeDeuda(cliente, deudas, simboloMoneda);
+    const enlace = construirEnlaceWhatsApp(cliente.telefono, mensaje, prefijoPais);
     window.open(enlace, '_blank');
   }
 
@@ -82,7 +84,7 @@ const esPremium = estadoPlan?.tipo === 'premium';
       {clientes.length > 0 && (
         <p className="mt-4 text-sm text-tinta/60">
           Total por cobrar:{' '}
-          <span className="font-semibold text-tinta">{formatearSoles(totalPorCobrar)}</span>
+          <span className="font-semibold text-tinta">{formatearMonto(totalPorCobrar, simboloMoneda)}</span>
         </p>
       )}
 
@@ -103,7 +105,7 @@ const esPremium = estadoPlan?.tipo === 'premium';
                 <span className="text-sm text-tinta">{cliente.nombre}</span>
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-semibold text-alerta">
-                    {formatearSoles(cliente.saldoPendiente)}
+                    {formatearMonto(cliente.saldoPendiente, simboloMoneda)}
                   </span>
                   <button
                     onClick={() => enviarRecordatorioWhatsApp(cliente)}

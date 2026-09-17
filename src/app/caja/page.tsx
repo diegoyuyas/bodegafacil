@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
+import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import type { MetodoPagoSinFiado, MovimientoCaja } from '@/core/tipos';
 
 const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
@@ -20,12 +21,14 @@ const VISTAS = [
 
 type Vista = (typeof VISTAS)[number]['valor'];
 
-function formatearSoles(monto: number): string {
-  return `S/ ${monto.toFixed(2)}`;
-}
-
 export default function PaginaCaja() {
   const { contenedor, cargando, error } = usarContenedor();
+  const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
+
+  useEffect(() => {
+    if (!contenedor) return;
+    setSimboloMoneda(obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)));
+  }, [contenedor]);
   const [saldo, setSaldo] = useState(0);
   const [movimientos, setMovimientos] = useState<MovimientoCaja[]>([]);
   const [vista, setVista] = useState<Vista>('todo');
@@ -93,7 +96,7 @@ export default function PaginaCaja() {
 
       <section className="mt-6">
         <p className="text-sm text-tinta/60">Saldo actual</p>
-        <p className="text-4xl font-extrabold text-tinta">{formatearSoles(saldo)}</p>
+        <p className="text-4xl font-extrabold text-tinta">{formatearMonto(saldo, simboloMoneda)}</p>
       </section>
 
       <div className="mt-4 flex gap-3">
@@ -172,7 +175,7 @@ export default function PaginaCaja() {
 
       <div className="mt-3 flex items-center justify-between rounded-xl bg-bodega-claro/40 px-4 py-3">
         <span className="text-sm text-tinta/70">{etiquetaTotal}</span>
-        <span className="text-base font-extrabold text-tinta">{formatearSoles(totalVisible)}</span>
+        <span className="text-base font-extrabold text-tinta">{formatearMonto(totalVisible, simboloMoneda)}</span>
       </div>
 
       <section className="mt-4 flex-1">
@@ -187,7 +190,7 @@ export default function PaginaCaja() {
               <li key={mov.id} className="flex items-center justify-between py-3 text-sm">
                 <span className="text-tinta/80">{mov.concepto}</span>
                 <span className={`font-semibold ${mov.tipo === 'ingreso' ? 'text-bodega-oscuro' : 'text-alerta'}`}>
-                  {mov.tipo === 'ingreso' ? '+' : '−'} {formatearSoles(mov.monto)}
+                  {mov.tipo === 'ingreso' ? '+' : '−'} {formatearMonto(mov.monto, simboloMoneda)}
                 </span>
               </li>
             ))}

@@ -5,6 +5,7 @@ import type {
   RegistrarCompraInput,
 } from '@/core/repositorios';
 import { ErrorDeNegocio, calcularStockNuevo, redondear, validarComprobante } from '@/core/reglas-negocio';
+import { ahoraLocalSql } from '@/core/tiempo';
 import type { Compra, CompraListaItem, HistorialCostoItem } from '@/core/tipos';
 import type { FilaCompraDetallada } from '@/core/exportacion';
 import type { BaseDatosLocal } from './base-datos';
@@ -31,9 +32,10 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
       );
 
       this.bd.ejecutar(
-        `INSERT INTO compra (proveedor_id, proveedor_nombre_libre, comprobante, total, estado)
-         VALUES (?, ?, ?, ?, 'recibida')`,
+        `INSERT INTO compra (fecha, proveedor_id, proveedor_nombre_libre, comprobante, total, estado)
+         VALUES (?, ?, ?, ?, ?, 'recibida')`,
         [
+          ahoraLocalSql(),
           input.proveedorId ?? null,
           input.proveedorId ? null : input.proveedorNombreLibre || null,
           input.comprobante || null,

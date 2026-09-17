@@ -34,9 +34,9 @@ async function main() {
   });
 
   const productos = new ProductoRepositorioSqlite(bd);
-  const clientes = new ClienteRepositorioSqlite(bd);
-  const caja = new CajaRepositorioSqlite(bd);
   const configuracion = new ConfiguracionRepositorioSqlite(bd);
+  const clientes = new ClienteRepositorioSqlite(bd, configuracion);
+  const caja = new CajaRepositorioSqlite(bd);
   const plan = new PlanRepositorioSqlite(configuracion);
   const ventas = new VentaRepositorioSqlite(bd, productos, caja, configuracion);
   const fiados = new FiadoRepositorioSqlite(bd, caja);
@@ -326,7 +326,7 @@ async function main() {
 
   // --- Plan Free / Premium ---
   afirmar(plan.obtenerEstado().tipo === 'gratis', 'Sin nada configurado, el plan es Gratis');
-  afirmar(!plan.tienePinConfigurado(), 'Al inicio no hay PIN configurado');
+  afirmar(plan.tienePinConfigurado(), 'Siempre hay un PIN (el de fábrica, hasta que se configure uno propio)');
 
   await plan.configurarPin('1234');
   afirmar(plan.tienePinConfigurado(), 'El PIN queda configurado');

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { usarContenedor } from '@/hooks/usar-contenedor';
+import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import type { LineaVentaResumen, ResumenDia, VentaListaItem } from '@/core/tipos';
 import { LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
 import type { EstadoPlan } from '@/core/plan';
@@ -26,13 +27,15 @@ const ETIQUETAS_METODO_PAGO: Record<string, string> = {
   fiado: 'Fiado',
 };
 
-function formatearSoles(monto: number): string {
-  return `S/ ${monto.toFixed(2)}`;
-}
-
 export default function PaginaInicio() {
   const router = useRouter();
   const { contenedor, error, cargando } = usarContenedor();
+  const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
+
+  useEffect(() => {
+    if (!contenedor) return;
+    setSimboloMoneda(obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)));
+  }, [contenedor]);
   const [resumen, setResumen] = useState<ResumenDia | null>(null);
   const [ventasDeHoy, setVentasDeHoy] = useState<VentaListaItem[]>([]);
   const [totalHistorico, setTotalHistorico] = useState(0);
@@ -185,10 +188,10 @@ export default function PaginaInicio() {
             <section aria-label="Resumen de ventas de hoy">
               <p className="text-sm text-tinta/60">Ventas de hoy</p>
               <p className="mt-1 text-5xl font-extrabold leading-none text-tinta">
-                {formatearSoles(resumen.totalVentas)}
+                {formatearMonto(resumen.totalVentas, simboloMoneda)}
               </p>
               <p className="mt-2 text-sm text-bodega-oscuro">
-                Ganancia estimada {formatearSoles(resumen.gananciaEstimada)} ·{' '}
+                Ganancia estimada {formatearMonto(resumen.gananciaEstimada, simboloMoneda)} ·{' '}
                 {resumen.numeroVentas} {resumen.numeroVentas === 1 ? 'venta' : 'ventas'}
               </p>
             </section>
@@ -210,7 +213,7 @@ export default function PaginaInicio() {
                         {ETIQUETAS_METODO_PAGO[fila.metodo] ?? fila.metodo}
                       </span>
                       <span className="font-semibold text-tinta">
-                        {formatearSoles(fila.monto)}
+                        {formatearMonto(fila.monto, simboloMoneda)}
                       </span>
                     </li>
                   ))}
@@ -236,7 +239,7 @@ export default function PaginaInicio() {
                   <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-acento" aria-hidden />
                   <p className="text-tinta/80">
                     <span className="font-semibold text-tinta">
-                      {formatearSoles(resumen.totalPorCobrar)}
+                      {formatearMonto(resumen.totalPorCobrar, simboloMoneda)}
                     </span>{' '}
                     pendientes de cobro
                   </p>
@@ -290,7 +293,7 @@ export default function PaginaInicio() {
                               </div>
                               <div className="flex items-center gap-3">
                                 <span className="text-sm font-semibold text-tinta">
-                                  {formatearSoles(venta.total)}
+                                  {formatearMonto(venta.total, simboloMoneda)}
                                 </span>
                                 {!venta.anulada && (
                                   <span

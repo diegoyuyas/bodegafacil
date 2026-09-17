@@ -9,6 +9,7 @@ import path from 'node:path';
 import { BaseDatosLocal } from '../src/infraestructura/sqlite/base-datos';
 import { ProductoRepositorioSqlite } from '../src/infraestructura/sqlite/producto.repositorio';
 import { ClienteRepositorioSqlite } from '../src/infraestructura/sqlite/cliente.repositorio';
+import { ConfiguracionRepositorioSqlite } from '../src/infraestructura/sqlite/configuracion.repositorio';
 
 function afirmar(condicion: boolean, mensaje: string): void {
   if (!condicion) throw new Error(`❌ Falló: ${mensaje}`);
@@ -91,7 +92,7 @@ async function main() {
   //    disparar aplicarMigraciones() automáticamente.
   const bd = await BaseDatosLocal.crear({ localizarArchivo, datosPrevios: bytesViejos });
 
-  const clientes = new ClienteRepositorioSqlite(bd);
+  const clientes = new ClienteRepositorioSqlite(bd, new ConfiguracionRepositorioSqlite(bd));
   const productos = new ProductoRepositorioSqlite(bd);
 
   const clienteExistente = clientes.listarActivos()[0];
@@ -124,7 +125,7 @@ async function main() {
   // 4. Volver a correr las migraciones sobre la base YA migrada no
   //    debe explotar (es lo que pasa cada vez que se abre la app).
   const bdOtraVez = await BaseDatosLocal.crear({ localizarArchivo, datosPrevios: bd.exportar() });
-  const clientesOtraVez = new ClienteRepositorioSqlite(bdOtraVez);
+  const clientesOtraVez = new ClienteRepositorioSqlite(bdOtraVez, new ConfiguracionRepositorioSqlite(bdOtraVez));
   afirmar(
     clientesOtraVez.listarActivos().length === 2,
     'Correr las migraciones de nuevo sobre una base ya migrada no falla ni duplica nada',

@@ -3,15 +3,18 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
+import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import type { Producto } from '@/core/tipos';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
 
-function formatearSoles(monto: number): string {
-  return `S/ ${monto.toFixed(2)}`;
-}
-
 export default function PaginaProductos() {
   const { contenedor, cargando, error } = usarContenedor();
+  const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
+
+  useEffect(() => {
+    if (!contenedor) return;
+    setSimboloMoneda(obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)));
+  }, [contenedor]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [busqueda, setBusqueda] = useState('');
@@ -274,7 +277,7 @@ export default function PaginaProductos() {
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
                     <span className="text-sm font-semibold text-tinta">
-                      {formatearSoles(producto.precioVenta)}
+                      {formatearMonto(producto.precioVenta, simboloMoneda)}
                     </span>
                     <button
                       onClick={() =>

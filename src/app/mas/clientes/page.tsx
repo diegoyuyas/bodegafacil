@@ -4,10 +4,14 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
+import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
+import { CLAVE_PREFIJO_PAIS, obtenerPrefijoPais } from '@/core/paises';
 import type { Cliente } from '@/core/tipos';
 
 export default function PaginaClientes() {
   const { contenedor, cargando, error } = usarContenedor();
+  const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
+  const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [busqueda, setBusqueda] = useState('');
@@ -24,7 +28,10 @@ export default function PaginaClientes() {
   const [mensajeErrorEdit, setMensajeErrorEdit] = useState<string | null>(null);
 
   function recargar() {
-    if (contenedor) setClientes(contenedor.clientes.listarTodos());
+    if (!contenedor) return;
+    setClientes(contenedor.clientes.listarTodos());
+    setSimboloMoneda(obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)));
+    setPrefijoPais(obtenerPrefijoPais(contenedor.configuracion.obtenerValor(CLAVE_PREFIJO_PAIS)));
   }
 
   useEffect(recargar, [contenedor]);
@@ -135,12 +142,18 @@ export default function PaginaClientes() {
               </p>
             )}
           </div>
-          <input
-            value={telefono}
-            onChange={(e) => setTelefono(e.target.value)}
-            placeholder="Teléfono (opcional)"
-            className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
-          />
+          <div className="flex gap-2">
+            <span className="flex h-11 shrink-0 items-center rounded-lg border border-linea bg-papel px-3 text-sm text-tinta/60">
+              +{prefijoPais}
+            </span>
+            <input
+              value={telefono}
+              onChange={(e) => setTelefono(e.target.value)}
+              placeholder="Celular (opcional)"
+              inputMode="numeric"
+              className="h-11 flex-1 rounded-lg border border-linea px-3 text-sm"
+            />
+          </div>
           {mensajeError && <p className="text-sm text-alerta">{mensajeError}</p>}
           <button
             onClick={guardarCliente}
@@ -196,7 +209,7 @@ export default function PaginaClientes() {
                     {cliente.documento ?? 'Sin documento'}
                     {cliente.telefono && ` · ${cliente.telefono}`}
                     {cliente.saldoPendiente > 0 && (
-                      <span className="text-alerta"> · Debe S/ {cliente.saldoPendiente.toFixed(2)}</span>
+                      <span className="text-alerta"> · Debe {formatearMonto(cliente.saldoPendiente, simboloMoneda)}</span>
                     )}
                   </p>
                 </div>
@@ -232,12 +245,18 @@ export default function PaginaClientes() {
                       </p>
                     )}
                   </div>
-                  <input
-                    value={telefonoEdit}
-                    onChange={(e) => setTelefonoEdit(e.target.value)}
-                    placeholder="Teléfono (opcional)"
-                    className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
-                  />
+                  <div className="flex gap-2">
+                    <span className="flex h-11 shrink-0 items-center rounded-lg border border-linea bg-papel px-3 text-sm text-tinta/60">
+                      +{prefijoPais}
+                    </span>
+                    <input
+                      value={telefonoEdit}
+                      onChange={(e) => setTelefonoEdit(e.target.value)}
+                      placeholder="Celular (opcional)"
+                      inputMode="numeric"
+                      className="h-11 flex-1 rounded-lg border border-linea px-3 text-sm"
+                    />
+                  </div>
                   <div>
                     <label className="mb-1 block text-xs text-tinta/50">Estado</label>
                     <select

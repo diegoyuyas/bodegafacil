@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
+import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { construirVenta, ErrorDeNegocio } from '@/core/reglas-negocio';
 import { LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
 import { CLAVE_NOMBRE_TIENDA, CLAVE_NOTIFICAR_STOCK_BAJO, CLAVE_PRECIO_EDITABLE_VENTA, estaActivado, obtenerNombreTienda } from '@/core/configuracion';
@@ -29,16 +30,26 @@ const METODOS_PAGO: { valor: MetodoPago; etiqueta: string }[] = [
   { valor: 'fiado', etiqueta: 'Fiado' },
 ];
 
-function formatearSoles(monto: number): string {
-  return `S/ ${monto.toFixed(2)}`;
-}
-
 export default function PaginaNuevaVenta() {
   const { contenedor, cargando, error } = usarContenedor();
+  const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
+
+  useEffect(() => {
+    if (!contenedor) return;
+    setSimboloMoneda(obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)));
+  }, [contenedor]);
 
   const [productos, setProductos] = useState<Producto[]>([]);
   const [texto, setTexto] = useState('');
   const inputBusquedaProductoRef = useRef<HTMLInputElement>(null);
+
+  // Al entrar a la pantalla, foco automático en el buscador para
+  // poder escribir de una vez (en Android/Capacitor no siempre alcanza
+  // a abrir el teclado solo, pero el cursor sí queda listo).
+  useEffect(() => {
+    const id = setTimeout(() => inputBusquedaProductoRef.current?.focus(), 100);
+    return () => clearTimeout(id);
+  }, []);
   const [carrito, setCarrito] = useState<LineaCarrito[]>([]);
   const [metodoPago, setMetodoPago] = useState<MetodoPago>('efectivo');
 
@@ -283,7 +294,7 @@ export default function PaginaNuevaVenta() {
         </div>
         <div>
           <p className="text-sm text-tinta/60">Venta guardada</p>
-          <p className="text-4xl font-extrabold text-tinta">{formatearSoles(totalGuardado)}</p>
+          <p className="text-4xl font-extrabold text-tinta">{formatearMonto(totalGuardado, simboloMoneda)}</p>
         </div>
         <div className="flex w-full flex-col gap-3">
           <button
@@ -315,7 +326,7 @@ export default function PaginaNuevaVenta() {
                 {linea.cantidad} × {linea.nombre}
               </span>
               <span className="font-semibold text-tinta">
-                {formatearSoles(linea.precioVenta * linea.cantidad)}
+                {formatearMonto(linea.precioVenta * linea.cantidad, simboloMoneda)}
               </span>
             </li>
           ))}
@@ -324,7 +335,7 @@ export default function PaginaNuevaVenta() {
         <div className="mt-4 flex items-center justify-between">
           <span className="text-base font-semibold text-tinta">Total</span>
           <span className="text-2xl font-extrabold text-tinta">
-            {formatearSoles(calculoValido.total)}
+            {formatearMonto(calculoValido.total, simboloMoneda)}
           </span>
         </div>
 
@@ -389,7 +400,7 @@ export default function PaginaNuevaVenta() {
                 >
                   <span>{producto.nombre}</span>
                   <span className="text-tinta/60">
-                    {producto.stockActual <= 0 ? 'Sin stock' : formatearSoles(producto.precioVenta)}
+                    {producto.stockActual <= 0 ? 'Sin stock' : formatearMonto(producto.precioVenta, simboloMoneda)}
                   </span>
                 </button>
               </li>
@@ -412,7 +423,7 @@ export default function PaginaNuevaVenta() {
                   <p className="text-sm text-tinta">{linea.nombre}</p>
                   {precioEditable ? (
                     <label className="mt-1 flex items-center gap-1 text-xs text-tinta/50">
-                      S/
+                      {simboloMoneda}
                       <input
                         type="number"
                         inputMode="decimal"
@@ -426,7 +437,7 @@ export default function PaginaNuevaVenta() {
                       c/u
                     </label>
                   ) : (
-                    <p className="text-xs text-tinta/50">{formatearSoles(linea.precioVenta)} c/u</p>
+                    <p className="text-xs text-tinta/50">{formatearMonto(linea.precioVenta, simboloMoneda)} c/u</p>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
@@ -448,7 +459,7 @@ export default function PaginaNuevaVenta() {
                   </button>
                 </div>
                 <span className="w-16 text-right text-sm font-semibold">
-                  {formatearSoles(linea.precioVenta * linea.cantidad)}
+                  {formatearMonto(linea.precioVenta * linea.cantidad, simboloMoneda)}
                 </span>
                 <button
                   onClick={() => quitarProducto(linea.productoId)}
@@ -547,7 +558,7 @@ export default function PaginaNuevaVenta() {
             onClick={() => setEtapa('revisando')}
             className="flex h-14 w-full items-center justify-center rounded-full bg-bodega text-base font-semibold text-white active:bg-bodega-oscuro"
           >
-            Revisar y cobrar {formatearSoles(calculoValido.total)}
+            Revisar y cobrar {formatearMonto(calculoValido.total, simboloMoneda)}
           </button>
         </div>
       )}
