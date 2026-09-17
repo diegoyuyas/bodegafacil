@@ -66,3 +66,29 @@
     transform: scale(1);
   }
 }
+
+/*
+ * Transición entre pantallas (Material "fade through" simplificado):
+ * cada pantalla entra con un fundido + escalado muy sutil, 300ms,
+ * FastOutSlowIn — se dispara sola en cada navegación vía
+ * `src/app/template.tsx`. `transform`+`opacity` son baratos (no
+ * disparan layout/reflow), y `will-change` evita el salto inicial en
+ * el WebView de Android. Respeta `prefers-reduced-motion` mediante la
+ * regla ya existente arriba, que reduce cualquier `animation-duration`
+ * a ~0.
+ */
+.transicion-pantalla {
+  animation: pantalla-fade-through 300ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  will-change: opacity, transform;
+}
+
+@keyframes pantalla-fade-through {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}

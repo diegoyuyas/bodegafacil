@@ -23,3 +23,18 @@ export function generarLibroExcel(hojas: HojaExcel[]): Uint8Array {
   const buffer = XLSX.write(libro, { type: 'array', bookType: 'xlsx' }) as ArrayBuffer;
   return new Uint8Array(buffer);
 }
+
+/**
+ * Lee la primera pestaña de un .xlsx como filas crudas (arreglo de
+ * arreglos, una celda = un valor), para la importación masiva de
+ * productos (Más > Importar Productos). No interpreta nada — eso lo
+ * hace `core/importacion-productos.ts`, que no depende de esta librería.
+ */
+export function leerFilasExcel(bytes: Uint8Array): unknown[][] {
+  const libro = XLSX.read(bytes, { type: 'array' });
+  const nombreHoja = libro.SheetNames[0];
+  if (!nombreHoja) return [];
+  const hoja = libro.Sheets[nombreHoja];
+  if (!hoja) return [];
+  return XLSX.utils.sheet_to_json<unknown[]>(hoja, { header: 1, defval: '' });
+}
