@@ -22,6 +22,9 @@ const MIGRACIONES: string[] = [
   `ALTER TABLE compra ADD COLUMN comprobante TEXT;`,
   // 0003: productos que no llevan stock (ej. servicios, recargas) — no descuentan ni bloquean venta.
   `ALTER TABLE producto ADD COLUMN controla_stock INTEGER NOT NULL DEFAULT 1;`,
+  // 0004: teléfono usado para WhatsApp en una venta puntual — necesario para poder
+  // reenviar el detalle después a un cliente eventual (sin registro de cliente propio).
+  `ALTER TABLE venta ADD COLUMN telefono_whatsapp TEXT;`,
 ];
 
 export function aplicarMigraciones(bd: BaseDatosLocal): void {

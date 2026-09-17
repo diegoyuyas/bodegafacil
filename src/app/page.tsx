@@ -11,6 +11,9 @@ import {
   CLAVE_NOMBRE_TIENDA,
   obtenerNombreTienda,
 } from '@/core/configuracion';
+import { CLAVE_PREFIJO_PAIS, obtenerPrefijoPais } from '@/core/paises';
+import { construirMensajeVenta } from '@/core/whatsapp';
+import { construirEnlaceWhatsApp } from '@/infraestructura/whatsapp/enlace';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 /**
@@ -31,10 +34,12 @@ export default function PaginaInicio() {
   const router = useRouter();
   const { contenedor, error, cargando } = usarContenedor();
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
+  const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
 
   useEffect(() => {
     if (!contenedor) return;
     setSimboloMoneda(obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)));
+    setPrefijoPais(obtenerPrefijoPais(contenedor.configuracion.obtenerValor(CLAVE_PREFIJO_PAIS)));
   }, [contenedor]);
   const [resumen, setResumen] = useState<ResumenDia | null>(null);
   const [ventasDeHoy, setVentasDeHoy] = useState<VentaListaItem[]>([]);
@@ -120,6 +125,39 @@ export default function PaginaInicio() {
     contenedor.ventas.anularVenta(venta.id);
     await contenedor.persistir();
     recargar();
+  }
+
+  /**
+   * Reenvía el detalle de una venta ya confirmada por WhatsApp (Objetivo
+   * 3): prioriza el teléfono del cliente registrado; si no tiene, o si
+   * es cliente eventual, usa el teléfono que haya quedado guardado en
+   * la propia venta. Nunca envía automático: solo abre wa.me con el
+   * mensaje ya escrito.
+   */
+  function enviarWhatsAppDeVenta(venta: VentaListaItem, evento: React.MouseEvent) {
+    evento.stopPropagation();
+    if (!contenedor) return;
+    const ventaCompleta = contenedor.ventas.obtenerPorId(venta.id);
+
+    let telefono: string | null = ventaCompleta.telefonoWhatsapp;
+    if (ventaCompleta.clienteId) {
+      try {
+        const cliente = contenedor.clientes.obtenerPorId(ventaCompleta.clienteId);
+        telefono = cliente.telefono ?? ventaCompleta.telefonoWhatsapp;
+      } catch {
+        // Cliente ya no existe: se usa el teléfono guardado en la venta, si lo hay.
+      }
+    }
+
+    if (!telefono) {
+      window.alert('Esta venta no tiene un número de celular asociado para WhatsApp.');
+      return;
+    }
+
+    const lineasMensaje = contenedor.ventas.obtenerLineasParaMensaje(venta.id);
+    const mensaje = construirMensajeVenta(nombreTienda, ventaCompleta, lineasMensaje, simboloMoneda);
+    const enlace = construirEnlaceWhatsApp(telefono, mensaje, prefijoPais);
+    window.open(enlace, '_blank');
   }
 
   return (
@@ -296,14 +334,25 @@ export default function PaginaInicio() {
                                   {formatearMonto(venta.total, simboloMoneda)}
                                 </span>
                                 {!venta.anulada && (
-                                  <span
-                                    role="button"
-                                    onClick={(e) => anularVenta(venta, e)}
-                                    className="text-lg text-alerta"
-                                    aria-label={`Anular pedido V-${venta.id}`}
-                                  >
-                                    🗑
-                                  </span>
+                                  <>
+                                    <span
+                                      role="button"
+                                      onClick={(e) => enviarWhatsAppDeVenta(venta, e)}
+                                      className="text-lg text-bodega-oscuro"
+                                      aria-label={`Enviar por WhatsApp el pedido V-${venta.id}`}
+                                      title="Enviar por WhatsApp"
+                                    >
+                                      💬
+                                    </span>
+                                    <span
+                                      role="button"
+                                      onClick={(e) => anularVenta(venta, e)}
+                                      className="text-lg text-alerta"
+                                      aria-label={`Anular pedido V-${venta.id}`}
+                                    >
+                                      🗑
+                                    </span>
+                                  </>
                                 )}
                               </div>
                             </button>

@@ -7,7 +7,10 @@ import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moned
 import { construirVenta, ErrorDeNegocio } from '@/core/reglas-negocio';
 import { LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
 import { CLAVE_NOMBRE_TIENDA, CLAVE_NOTIFICAR_STOCK_BAJO, CLAVE_PRECIO_EDITABLE_VENTA, estaActivado, obtenerNombreTienda } from '@/core/configuracion';
-import type { Cliente, MetodoPago, Producto } from '@/core/tipos';
+import { CLAVE_PREFIJO_PAIS, obtenerPrefijoPais } from '@/core/paises';
+import { construirMensajeVenta } from '@/core/whatsapp';
+import { construirEnlaceWhatsApp } from '@/infraestructura/whatsapp/enlace';
+import type { Cliente, MetodoPago, Producto, Venta } from '@/core/tipos';
 import { limpiarNumeroEscrito } from '@/core/texto';
 import {
   mostrarNotificacionSinStock,
@@ -59,6 +62,16 @@ export default function PaginaNuevaVenta() {
   const [clientesEncontrados, setClientesEncontrados] = useState<Cliente[]>([]);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null);
 
+  // Teléfono para WhatsApp: se precarga con el del cliente si tiene uno
+  // registrado; si no (o si es cliente eventual), queda editable.
+  const [telefonoCelular, setTelefonoCelular] = useState('');
+  const [enviarWhatsApp, setEnviarWhatsApp] = useState(false);
+  const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
+
+  useEffect(() => {
+    setTelefonoCelular(clienteSeleccionado?.telefono ?? '');
+  }, [clienteSeleccionado]);
+
   const [etapa, setEtapa] = useState<'armando' | 'revisando' | 'guardada'>('armando');
   const [totalGuardado, setTotalGuardado] = useState(0);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
@@ -81,6 +94,7 @@ export default function PaginaNuevaVenta() {
     setNotificarStockBajo(
       estaActivado(contenedor.configuracion.obtenerValor(CLAVE_NOTIFICAR_STOCK_BAJO)),
     );
+    setPrefijoPais(obtenerPrefijoPais(contenedor.configuracion.obtenerValor(CLAVE_PREFIJO_PAIS)));
   }, [contenedor]);
 
   useEffect(() => {
@@ -222,10 +236,31 @@ export default function PaginaNuevaVenta() {
     }
   }
 
+  /** Teléfono a usar: el del cliente si tiene uno registrado, si no el escrito a mano. */
+  function telefonoWhatsAppFinal(): string {
+    if (clienteSeleccionado?.telefono) return clienteSeleccionado.telefono;
+    return telefonoCelular.trim();
+  }
+
+  function abrirWhatsAppDeVenta(venta: Venta, telefono: string) {
+    if (!contenedor) return;
+    const lineasMensaje = contenedor.ventas.obtenerLineasParaMensaje(venta.id);
+    const nombreTiendaActual = obtenerNombreTienda(contenedor.configuracion.obtenerValor(CLAVE_NOMBRE_TIENDA));
+    const mensaje = construirMensajeVenta(nombreTiendaActual, venta, lineasMensaje, simboloMoneda);
+    const enlace = construirEnlaceWhatsApp(telefono, mensaje, prefijoPais);
+    window.open(enlace, '_blank');
+  }
+
   async function confirmarVenta() {
     if (!contenedor || !calculoValido) return;
     if (metodoPago === 'fiado' && !clienteSeleccionado) {
       setMensajeError('Elige un cliente para la venta al fiado.');
+      return;
+    }
+
+    const telefonoFinal = telefonoWhatsAppFinal();
+    if (enviarWhatsApp && !telefonoFinal) {
+      setMensajeError('Ingresa un número de celular para enviar la venta por WhatsApp.');
       return;
     }
 
@@ -240,11 +275,15 @@ export default function PaginaNuevaVenta() {
         })),
         metodoPago,
         clienteId: clienteSeleccionado?.id ?? null,
+        telefonoWhatsapp: telefonoFinal || null,
       });
       await contenedor.persistir();
       notificarStockBajoTrasVenta(carrito);
       setTotalGuardado(venta.total);
       setEtapa('guardada');
+      if (enviarWhatsApp && telefonoFinal) {
+        abrirWhatsAppDeVenta(venta, telefonoFinal);
+      }
     } catch (e) {
       setMensajeError(e instanceof ErrorDeNegocio ? e.message : 'No se pudo guardar la venta.');
     } finally {
@@ -257,6 +296,8 @@ export default function PaginaNuevaVenta() {
     setClienteSeleccionado(null);
     setBusquedaCliente('');
     setMetodoPago('efectivo');
+    setTelefonoCelular('');
+    setEnviarWhatsApp(false);
     setMensajeError(null);
     setEtapa('armando');
     if (contenedor) setProductos(contenedor.productos.listarActivos());
@@ -345,6 +386,12 @@ export default function PaginaNuevaVenta() {
           Pago: {METODOS_PAGO.find((m) => m.valor === metodoPago)?.etiqueta} ·{' '}
           {clienteSeleccionado ? clienteSeleccionado.nombre : 'Cliente eventual'}
         </p>
+
+        {enviarWhatsApp && (
+          <p className="mt-1 text-xs text-tinta/50">
+            📲 Al confirmar, se abrirá WhatsApp con el detalle listo para enviar.
+          </p>
+        )}
 
         {mensajeError && <p className="mt-3 text-sm text-alerta">{mensajeError}</p>}
 
@@ -553,6 +600,36 @@ export default function PaginaNuevaVenta() {
             </p>
           </div>
         )}
+      </section>
+
+      {/* Teléfono + WhatsApp */}
+      <section className="mt-4">
+        <p className="text-sm text-tinta/60">Número de celular (opcional)</p>
+        <div className="mt-2 flex gap-2">
+          <span className="flex h-11 shrink-0 items-center rounded-lg border border-linea bg-papel px-3 text-sm text-tinta/60">
+            +{prefijoPais}
+          </span>
+          <input
+            value={telefonoCelular}
+            onChange={(e) => setTelefonoCelular(e.target.value)}
+            placeholder="Celular para WhatsApp"
+            inputMode="numeric"
+            disabled={Boolean(clienteSeleccionado?.telefono)}
+            className="h-11 flex-1 rounded-lg border border-linea px-3 text-sm disabled:bg-papel disabled:text-tinta/50"
+          />
+        </div>
+        {clienteSeleccionado?.telefono && (
+          <p className="mt-1 text-xs text-tinta/40">Se usará el teléfono registrado del cliente.</p>
+        )}
+        <label className="mt-3 flex items-center gap-2 text-sm text-tinta/80">
+          <input
+            type="checkbox"
+            checked={enviarWhatsApp}
+            onChange={(e) => setEnviarWhatsApp(e.target.checked)}
+            className="h-4 w-4 rounded border-linea"
+          />
+          Enviar venta a WhatsApp
+        </label>
       </section>
 
       {/* Acción principal */}

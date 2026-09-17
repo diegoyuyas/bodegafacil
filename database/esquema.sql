@@ -74,6 +74,7 @@ CREATE TABLE venta (
     ganancia_estimada   REAL NOT NULL DEFAULT 0,
     anulada             INTEGER NOT NULL DEFAULT 0,   -- trazabilidad: no se borra, se anula
     motivo_anulacion    TEXT,
+    telefono_whatsapp   TEXT,   -- número usado para WhatsApp en esta venta (clave para reenviar a clientes eventuales, que no tienen registro propio)
     creado_en           TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

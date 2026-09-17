@@ -63,6 +63,8 @@ export interface Venta {
   gananciaEstimada: number;
   anulada: boolean;
   motivoAnulacion: string | null;
+  /** Número usado para WhatsApp en esta venta puntual (clientes eventuales no tienen teléfono propio guardado). */
+  telefonoWhatsapp: string | null;
   creadoEn: string;
 }
 
@@ -197,6 +199,8 @@ export interface RegistrarVentaInput {
   lineas: LineaVentaEntrada[];
   metodoPago: MetodoPago;
   clienteId?: number | null;
+  /** Número de celular para WhatsApp, si se ingresó uno (independiente de si se marcó "Enviar a WhatsApp"). */
+  telefonoWhatsapp?: string | null;
 }
 
 /**
@@ -226,6 +230,14 @@ export interface VentaListaItem {
 export interface LineaVentaResumen {
   producto: string;
   cantidad: number;
+}
+
+/** Una línea de producto con precio, para armar el mensaje de WhatsApp de una venta (Ventas → Nueva venta / reenvío). */
+export interface LineaVentaMensaje {
+  producto: string;
+  cantidad: number;
+  precioUnitario: number;
+  subtotal: number;
 }
 
 /**

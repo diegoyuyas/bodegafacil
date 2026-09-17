@@ -8,6 +8,7 @@ import {
 } from '@/core/reglas-negocio';
 import { calcularEstadoPlan, CLAVE_PLAN_VENCE_EN, LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
 import type {
+  LineaVentaMensaje,
   LineaVentaResumen,
   ProductoMasVendidoItem,
   RegistrarVentaInput,
@@ -51,8 +52,8 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
       const calculada = construirVenta(input.lineas, (id) => this.productos.obtenerPorId(id));
 
       this.bd.ejecutar(
-        `INSERT INTO venta (fecha_hora, cliente_id, metodo_pago, subtotal, total, ganancia_estimada)
-         VALUES (?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO venta (fecha_hora, cliente_id, metodo_pago, subtotal, total, ganancia_estimada, telefono_whatsapp)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
           ahoraLocalSql(),
           input.clienteId ?? null,
@@ -60,6 +61,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
           calculada.subtotal,
           calculada.total,
           calculada.gananciaEstimada,
+          input.telefonoWhatsapp ?? null,
         ],
       );
       const ventaId = this.bd.ultimoIdInsertado();
@@ -160,6 +162,31 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
        ORDER BY dv.id`,
       [ventaId],
     );
+  }
+
+  /** Líneas con precio unitario y subtotal, para armar el mensaje de WhatsApp de una venta. */
+  obtenerLineasParaMensaje(ventaId: number): LineaVentaMensaje[] {
+    return this.bd
+      .consultar<{
+        producto: string;
+        cantidad: number;
+        precio_unitario: number;
+        subtotal: number;
+      }>(
+        `SELECT p.nombre AS producto, dv.cantidad AS cantidad,
+                dv.precio_unitario AS precio_unitario, dv.subtotal AS subtotal
+         FROM detalle_venta dv
+         JOIN producto p ON p.id = dv.producto_id
+         WHERE dv.venta_id = ?
+         ORDER BY dv.id`,
+        [ventaId],
+      )
+      .map((fila) => ({
+        producto: fila.producto,
+        cantidad: fila.cantidad,
+        precioUnitario: fila.precio_unitario,
+        subtotal: fila.subtotal,
+      }));
   }
 
   /**

@@ -97,6 +97,7 @@ export interface FilaVenta {
   ganancia_estimada: number;
   anulada: number;
   motivo_anulacion: string | null;
+  telefono_whatsapp: string | null;
   creado_en: string;
 }
 
@@ -111,6 +112,7 @@ export function mapearVenta(fila: FilaVenta): Venta {
     gananciaEstimada: fila.ganancia_estimada,
     anulada: fila.anulada === 1,
     motivoAnulacion: fila.motivo_anulacion,
+    telefonoWhatsapp: fila.telefono_whatsapp,
     creadoEn: fila.creado_en,
   };
 }

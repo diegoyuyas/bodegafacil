@@ -7,23 +7,43 @@ import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moned
 import type { EstadoPlan } from '@/core/plan';
 import type { CompraListaItem, HistorialCostoItem, MovimientoCaja, Producto, ProductoMasVendidoItem } from '@/core/tipos';
 import { hoyLocalSql } from '@/core/tiempo';
+import type { FilaVentaDetallada } from '@/core/exportacion';
 import {
   construirHojaCaja,
   construirHojaComprasDetallado,
   construirHojaHistorialCostos,
   construirHojaMasVendidos,
+  construirHojaVentas,
 } from '@/core/exportacion';
 import { generarLibroExcel } from '@/infraestructura/exportacion/excel';
 import { descargarExcel } from '@/infraestructura/exportacion/descargas';
 
 const PESTANAS = [
+  { valor: 'ventas', etiqueta: 'Ventas' },
   { valor: 'caja', etiqueta: 'Caja' },
   { valor: 'compras', etiqueta: 'Compras' },
   { valor: 'productos', etiqueta: 'Más vendidos' },
   { valor: 'costos', etiqueta: 'Costos' },
 ] as const;
 
+const ETIQUETAS_METODO_PAGO_REPORTE: Record<string, string> = {
+  efectivo: 'Efectivo',
+  yape: 'Yape',
+  plin: 'Plin',
+  tarjeta: 'Tarjeta',
+  fiado: 'Fiado',
+};
+
 type Pestana = (typeof PESTANAS)[number]['valor'];
+
+interface VentaAgrupada {
+  pedido: string;
+  fecha: string;
+  cliente: string;
+  metodoPago: string;
+  lineas: FilaVentaDetallada[];
+  total: number;
+}
 
 export default function PaginaReportes() {
   const { contenedor, cargando, error } = usarContenedor();
@@ -34,12 +54,13 @@ export default function PaginaReportes() {
     setSimboloMoneda(obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)));
   }, [contenedor]);
   const [estadoPlan, setEstadoPlan] = useState<EstadoPlan | null>(null);
-  const [pestana, setPestana] = useState<Pestana>('caja');
+  const [pestana, setPestana] = useState<Pestana>('ventas');
 
   const [desde, setDesde] = useState(hoyLocalSql());
   const [hasta, setHasta] = useState(hoyLocalSql());
   const rangoInvalido = Boolean(desde && hasta && desde > hasta);
 
+  const [detalleVentas, setDetalleVentas] = useState<FilaVentaDetallada[]>([]);
   const [movimientosCaja, setMovimientosCaja] = useState<MovimientoCaja[]>([]);
   const [compras, setCompras] = useState<CompraListaItem[]>([]);
   const [masVendidos, setMasVendidos] = useState<ProductoMasVendidoItem[]>([]);
@@ -61,6 +82,7 @@ export default function PaginaReportes() {
 
   function consultar() {
     if (!contenedor || rangoInvalido || !desde || !hasta) return;
+    setDetalleVentas(contenedor.ventas.listarDetalleParaExportar(desde, hasta));
     setMovimientosCaja(contenedor.caja.listarMovimientosPorRango(desde, hasta));
     setCompras(contenedor.compras.listarPorRango(desde, hasta));
     setMasVendidos(contenedor.ventas.listarProductosMasVendidos(desde, hasta));
@@ -87,8 +109,39 @@ export default function PaginaReportes() {
     setBusquedaProducto('');
   }
 
+  const ventasAgrupadas = useMemo<VentaAgrupada[]>(() => {
+    const mapa = new Map<string, VentaAgrupada>();
+    for (const fila of detalleVentas) {
+      let grupo = mapa.get(fila.pedido);
+      if (!grupo) {
+        grupo = {
+          pedido: fila.pedido,
+          fecha: fila.fecha,
+          cliente: fila.cliente,
+          metodoPago: fila.metodoPago,
+          lineas: [],
+          total: 0,
+        };
+        mapa.set(fila.pedido, grupo);
+      }
+      grupo.lineas.push(fila);
+      grupo.total += fila.subtotal;
+    }
+    return Array.from(mapa.values());
+  }, [detalleVentas]);
+
+  const totalVentasReporte = useMemo(
+    () => ventasAgrupadas.reduce((suma, v) => suma + v.total, 0),
+    [ventasAgrupadas],
+  );
+
   async function descargarExcelDelReporte() {
     if (!esPremium || !contenedor) return;
+    if (pestana === 'ventas') {
+      const libro = generarLibroExcel([construirHojaVentas(detalleVentas)]);
+      await descargarExcel(`reporte-ventas-${desde}-a-${hasta}.xlsx`, libro);
+      return;
+    }
     if (pestana === 'costos') {
       if (!productoElegido || historialCostos.length === 0) return;
       const hoja = construirHojaHistorialCostos(productoElegido.nombre, historialCostos);
@@ -198,6 +251,50 @@ export default function PaginaReportes() {
             >
               {esPremium ? 'Descargar Excel ↓' : '🔒 Descargar Excel (Premium)'}
             </button>
+          )}
+
+          {pestana === 'ventas' && (
+            <section className="mt-4">
+              <div className="rounded-xl border border-linea px-4 py-3">
+                <p className="text-xs text-tinta/60">Total vendido en el rango</p>
+                <p className="text-2xl font-extrabold text-tinta">
+                  {formatearMonto(totalVentasReporte, simboloMoneda)}
+                </p>
+              </div>
+
+              {ventasAgrupadas.length === 0 ? (
+                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                  No hay ventas registradas en este rango.
+                </p>
+              ) : (
+                <ul className="mt-4 divide-y divide-linea border-y border-linea">
+                  {ventasAgrupadas.map((venta) => (
+                    <li key={venta.pedido} className="py-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-tinta/80">
+                          {venta.pedido} · {venta.cliente}
+                        </span>
+                        <span className="font-semibold text-tinta">
+                          {formatearMonto(venta.total, simboloMoneda)}
+                        </span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-tinta/40">
+                        {new Date(venta.fecha).toLocaleString('es-PE')} ·{' '}
+                        {ETIQUETAS_METODO_PAGO_REPORTE[venta.metodoPago] ?? venta.metodoPago}
+                      </p>
+                      <div className="mt-1.5 space-y-0.5 pl-2">
+                        {venta.lineas.map((linea, i) => (
+                          <p key={i} className="text-xs text-tinta/60">
+                            {linea.cantidad} × {linea.producto} —{' '}
+                            {formatearMonto(linea.subtotal, simboloMoneda)}
+                          </p>
+                        ))}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
           )}
 
           {pestana === 'caja' && (

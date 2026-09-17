@@ -14,6 +14,7 @@ import type {
   CompraListaItem,
   DeudaPendienteDetalle,
   HistorialCostoItem,
+  LineaVentaMensaje,
   LineaVentaResumen,
   MetodoPagoSinFiado,
   MovimientoCaja,
@@ -98,6 +99,8 @@ export interface VentaRepositorio {
   listarDeHoyConDetalle(): VentaListaItem[];
   /** Para el preview al expandir una venta en la lista. */
   obtenerLineas(ventaId: number): LineaVentaResumen[];
+  /** Líneas con precio unitario y subtotal, para armar el mensaje de WhatsApp de una venta. */
+  obtenerLineasParaMensaje(ventaId: number): LineaVentaMensaje[];
   /** Repone stock, revierte caja/deuda, y marca la venta como anulada. */
   anularVenta(id: number, motivo?: string): void;
   resumenDelDia(fechaIso?: string): ResumenDia;
