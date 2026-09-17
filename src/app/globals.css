@@ -17,6 +17,26 @@
     outline-offset: 2px;
   }
 
+  /*
+   * Efecto de "presionado" para todos los botones (y enlaces/íconos que
+   * funcionan como botón) de la app: un scale-down sutil al tocar.
+   * Solo usa `transform` (no repinta layout ni afecta otras propiedades),
+   * así que es prácticamente gratis en cualquier dispositivo. Respeta
+   * `prefers-reduced-motion` mediante la regla ya existente más abajo,
+   * que reduce `transition-duration` a ~0.
+   */
+  button:not(:disabled),
+  a,
+  [role='button'] {
+    transition: transform 0.1s ease-out;
+  }
+
+  button:not(:disabled):active,
+  a:active,
+  [role='button']:active {
+    transform: scale(0.96);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;

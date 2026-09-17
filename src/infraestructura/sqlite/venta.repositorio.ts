@@ -245,6 +245,10 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
     });
   }
 
+  actualizarTelefonoWhatsapp(id: number, telefono: string): void {
+    this.bd.ejecutar('UPDATE venta SET telefono_whatsapp = ? WHERE id = ?', [telefono, id]);
+  }
+
   resumenDelDia(fechaIso?: string): ResumenDia {
     const fecha = fechaIso ?? hoyLocalSql();
 

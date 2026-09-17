@@ -103,6 +103,12 @@ export interface VentaRepositorio {
   obtenerLineasParaMensaje(ventaId: number): LineaVentaMensaje[];
   /** Repone stock, revierte caja/deuda, y marca la venta como anulada. */
   anularVenta(id: number, motivo?: string): void;
+  /**
+   * Guarda (o reemplaza) el teléfono de WhatsApp asociado a una venta ya
+   * registrada — para cuando se completa recién al reenviar desde Inicio,
+   * así no se vuelve a pedir la próxima vez.
+   */
+  actualizarTelefonoWhatsapp(id: number, telefono: string): void;
   resumenDelDia(fechaIso?: string): ResumenDia;
   /** Total histórico de ventas válidas (no anuladas) — para el umbral de Plan Pro. */
   contarTotalHistorico(): number;

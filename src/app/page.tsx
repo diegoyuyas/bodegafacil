@@ -131,10 +131,13 @@ export default function PaginaInicio() {
    * Reenvía el detalle de una venta ya confirmada por WhatsApp (Objetivo
    * 3): prioriza el teléfono del cliente registrado; si no tiene, o si
    * es cliente eventual, usa el teléfono que haya quedado guardado en
-   * la propia venta. Nunca envía automático: solo abre wa.me con el
-   * mensaje ya escrito.
+   * la propia venta. Si tampoco hay uno guardado, lo pide en el momento
+   * (window.prompt, igual de simple que el confirm de "Anular venta") y
+   * lo guarda en la venta para no volver a pedirlo. Nunca envía
+   * automático: solo abre wa.me con el mensaje ya escrito, el usuario
+   * presiona "Enviar".
    */
-  function enviarWhatsAppDeVenta(venta: VentaListaItem, evento: React.MouseEvent) {
+  async function enviarWhatsAppDeVenta(venta: VentaListaItem, evento: React.MouseEvent) {
     evento.stopPropagation();
     if (!contenedor) return;
     const ventaCompleta = contenedor.ventas.obtenerPorId(venta.id);
@@ -150,8 +153,14 @@ export default function PaginaInicio() {
     }
 
     if (!telefono) {
-      window.alert('Esta venta no tiene un número de celular asociado para WhatsApp.');
-      return;
+      const ingresado = window.prompt(
+        `Esta venta no tiene un número de celular. Ingresa el número (sin prefijo de país, +${prefijoPais} se agrega solo):`,
+      );
+      const limpio = ingresado?.trim();
+      if (!limpio) return; // el usuario canceló o dejó el campo vacío
+      telefono = limpio;
+      contenedor.ventas.actualizarTelefonoWhatsapp(venta.id, telefono);
+      await contenedor.persistir();
     }
 
     const lineasMensaje = contenedor.ventas.obtenerLineasParaMensaje(venta.id);
