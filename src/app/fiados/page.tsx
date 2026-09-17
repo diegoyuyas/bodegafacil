@@ -10,6 +10,7 @@ import { construirMensajeDeuda } from '@/core/whatsapp';
 import { construirEnlaceWhatsApp } from '@/infraestructura/whatsapp/enlace';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { CLAVE_PREFIJO_PAIS, obtenerPrefijoPais } from '@/core/paises';
+import { limpiarNumeroEscrito } from '@/core/texto';
 
 const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
   { valor: 'efectivo', etiqueta: 'Efectivo' },
@@ -136,7 +137,7 @@ const esPremium = estadoPlan?.tipo === 'premium';
                 <div className="mt-3 space-y-3 rounded-xl border border-linea p-3">
                   <input
                     value={monto}
-                    onChange={(e) => setMonto(e.target.value)}
+                    onChange={(e) => setMonto(limpiarNumeroEscrito(e.target.value))}
                     inputMode="decimal"
                     placeholder="Monto"
                     className="h-10 w-full rounded-lg border border-linea px-3 text-sm"

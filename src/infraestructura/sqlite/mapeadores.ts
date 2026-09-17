@@ -13,6 +13,7 @@ export interface FilaProducto {
   costo: number;
   stock_actual: number;
   stock_minimo: number;
+  controla_stock: number;
   unidad_medida: string;
   activo: number;
   creado_en: string;
@@ -29,6 +30,7 @@ export function mapearProducto(fila: FilaProducto): Producto {
     costo: fila.costo,
     stockActual: fila.stock_actual,
     stockMinimo: fila.stock_minimo,
+    controlaStock: fila.controla_stock === 1,
     unidadMedida: fila.unidad_medida,
     activo: fila.activo === 1,
     creadoEn: fila.creado_en,

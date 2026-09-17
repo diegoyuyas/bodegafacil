@@ -81,15 +81,17 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         );
 
         const producto = this.productos.obtenerPorId(detalle.productoId);
-        const stockNuevo = calcularStockNuevo(producto.stockActual, 0, detalle.cantidad);
-        this.productos.actualizarStock(producto.id, stockNuevo);
+        if (producto.controlaStock) {
+          const stockNuevo = calcularStockNuevo(producto.stockActual, 0, detalle.cantidad);
+          this.productos.actualizarStock(producto.id, stockNuevo);
 
-        this.bd.ejecutar(
-          `INSERT INTO movimiento_inventario
-             (producto_id, tipo, cantidad, motivo, venta_id, stock_resultante)
-           VALUES (?, 'salida', ?, 'venta', ?, ?)`,
-          [detalle.productoId, detalle.cantidad, ventaId, stockNuevo],
-        );
+          this.bd.ejecutar(
+            `INSERT INTO movimiento_inventario
+               (producto_id, tipo, cantidad, motivo, venta_id, stock_resultante)
+             VALUES (?, 'salida', ?, 'venta', ?, ?)`,
+            [detalle.productoId, detalle.cantidad, ventaId, stockNuevo],
+          );
+        }
       }
 
       if (input.metodoPago === 'fiado') {
@@ -180,6 +182,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
 
       for (const linea of lineas) {
         const producto = this.productos.obtenerPorId(linea.producto_id);
+        if (!producto.controlaStock) continue;
         const stockNuevo = calcularStockNuevo(producto.stockActual, linea.cantidad, 0);
         this.productos.actualizarStock(producto.id, stockNuevo);
         this.bd.ejecutar(
@@ -241,7 +244,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
     );
 
     const stockBajo = this.bd.consultar<{ total: number }>(
-      `SELECT COUNT(*) AS total FROM producto WHERE activo = 1 AND stock_actual <= stock_minimo`,
+      `SELECT COUNT(*) AS total FROM producto WHERE activo = 1 AND controla_stock = 1 AND stock_actual <= stock_minimo`,
     )[0] ?? { total: 0 };
 
     const porCobrar = this.bd.consultar<{ total: number | null }>(

@@ -29,6 +29,7 @@ CREATE TABLE producto (
     costo           REAL NOT NULL CHECK (costo >= 0),
     stock_actual    REAL NOT NULL DEFAULT 0,
     stock_minimo    REAL NOT NULL DEFAULT 0,
+    controla_stock  INTEGER NOT NULL DEFAULT 1,       -- 0 = no lleva stock (ej. servicios, recarga de celular): no descuenta ni bloquea venta
     unidad_medida   TEXT NOT NULL DEFAULT 'unidad',   -- unidad, kg, litro, paquete, etc.
     activo          INTEGER NOT NULL DEFAULT 1,       -- eliminación lógica
     creado_en       TEXT NOT NULL DEFAULT (datetime('now')),

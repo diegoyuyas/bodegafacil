@@ -20,6 +20,8 @@ const MIGRACIONES: string[] = [
   `ALTER TABLE proveedor ADD COLUMN ruc TEXT;`,
   `ALTER TABLE compra ADD COLUMN proveedor_nombre_libre TEXT;`,
   `ALTER TABLE compra ADD COLUMN comprobante TEXT;`,
+  // 0003: productos que no llevan stock (ej. servicios, recargas) — no descuentan ni bloquean venta.
+  `ALTER TABLE producto ADD COLUMN controla_stock INTEGER NOT NULL DEFAULT 1;`,
 ];
 
 export function aplicarMigraciones(bd: BaseDatosLocal): void {

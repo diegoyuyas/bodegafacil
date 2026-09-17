@@ -33,6 +33,8 @@ export interface Producto {
   costo: number;
   stockActual: number;
   stockMinimo: number;
+  /** false = no lleva stock (ej. servicios, recarga de celular): no descuenta ni bloquea venta; stockActual/stockMinimo quedan en 0. */
+  controlaStock: boolean;
   unidadMedida: string;
   activo: boolean;
   creadoEn: string;

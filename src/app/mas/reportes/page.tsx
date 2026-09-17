@@ -9,7 +9,7 @@ import type { CompraListaItem, HistorialCostoItem, MovimientoCaja, Producto, Pro
 import { hoyLocalSql } from '@/core/tiempo';
 import {
   construirHojaCaja,
-  construirHojaCompras,
+  construirHojaComprasDetallado,
   construirHojaHistorialCostos,
   construirHojaMasVendidos,
 } from '@/core/exportacion';
@@ -88,7 +88,7 @@ export default function PaginaReportes() {
   }
 
   async function descargarExcelDelReporte() {
-    if (!esPremium) return;
+    if (!esPremium || !contenedor) return;
     if (pestana === 'costos') {
       if (!productoElegido || historialCostos.length === 0) return;
       const hoja = construirHojaHistorialCostos(productoElegido.nombre, historialCostos);
@@ -96,12 +96,18 @@ export default function PaginaReportes() {
       await descargarExcel(`costos-${productoElegido.nombre}-${desde}-a-${hasta}.xlsx`, libro);
       return;
     }
-    const hoja =
-      pestana === 'caja'
-        ? construirHojaCaja(movimientosCaja)
-        : pestana === 'compras'
-          ? construirHojaCompras(compras)
-          : construirHojaMasVendidos(masVendidos);
+    if (pestana === 'compras') {
+      // Mismo detalle línea por línea que "Exportar todo a Excel", pero
+      // acotado al rango de fechas elegido acá arriba.
+      const detalle = contenedor.compras.listarDetalleParaExportar(
+        desde || undefined,
+        hasta || undefined,
+      );
+      const libro = generarLibroExcel([construirHojaComprasDetallado(detalle)]);
+      await descargarExcel(`reporte-compras-${desde}-a-${hasta}.xlsx`, libro);
+      return;
+    }
+    const hoja = pestana === 'caja' ? construirHojaCaja(movimientosCaja) : construirHojaMasVendidos(masVendidos);
     const libro = generarLibroExcel([hoja]);
     await descargarExcel(`reporte-${pestana}-${desde}-a-${hasta}.xlsx`, libro);
   }

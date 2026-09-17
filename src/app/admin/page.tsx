@@ -11,6 +11,7 @@ import {
 } from '@/core/plan';
 import type { DuracionPremiumDias, EstadoPlan } from '@/core/plan';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
+import { limpiarNumeroEscrito } from '@/core/texto';
 
 /**
  * Panel de administrador — no aparece en ningún menú. Se llega tocando
@@ -249,7 +250,7 @@ export default function PaginaAdmin() {
             min={DIAS_PREMIUM_MINIMO}
             max={DIAS_PREMIUM_MAXIMO}
             value={diasPersonalizados}
-            onChange={(e) => setDiasPersonalizados(e.target.value)}
+            onChange={(e) => setDiasPersonalizados(limpiarNumeroEscrito(e.target.value))}
             placeholder="Ej: 15"
             className="h-11 flex-1 rounded-xl border border-linea px-3 text-sm"
           />

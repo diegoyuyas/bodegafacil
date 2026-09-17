@@ -43,16 +43,17 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
   crear(datos: DatosNuevoProducto): Producto {
     this.bd.ejecutar(
       `INSERT INTO producto
-         (nombre, categoria_id, codigo, precio_venta, costo, stock_actual, stock_minimo, unidad_medida)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         (nombre, categoria_id, codigo, precio_venta, costo, stock_actual, stock_minimo, controla_stock, unidad_medida)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         datos.nombre,
         datos.categoriaId ?? null,
         datos.codigo ?? null,
         datos.precioVenta,
         datos.costo,
-        datos.stockActual,
-        datos.stockMinimo,
+        datos.controlaStock ? datos.stockActual : 0,
+        datos.controlaStock ? datos.stockMinimo : 0,
+        datos.controlaStock ? 1 : 0,
         datos.unidadMedida,
       ],
     );
@@ -78,7 +79,7 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
     this.bd.ejecutar(
       `UPDATE producto
          SET nombre = ?, categoria_id = ?, codigo = ?, precio_venta = ?, costo = ?,
-             stock_minimo = ?, unidad_medida = ?, activo = ?, actualizado_en = datetime('now')
+             stock_minimo = ?, controla_stock = ?, unidad_medida = ?, activo = ?, actualizado_en = datetime('now')
        WHERE id = ?`,
       [
         datos.nombre.trim(),
@@ -86,12 +87,18 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
         datos.codigo ?? null,
         datos.precioVenta,
         datos.costo,
-        datos.stockMinimo,
+        datos.controlaStock ? datos.stockMinimo : 0,
+        datos.controlaStock ? 1 : 0,
         datos.unidadMedida,
         datos.activo ? 1 : 0,
         id,
       ],
     );
+    // Si se desactivó el control de stock, el stock actual también vuelve a 0
+    // (no tiene sentido dejar un número "colgado" que ya no se usa para nada).
+    if (!datos.controlaStock) {
+      this.actualizarStock(id, 0);
+    }
     return this.obtenerPorId(id);
   }
 

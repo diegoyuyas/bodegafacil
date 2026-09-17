@@ -50,6 +50,7 @@ async function main() {
     costo: 2.8,
     stockActual: 10,
     stockMinimo: 3,
+    controlaStock: true,
     unidadMedida: 'unidad',
   });
   afirmar(incaKola.id > 0, 'Producto creado con id válido');
@@ -355,6 +356,7 @@ async function main() {
     costo: 0.05,
     stockActual: 1000,
     stockMinimo: 0,
+    controlaStock: true,
     unidadMedida: 'unidad',
   });
 

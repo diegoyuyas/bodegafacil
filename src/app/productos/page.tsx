@@ -6,6 +6,7 @@ import { usarContenedor } from '@/hooks/usar-contenedor';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import type { Producto } from '@/core/tipos';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
+import { limpiarNumeroEscrito } from '@/core/texto';
 
 export default function PaginaProductos() {
   const { contenedor, cargando, error } = usarContenedor();
@@ -24,6 +25,7 @@ export default function PaginaProductos() {
   const [costo, setCosto] = useState('');
   const [stockActual, setStockActual] = useState('');
   const [stockMinimo, setStockMinimo] = useState('');
+  const [controlaStock, setControlaStock] = useState(true);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
 
   const [editandoId, setEditandoId] = useState<number | null>(null);
@@ -31,6 +33,7 @@ export default function PaginaProductos() {
   const [precioVentaEdit, setPrecioVentaEdit] = useState('');
   const [costoEdit, setCostoEdit] = useState('');
   const [stockMinimoEdit, setStockMinimoEdit] = useState('');
+  const [controlaStockEdit, setControlaStockEdit] = useState(true);
   const [activoEdit, setActivoEdit] = useState(true);
   const [mensajeErrorEdit, setMensajeErrorEdit] = useState<string | null>(null);
 
@@ -58,6 +61,7 @@ export default function PaginaProductos() {
         costo: Number(costo),
         stockActual: Number(stockActual || 0),
         stockMinimo: Number(stockMinimo || 0),
+        controlaStock,
         unidadMedida: 'unidad',
       });
       await contenedor.persistir();
@@ -66,6 +70,7 @@ export default function PaginaProductos() {
       setCosto('');
       setStockActual('');
       setStockMinimo('');
+      setControlaStock(true);
       setMostrarFormulario(false);
       recargar();
     } catch (e) {
@@ -80,6 +85,7 @@ export default function PaginaProductos() {
     setPrecioVentaEdit(String(producto.precioVenta));
     setCostoEdit(String(producto.costo));
     setStockMinimoEdit(String(producto.stockMinimo));
+    setControlaStockEdit(producto.controlaStock);
     setActivoEdit(producto.activo);
     setMensajeErrorEdit(null);
   }
@@ -149,6 +155,7 @@ export default function PaginaProductos() {
         precioVenta: Number(precioVentaEdit),
         costo: Number(costoEdit),
         stockMinimo: Number(stockMinimoEdit || 0),
+        controlaStock: controlaStockEdit,
         unidadMedida: producto.unidadMedida,
         activo: activoEdit,
       });
@@ -189,33 +196,51 @@ export default function PaginaProductos() {
           <div className="flex gap-3">
             <input
               value={precioVenta}
-              onChange={(e) => setPrecioVenta(e.target.value)}
+              onChange={(e) => setPrecioVenta(limpiarNumeroEscrito(e.target.value))}
               inputMode="decimal"
               placeholder="Precio de venta"
               className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
             />
             <input
               value={costo}
-              onChange={(e) => setCosto(e.target.value)}
+              onChange={(e) => setCosto(limpiarNumeroEscrito(e.target.value))}
               inputMode="decimal"
               placeholder="Costo"
               className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
             />
           </div>
+          <label className="flex items-center gap-2 text-sm text-tinta">
+            <input
+              type="checkbox"
+              checked={controlaStock}
+              onChange={(e) => {
+                const marcado = e.target.checked;
+                setControlaStock(marcado);
+                if (!marcado) {
+                  setStockActual('0');
+                  setStockMinimo('0');
+                }
+              }}
+              className="h-4 w-4 rounded border-linea"
+            />
+            Controla stock
+          </label>
           <div className="flex gap-3">
             <input
-              value={stockActual}
-              onChange={(e) => setStockActual(e.target.value)}
+              value={controlaStock ? stockActual : '0'}
+              onChange={(e) => setStockActual(limpiarNumeroEscrito(e.target.value))}
+              disabled={!controlaStock}
               inputMode="numeric"
               placeholder="Stock inicial"
-              className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+              className="h-11 w-full rounded-lg border border-linea px-3 text-sm disabled:bg-papel disabled:text-tinta/40"
             />
             <input
-              value={stockMinimo}
-              onChange={(e) => setStockMinimo(e.target.value)}
+              value={controlaStock ? stockMinimo : '0'}
+              onChange={(e) => setStockMinimo(limpiarNumeroEscrito(e.target.value))}
+              disabled={!controlaStock}
               inputMode="numeric"
               placeholder="Stock mínimo"
-              className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+              className="h-11 w-full rounded-lg border border-linea px-3 text-sm disabled:bg-papel disabled:text-tinta/40"
             />
           </div>
           {mensajeError && <p className="text-sm text-alerta">{mensajeError}</p>}
@@ -258,7 +283,7 @@ export default function PaginaProductos() {
 
         <ul className="divide-y divide-linea border-y border-linea">
           {productosFiltrados.map((producto) => {
-            const stockBajo = producto.stockActual <= producto.stockMinimo;
+            const stockBajo = producto.controlaStock && producto.stockActual <= producto.stockMinimo;
             return (
               <li key={producto.id} className="py-3">
                 <div className="flex items-center justify-between gap-3">
@@ -271,22 +296,28 @@ export default function PaginaProductos() {
                         </span>
                       )}
                     </p>
-                    <p className={`text-xs ${stockBajo ? 'text-alerta' : 'text-tinta/50'}`}>
-                      Stock: {producto.stockActual} {stockBajo && '· bajo'}
-                    </p>
+                    {producto.controlaStock ? (
+                      <p className={`text-xs ${stockBajo ? 'text-alerta' : 'text-tinta/50'}`}>
+                        Stock: {producto.stockActual} {stockBajo && '· bajo'}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-tinta/40">No controla stock</p>
+                    )}
                   </div>
                   <div className="flex shrink-0 items-center gap-3">
                     <span className="text-sm font-semibold text-tinta">
                       {formatearMonto(producto.precioVenta, simboloMoneda)}
                     </span>
-                    <button
-                      onClick={() =>
-                        ajustandoId === producto.id ? cancelarAjuste() : abrirAjuste(producto)
-                      }
-                      className="text-sm font-semibold text-tinta/70"
-                    >
-                      {ajustandoId === producto.id ? 'Cancelar' : 'Ajustar'}
-                    </button>
+                    {producto.controlaStock && (
+                      <button
+                        onClick={() =>
+                          ajustandoId === producto.id ? cancelarAjuste() : abrirAjuste(producto)
+                        }
+                        className="text-sm font-semibold text-tinta/70"
+                      >
+                        {ajustandoId === producto.id ? 'Cancelar' : 'Ajustar'}
+                      </button>
+                    )}
                     <button
                       onClick={() =>
                         editandoId === producto.id ? cancelarEdicion() : abrirEdicion(producto)
@@ -329,7 +360,7 @@ export default function PaginaProductos() {
                     </div>
                     <input
                       value={cantidadAjuste}
-                      onChange={(e) => setCantidadAjuste(e.target.value)}
+                      onChange={(e) => setCantidadAjuste(limpiarNumeroEscrito(e.target.value))}
                       inputMode="decimal"
                       placeholder="Cantidad"
                       className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
@@ -362,25 +393,39 @@ export default function PaginaProductos() {
                     <div className="flex gap-3">
                       <input
                         value={precioVentaEdit}
-                        onChange={(e) => setPrecioVentaEdit(e.target.value)}
+                        onChange={(e) => setPrecioVentaEdit(limpiarNumeroEscrito(e.target.value))}
                         inputMode="decimal"
                         placeholder="Precio de venta"
                         className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
                       />
                       <input
                         value={costoEdit}
-                        onChange={(e) => setCostoEdit(e.target.value)}
+                        onChange={(e) => setCostoEdit(limpiarNumeroEscrito(e.target.value))}
                         inputMode="decimal"
                         placeholder="Costo"
                         className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
                       />
                     </div>
+                    <label className="flex items-center gap-2 text-sm text-tinta">
+                      <input
+                        type="checkbox"
+                        checked={controlaStockEdit}
+                        onChange={(e) => {
+                          const marcado = e.target.checked;
+                          setControlaStockEdit(marcado);
+                          if (!marcado) setStockMinimoEdit('0');
+                        }}
+                        className="h-4 w-4 rounded border-linea"
+                      />
+                      Controla stock
+                    </label>
                     <input
-                      value={stockMinimoEdit}
-                      onChange={(e) => setStockMinimoEdit(e.target.value)}
+                      value={controlaStockEdit ? stockMinimoEdit : '0'}
+                      onChange={(e) => setStockMinimoEdit(limpiarNumeroEscrito(e.target.value))}
+                      disabled={!controlaStockEdit}
                       inputMode="numeric"
                       placeholder="Stock mínimo"
-                      className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+                      className="h-11 w-full rounded-lg border border-linea px-3 text-sm disabled:bg-papel disabled:text-tinta/40"
                     />
                     <div>
                       <label className="mb-1 block text-xs text-tinta/50">Estado</label>

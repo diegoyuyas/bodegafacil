@@ -56,6 +56,7 @@ export interface DatosNuevoProducto {
   costo: number;
   stockActual: number;
   stockMinimo: number;
+  controlaStock: boolean;
   unidadMedida: string;
 }
 
@@ -66,6 +67,7 @@ export interface DatosActualizarProducto {
   precioVenta: number;
   costo: number;
   stockMinimo: number;
+  controlaStock: boolean;
   unidadMedida: string;
   activo: boolean;
 }

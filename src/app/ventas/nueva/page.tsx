@@ -8,6 +8,7 @@ import { construirVenta, ErrorDeNegocio } from '@/core/reglas-negocio';
 import { LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
 import { CLAVE_NOMBRE_TIENDA, CLAVE_NOTIFICAR_STOCK_BAJO, CLAVE_PRECIO_EDITABLE_VENTA, estaActivado, obtenerNombreTienda } from '@/core/configuracion';
 import type { Cliente, MetodoPago, Producto } from '@/core/tipos';
+import { limpiarNumeroEscrito } from '@/core/texto';
 import {
   mostrarNotificacionSinStock,
   mostrarNotificacionStockBajoProducto,
@@ -126,12 +127,12 @@ export default function PaginaNuevaVenta() {
     setCarrito((actual) => {
       const existente = actual.find((l) => l.productoId === producto.id);
       if (existente) {
-        if (existente.cantidad >= producto.stockActual) return actual;
+        if (producto.controlaStock && existente.cantidad >= producto.stockActual) return actual;
         return actual.map((l) =>
           l.productoId === producto.id ? { ...l, cantidad: l.cantidad + 1 } : l,
         );
       }
-      if (producto.stockActual <= 0) return actual;
+      if (producto.controlaStock && producto.stockActual <= 0) return actual;
       return [
         ...actual,
         {
@@ -139,7 +140,7 @@ export default function PaginaNuevaVenta() {
           nombre: producto.nombre,
           cantidad: 1,
           precioVenta: producto.precioVenta,
-          stockDisponible: producto.stockActual,
+          stockDisponible: producto.controlaStock ? producto.stockActual : Infinity,
         },
       ];
     });
@@ -212,6 +213,7 @@ export default function PaginaNuevaVenta() {
       } catch {
         continue;
       }
+      if (!producto.controlaStock) continue;
       if (producto.stockActual === 0) {
         mostrarNotificacionSinStock(producto.nombre, nombreTienda);
       } else if (producto.stockActual < producto.stockMinimo) {
@@ -395,12 +397,14 @@ export default function PaginaNuevaVenta() {
               <li key={producto.id}>
                 <button
                   onClick={() => agregarProducto(producto)}
-                  disabled={producto.stockActual <= 0}
+                  disabled={producto.controlaStock && producto.stockActual <= 0}
                   className="flex w-full items-center justify-between px-4 py-3 text-left text-sm disabled:opacity-40"
                 >
                   <span>{producto.nombre}</span>
                   <span className="text-tinta/60">
-                    {producto.stockActual <= 0 ? 'Sin stock' : formatearMonto(producto.precioVenta, simboloMoneda)}
+                    {producto.controlaStock && producto.stockActual <= 0
+                      ? 'Sin stock'
+                      : formatearMonto(producto.precioVenta, simboloMoneda)}
                   </span>
                 </button>
               </li>
@@ -430,7 +434,7 @@ export default function PaginaNuevaVenta() {
                         min={0}
                         step="0.1"
                         value={linea.precioVenta}
-                        onChange={(e) => cambiarPrecioLinea(linea.productoId, e.target.value)}
+                        onChange={(e) => cambiarPrecioLinea(linea.productoId, limpiarNumeroEscrito(e.target.value))}
                         aria-label={`Precio de ${linea.nombre}`}
                         className="h-7 w-20 rounded-md border border-linea px-2 text-xs text-tinta outline-none focus:border-bodega"
                       />

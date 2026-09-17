@@ -61,6 +61,7 @@ export function verificarStockDisponible(producto: Producto, cantidad: number): 
   if (cantidad <= 0) {
     throw new ErrorDeNegocio(`La cantidad debe ser mayor a cero (producto: ${producto.nombre}).`);
   }
+  if (!producto.controlaStock) return;
   if (producto.stockActual < cantidad) {
     throw new ErrorDeNegocio(
       `Stock insuficiente de "${producto.nombre}". Disponible: ${producto.stockActual}, solicitado: ${cantidad}.`,

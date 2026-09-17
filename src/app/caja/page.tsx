@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
+import { limpiarNumeroEscrito } from '@/core/texto';
 import type { MetodoPagoSinFiado, MovimientoCaja } from '@/core/tipos';
 
 const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
@@ -130,7 +131,7 @@ export default function PaginaCaja() {
           />
           <input
             value={monto}
-            onChange={(e) => setMonto(e.target.value)}
+            onChange={(e) => setMonto(limpiarNumeroEscrito(e.target.value))}
             inputMode="decimal"
             placeholder="Monto"
             className="h-11 w-full rounded-lg border border-linea px-3 text-sm"

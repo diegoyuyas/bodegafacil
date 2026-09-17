@@ -114,11 +114,8 @@ export async function restaurarRespaldo(datos: Uint8Array): Promise<void> {
  */
 function sembrarDatosDeEjemplo(productos: ProductoRepositorioSqlite): void {
   const ejemplos = [
-    { nombre: 'Inca Kola 500 ml', precioVenta: 4.0, costo: 2.8, stockActual: 24, stockMinimo: 6, unidadMedida: 'unidad' },
-    { nombre: 'Agua San Luis 625 ml', precioVenta: 2.0, costo: 1.2, stockActual: 30, stockMinimo: 8, unidadMedida: 'unidad' },
-    { nombre: 'Galletas Rellenitas', precioVenta: 3.0, costo: 1.9, stockActual: 20, stockMinimo: 5, unidadMedida: 'unidad' },
-    { nombre: 'Pan de molde Bimbo', precioVenta: 7.5, costo: 5.5, stockActual: 10, stockMinimo: 3, unidadMedida: 'unidad' },
-    { nombre: 'Cerveza Pilsen 620 ml', precioVenta: 8.0, costo: 6.0, stockActual: 15, stockMinimo: 4, unidadMedida: 'unidad' },
+    { nombre: 'Inca Kola 500 ml', precioVenta: 4.0, costo: 2.8, stockActual: 24, stockMinimo: 6, controlaStock: true, unidadMedida: 'unidad' },
+    { nombre: 'Agua San Luis 625 ml', precioVenta: 2.0, costo: 1.2, stockActual: 30, stockMinimo: 8, controlaStock: true, unidadMedida: 'unidad' },
   ];
 
   for (const ejemplo of ejemplos) {
