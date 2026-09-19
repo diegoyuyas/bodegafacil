@@ -30,6 +30,11 @@ export function hoyLocalSql(fecha: Date = new Date()): string {
   return `${fecha.getFullYear()}-${dosDigitos(fecha.getMonth() + 1)}-${dosDigitos(fecha.getDate())}`;
 }
 
+/** 'HH:MM' en hora local — para comparar contra la hora configurada del Backup Automático. */
+export function horaLocalHHmm(fecha: Date = new Date()): string {
+  return `${dosDigitos(fecha.getHours())}:${dosDigitos(fecha.getMinutes())}`;
+}
+
 /** Suma `dias` días a la fecha local de hoy y devuelve 'YYYY-MM-DD'. */
 export function sumarDiasLocalSql(dias: number, desde: Date = new Date()): string {
   const resultado = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate() + dias);

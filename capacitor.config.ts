@@ -22,6 +22,10 @@ const config: CapacitorConfig = {
     // abre la app y que termina de pintar el primer frame.
     backgroundColor: '#F4FAF9',
   },
+  ios: {
+    // Mismo motivo que en android — ver comentario de arriba.
+    backgroundColor: '#F4FAF9',
+  },
 };
 
 export default config;

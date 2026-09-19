@@ -4,6 +4,14 @@ Cómo activar Premium en una tienda sin estar ahí físicamente, usando
 solo WhatsApp — nada de esto pasa por internet en el momento de
 activar, todo se verifica offline en el celular/PC de la bodega.
 
+**En Windows** hay dos atajos que hacen exactamente lo mismo que los
+comandos de abajo, pero con preguntas en pantalla en vez de flags:
+doble clic en `generar-llaves.bat` (una sola vez) y en
+`generar-codigo.bat` (cada vez que actives una tienda). La primera vez
+que uses `generar-codigo.bat`, te ofrece guardar la llave privada en
+este mismo PC (en un archivo que `.gitignore` ya excluye de git) para
+no tener que pegarla cada vez.
+
 ## Una sola vez: generar tu par de llaves
 
 ```

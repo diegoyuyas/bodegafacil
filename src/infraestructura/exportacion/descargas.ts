@@ -76,6 +76,51 @@ function blobABase64(blob: Blob): Promise<string> {
   });
 }
 
+const CARPETA_BACKUP_AUTOMATICO = 'VendeFacil';
+
+/**
+ * Guarda un archivo binario SIN interacción del usuario — usado por el
+ * Backup Automático (Más > Configuración > Configurar Backup
+ * Automático). A diferencia de `descargarBinario` (que en el APK abre
+ * la hoja "Compartir" para que el bodeguero elija destino cada vez),
+ * acá se escribe directo en una carpeta fija (`Documents/VendeFacil`)
+ * con permiso de almacenamiento — se sobrescribe si ya existía un
+ * archivo con el mismo nombre.
+ *
+ * En navegador/PWA instalada NO existe forma de escribir en disco sin
+ * que el usuario interactúe con un diálogo (sandbox de seguridad del
+ * navegador): ahí se cae al mismo `<a download>` de siempre, así que
+ * el resultado indica `silencioso: false` para que quien llama sepa
+ * que sí se disparó algo visible.
+ */
+export async function guardarBinarioLocalSilencioso(
+  nombreArchivo: string,
+  datos: Uint8Array,
+): Promise<{ silencioso: boolean; ruta: string }> {
+  if (!Capacitor.isNativePlatform()) {
+    await descargarBinario(nombreArchivo, datos);
+    return { silencioso: false, ruta: nombreArchivo };
+  }
+
+  const permisoActual = await Filesystem.checkPermissions();
+  if (permisoActual.publicStorage !== 'granted') {
+    const permisoPedido = await Filesystem.requestPermissions();
+    if (permisoPedido.publicStorage !== 'granted') {
+      throw new Error('No se pudo guardar: falta el permiso de almacenamiento del teléfono.');
+    }
+  }
+
+  const blob = new Blob([datos], { type: 'application/octet-stream' });
+  const base64 = await blobABase64(blob);
+  const archivoEscrito = await Filesystem.writeFile({
+    path: `${CARPETA_BACKUP_AUTOMATICO}/${nombreArchivo}`,
+    data: base64,
+    directory: Directory.Documents,
+    recursive: true,
+  });
+  return { silencioso: true, ruta: archivoEscrito.uri };
+}
+
 /** Lee un <input type="file"> como bytes, para restaurar un respaldo. */
 export function leerArchivoComoBytes(archivo: File): Promise<Uint8Array> {
   return new Promise((resolve, reject) => {

@@ -218,6 +218,31 @@ export default function PaginaConfiguracion() {
           </div>
           {mensajePermiso && <p className="mt-2 text-xs text-alerta">{mensajePermiso}</p>}
         </li>
+
+        <li>
+          <Link href="/mas/configuracion/pin" className="flex items-center justify-between gap-4 py-4">
+            <div>
+              <p className="text-sm font-semibold text-tinta">Configurar PIN</p>
+              <p className="mt-0.5 text-xs text-tinta/50">Pide un PIN de 4 dígitos para abrir la app.</p>
+              <p className="mt-1 text-xs font-semibold text-acento-oscuro">Función Premium</p>
+            </div>
+            <span className="text-tinta/40">›</span>
+          </Link>
+        </li>
+
+        <li>
+          <Link
+            href="/mas/configuracion/backup-automatico"
+            className="flex items-center justify-between gap-4 py-4"
+          >
+            <div>
+              <p className="text-sm font-semibold text-tinta">Configurar Backup Automático</p>
+              <p className="mt-0.5 text-xs text-tinta/50">Respaldo periódico al teléfono o a Google Drive.</p>
+              <p className="mt-1 text-xs font-semibold text-acento-oscuro">Función Premium</p>
+            </div>
+            <span className="text-tinta/40">›</span>
+          </Link>
+        </li>
       </ul>
 
       <section className="mt-6">

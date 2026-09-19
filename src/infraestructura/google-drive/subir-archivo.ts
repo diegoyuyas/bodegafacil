@@ -21,13 +21,17 @@ export interface ArchivoSubido {
  * Arma el cuerpo multipart/related a mano (metadata JSON + bytes del
  * archivo) porque no hay SDK de Google cargado — solo `fetch`.
  */
-function construirCuerpoMultipart(nombreArchivo: string, datos: Uint8Array): { cuerpo: Blob; limite: string } {
+function construirCuerpoMultipart(
+  nombreArchivo: string,
+  datos: Uint8Array,
+  mimeType: string,
+): { cuerpo: Blob; limite: string } {
   const limite = 'vende_facil_' + Math.random().toString(36).slice(2);
-  const metadata = JSON.stringify({ name: nombreArchivo, mimeType: MIME_XLSX });
+  const metadata = JSON.stringify({ name: nombreArchivo, mimeType });
 
   const partes: BlobPart[] = [
     `--${limite}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`,
-    `--${limite}\r\nContent-Type: ${MIME_XLSX}\r\n\r\n`,
+    `--${limite}\r\nContent-Type: ${mimeType}\r\n\r\n`,
     datos,
     `\r\n--${limite}--`,
   ];
@@ -35,12 +39,19 @@ function construirCuerpoMultipart(nombreArchivo: string, datos: Uint8Array): { c
   return { cuerpo: new Blob(partes), limite };
 }
 
+/**
+ * `mimeType` por defecto es el del Excel (uso original: Exportar a
+ * Drive); el Backup Automático a Drive pasa `application/x-sqlite3`
+ * para subir el `.sqlite` tal cual, sin que Drive lo confunda con una
+ * hoja de cálculo.
+ */
 export async function subirArchivoADrive(
   accessToken: string,
   nombreArchivo: string,
   datos: Uint8Array,
+  mimeType: string = MIME_XLSX,
 ): Promise<ArchivoSubido> {
-  const { cuerpo, limite } = construirCuerpoMultipart(nombreArchivo, datos);
+  const { cuerpo, limite } = construirCuerpoMultipart(nombreArchivo, datos, mimeType);
 
   const respuesta = await fetch(URL_SUBIDA_DRIVE, {
     method: 'POST',

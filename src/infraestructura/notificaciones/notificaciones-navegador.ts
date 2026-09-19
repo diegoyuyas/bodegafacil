@@ -123,3 +123,26 @@ export function mostrarNotificacionSinStock(nombreProducto: string, nombreTienda
     tag: `venta-facil-stock-bajo-${nombreProducto}`,
   });
 }
+
+/** El Backup Automático (local o a Drive) no se pudo completar. */
+export function mostrarNotificacionBackupAutomaticoFallido(motivo: string, nombreTienda: string): void {
+  void mostrarNotificacion({
+    titulo: nombreTienda,
+    cuerpo: `No se pudo completar el backup automático: ${motivo}`,
+    tag: 'venta-facil-backup-automatico',
+  });
+}
+
+/**
+ * Backup Automático con destino Google Drive: como Google exige un
+ * toque del usuario para autorizar (no hay forma de subir en
+ * silencio), esto avisa que hay uno esperando a que se abra la app y
+ * se autorice.
+ */
+export function mostrarNotificacionBackupAutomaticoPendienteDrive(nombreTienda: string): void {
+  void mostrarNotificacion({
+    titulo: nombreTienda,
+    cuerpo: 'Backup automático listo — abre Vende Fácil para autorizar la subida a Google Drive.',
+    tag: 'venta-facil-backup-automatico',
+  });
+}

@@ -8,6 +8,8 @@ import { ProveedorRepositorioSqlite } from './proveedor.repositorio';
 import { CompraRepositorioSqlite } from './compra.repositorio';
 import { ConfiguracionRepositorioSqlite } from './configuracion.repositorio';
 import { PlanRepositorioSqlite } from './plan.repositorio';
+import { BloqueoPinRepositorioSqlite } from './bloqueo-pin.repositorio';
+import { RespaldoRepositorioSqlite } from './respaldo.repositorio';
 import { cargarBinario, guardarBinario } from '../persistencia/almacen-indexeddb';
 
 const CLAVE_PERSISTENCIA = 'vende-facil-db';
@@ -21,6 +23,10 @@ export interface ContenedorRepositorios {
   proveedores: ProveedorRepositorioSqlite;
   compras: CompraRepositorioSqlite;
   plan: PlanRepositorioSqlite;
+  /** PIN para abrir la app (Más > Configuración > Configurar PIN) — independiente del PIN admin de `plan`. */
+  bloqueoPin: BloqueoPinRepositorioSqlite;
+  /** Registro de respaldos (tabla metadato_respaldo), usado por el Backup Automático. */
+  respaldos: RespaldoRepositorioSqlite;
   /** Acceso crudo clave-valor, usado por la pantalla Más > Configuración para sus switches. */
   configuracion: ConfiguracionRepositorioSqlite;
   /** Guarda el estado actual de la base en IndexedDB. Llamar tras cada escritura. */
@@ -60,6 +66,8 @@ async function inicializar(): Promise<ContenedorRepositorios> {
   const proveedores = new ProveedorRepositorioSqlite(bd);
   const compras = new CompraRepositorioSqlite(bd, productos, caja);
   const plan = new PlanRepositorioSqlite(configuracion);
+  const bloqueoPin = new BloqueoPinRepositorioSqlite(configuracion);
+  const respaldos = new RespaldoRepositorioSqlite(bd);
 
   const persistir = () => guardarBinario(CLAVE_PERSISTENCIA, bd.exportar());
 
@@ -77,6 +85,8 @@ async function inicializar(): Promise<ContenedorRepositorios> {
     proveedores,
     compras,
     plan,
+    bloqueoPin,
+    respaldos,
     configuracion,
     persistir,
     exportarRespaldoCompleto: () => bd.exportar(),

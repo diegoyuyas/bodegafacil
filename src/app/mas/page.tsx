@@ -11,9 +11,9 @@ const OPCIONES = [
   { href: '/mas/clientes', etiqueta: 'Clientes', descripcion: 'Guardar clientes con su documento' },
   { href: '/mas/proveedores', etiqueta: 'Proveedores', descripcion: 'Guardar proveedores con RUC y celular' },
   {
-    href: '/mas/importar-productos',
-    etiqueta: 'Importar Productos',
-    descripcion: 'Carga masiva desde una plantilla Excel (Premium)',
+    href: '/mas/importar-datos',
+    etiqueta: 'Importar Datos',
+    descripcion: 'Productos, Clientes, Proveedores y Stock masivo, desde Excel (Premium)',
   },
   { href: '/mas/respaldo', etiqueta: 'Respaldo y exportación', descripcion: 'CSV, respaldo completo y restaurar' },
   {

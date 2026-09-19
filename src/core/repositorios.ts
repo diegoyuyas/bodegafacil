@@ -13,9 +13,11 @@ import type {
   Compra,
   CompraListaItem,
   DeudaPendienteDetalle,
+  EstadoRespaldo,
   HistorialCostoItem,
   LineaVentaMensaje,
   LineaVentaResumen,
+  MetadatoRespaldo,
   MetodoPagoSinFiado,
   MovimientoCaja,
   Producto,
@@ -23,6 +25,7 @@ import type {
   Proveedor,
   RegistrarVentaInput,
   ResumenDia,
+  TipoRespaldo,
   Venta,
   VentaListaItem,
 } from './tipos';
@@ -253,4 +256,32 @@ export interface PlanRepositorio {
    * con un mensaje amigable si el código no sirve.
    */
   activarConCodigo(codigoTexto: string): Promise<void>;
+}
+
+/**
+ * PIN de acceso a la app (Más > Configuración > Configurar PIN) —
+ * distinto del PIN del panel admin de `PlanRepositorio` de arriba.
+ * Protege simplemente ABRIR Vende Fácil, no el panel de administrador.
+ */
+export interface BloqueoPinRepositorio {
+  estaActivo(): boolean;
+  /** Guarda el hash del PIN nuevo y activa el bloqueo. Lanza ErrorDeNegocio si el PIN no son 4 dígitos numéricos. */
+  activar(pinNuevo: string): Promise<void>;
+  /** Desactiva el bloqueo, solo si `pinActual` es correcto. Devuelve false (sin cambiar nada) si no lo es. */
+  desactivar(pinActual: string): Promise<boolean>;
+  verificar(pin: string): Promise<boolean>;
+  /** Devuelve false (sin cambiar nada) si pinActual no es correcto. */
+  cambiarPin(pinActual: string, pinNuevo: string): Promise<boolean>;
+}
+
+/** Registro de respaldos (tabla `metadato_respaldo`) — usado por el Backup Automático. */
+export interface RespaldoRepositorio {
+  registrar(
+    tipo: TipoRespaldo,
+    estado: EstadoRespaldo,
+    rutaArchivo: string | null,
+    tamanoBytes: number | null,
+  ): void;
+  /** El último backup AUTOMÁTICO completado con éxito, o null si nunca hubo uno. */
+  obtenerUltimoAutomaticoExitoso(): MetadatoRespaldo | null;
 }

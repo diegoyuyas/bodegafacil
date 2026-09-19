@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from 'next';
 import { RegistrarServiceWorker } from '@/components/registrar-service-worker';
 import { PantallaSplash } from '@/components/pantalla-splash';
 import { ManejarBotonAtras } from '@/components/manejar-boton-atras';
+import { BloqueoPinAcceso } from '@/components/bloqueo-pin-acceso';
+import { RevisarBackupAutomatico } from '@/components/revisar-backup-automatico';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -27,7 +29,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="es">
       <body className="font-sans">
-        <PantallaSplash>{children}</PantallaSplash>
+        <PantallaSplash>
+          <BloqueoPinAcceso>
+            {children}
+            <RevisarBackupAutomatico />
+          </BloqueoPinAcceso>
+        </PantallaSplash>
         <RegistrarServiceWorker />
         <ManejarBotonAtras />
       </body>
