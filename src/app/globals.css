@@ -79,7 +79,18 @@
  */
 .transicion-pantalla {
   animation: pantalla-fade-through 300ms cubic-bezier(0.4, 0, 0.2, 1) both;
-  will-change: opacity, transform;
+  /* SOLO opacity, nunca transform: "will-change: transform" (y cualquier
+   * transform activo) convierte a este div en el "contenedor" de
+   * cualquier descendiente con position:fixed —como la barra de
+   * navegación inferior— en vez del viewport. Eso hacía que la barra
+   * se corriera hacia abajo cada vez que el contenido de la pantalla
+   * crecía (ej. al desplegar todos los pedidos de Inicio), porque
+   * "fixed" pasaba a pegarse al fondo de ESTE div, no al de la
+   * pantalla. Sin "transform" acá, el fade-through pierde un poco de
+   * suavidad en equipos muy lentos, pero la barra queda siempre fija
+   * de verdad.
+   */
+  will-change: opacity;
 }
 
 @keyframes pantalla-fade-through {

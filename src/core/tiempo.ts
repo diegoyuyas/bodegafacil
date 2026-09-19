@@ -35,6 +35,11 @@ export function horaLocalHHmm(fecha: Date = new Date()): string {
   return `${dosDigitos(fecha.getHours())}:${dosDigitos(fecha.getMinutes())}`;
 }
 
+/** 'HHMMSS' compacto (sin separadores) — para el nombre de archivo del Backup Automático. */
+export function horaLocalCompacta(fecha: Date = new Date()): string {
+  return `${dosDigitos(fecha.getHours())}${dosDigitos(fecha.getMinutes())}${dosDigitos(fecha.getSeconds())}`;
+}
+
 /** Suma `dias` días a la fecha local de hoy y devuelve 'YYYY-MM-DD'. */
 export function sumarDiasLocalSql(dias: number, desde: Date = new Date()): string {
   const resultado = new Date(desde.getFullYear(), desde.getMonth(), desde.getDate() + dias);

@@ -1,4 +1,4 @@
-import type { Cliente, Compra, MetadatoRespaldo, MovimientoCaja, Producto, Proveedor, Venta } from '@/core/tipos';
+import type { Cliente, Compra, MetadatoRespaldo, MovimientoCaja, MovimientoInventarioItem, Producto, Proveedor, Venta } from '@/core/tipos';
 
 // Las filas que devuelve sql.js tienen exactamente los nombres de
 // columna de esquema.sql (snake_case). Estos tipos documentan esa
@@ -176,5 +176,25 @@ export function mapearMetadatoRespaldo(fila: FilaMetadatoRespaldo): MetadatoResp
     rutaArchivo: fila.ruta_archivo,
     tamanoBytes: fila.tamano_bytes,
     estado: fila.estado,
+  };
+}
+
+export interface FilaMovimientoInventario {
+  id: number;
+  fecha_hora: string;
+  tipo: MovimientoInventarioItem['tipo'];
+  cantidad: number;
+  motivo: string;
+  stock_resultante: number;
+}
+
+export function mapearMovimientoInventario(fila: FilaMovimientoInventario): MovimientoInventarioItem {
+  return {
+    id: fila.id,
+    fechaHora: fila.fecha_hora,
+    tipo: fila.tipo,
+    cantidad: fila.cantidad,
+    motivo: fila.motivo,
+    stockResultante: fila.stock_resultante,
   };
 }

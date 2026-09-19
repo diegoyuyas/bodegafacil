@@ -13,3 +13,6 @@ project(':capacitor-local-notifications').projectDir = new File('../node_modules
 
 include ':capacitor-share'
 project(':capacitor-share').projectDir = new File('../node_modules/@capacitor/share/android')
+
+include ':kduma-autoid-capacitor-bluetooth-printer'
+project(':kduma-autoid-capacitor-bluetooth-printer').projectDir = new File('../node_modules/@kduma-autoid/capacitor-bluetooth-printer/android')

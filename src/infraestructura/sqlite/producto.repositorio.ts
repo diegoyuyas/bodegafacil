@@ -1,9 +1,9 @@
 import type { DatosActualizarProducto, DatosNuevoProducto, ProductoRepositorio } from '@/core/repositorios';
 import { ErrorDeNegocio, calcularStockNuevo } from '@/core/reglas-negocio';
-import type { Producto } from '@/core/tipos';
+import type { MovimientoInventarioItem, Producto } from '@/core/tipos';
 import { ahoraLocalSql } from '@/core/tiempo';
 import type { BaseDatosLocal } from './base-datos';
-import { mapearProducto, type FilaProducto } from './mapeadores';
+import { mapearMovimientoInventario, mapearProducto, type FilaMovimientoInventario, type FilaProducto } from './mapeadores';
 
 export class ProductoRepositorioSqlite implements ProductoRepositorio {
   constructor(private readonly bd: BaseDatosLocal) {}
@@ -126,5 +126,16 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
       );
       return this.obtenerPorId(id);
     });
+  }
+
+  listarMovimientosInventario(productoId: number, desde: string, hasta: string): MovimientoInventarioItem[] {
+    return this.bd
+      .consultar<FilaMovimientoInventario>(
+        `SELECT * FROM movimiento_inventario
+         WHERE producto_id = ? AND date(fecha_hora) BETWEEN ? AND ?
+         ORDER BY fecha_hora ASC, id ASC`,
+        [productoId, desde, hasta],
+      )
+      .map(mapearMovimientoInventario);
   }
 }

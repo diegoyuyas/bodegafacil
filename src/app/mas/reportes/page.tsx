@@ -5,15 +5,24 @@ import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import type { EstadoPlan } from '@/core/plan';
-import type { CompraListaItem, HistorialCostoItem, MovimientoCaja, Producto, ProductoMasVendidoItem } from '@/core/tipos';
+import type {
+  CompraListaItem,
+  HistorialCostoItem,
+  MovimientoCaja,
+  MovimientoInventarioItem,
+  Producto,
+  ProductoMasVendidoItem,
+} from '@/core/tipos';
 import { hoyLocalSql } from '@/core/tiempo';
 import type { FilaVentaDetallada } from '@/core/exportacion';
 import {
   construirHojaCaja,
   construirHojaComprasDetallado,
   construirHojaHistorialCostos,
+  construirHojaKardex,
   construirHojaMasVendidos,
   construirHojaVentas,
+  desglosarMovimientoInventario,
 } from '@/core/exportacion';
 import { generarLibroExcel } from '@/infraestructura/exportacion/excel';
 import { descargarExcel } from '@/infraestructura/exportacion/descargas';
@@ -24,6 +33,7 @@ const PESTANAS = [
   { valor: 'compras', etiqueta: 'Compras' },
   { valor: 'productos', etiqueta: 'Más vendidos' },
   { valor: 'costos', etiqueta: 'Costos' },
+  { valor: 'kardex', etiqueta: 'Kardex' },
 ] as const;
 
 const ETIQUETAS_METODO_PAGO_REPORTE: Record<string, string> = {
@@ -32,6 +42,12 @@ const ETIQUETAS_METODO_PAGO_REPORTE: Record<string, string> = {
   plin: 'Plin',
   tarjeta: 'Tarjeta',
   fiado: 'Fiado',
+};
+
+const ETIQUETAS_TIPO_MOVIMIENTO_KARDEX: Record<MovimientoInventarioItem['tipo'], string> = {
+  entrada: 'Entrada',
+  salida: 'Salida',
+  ajuste: 'Ajuste',
 };
 
 type Pestana = (typeof PESTANAS)[number]['valor'];
@@ -72,6 +88,14 @@ export default function PaginaReportes() {
   const [productoElegido, setProductoElegido] = useState<Producto | null>(null);
   const [historialCostos, setHistorialCostos] = useState<HistorialCostoItem[]>([]);
 
+  // Kardex (Free ver, Premium descargar): mismo patrón de "elegir
+  // producto" que Costos, pero con su propio estado — Kardex es
+  // visible sin Premium, así que no puede compartir el picker de
+  // Costos (que solo se muestra con Premium activo).
+  const [busquedaProductoKardex, setBusquedaProductoKardex] = useState('');
+  const [productoElegidoKardex, setProductoElegidoKardex] = useState<Producto | null>(null);
+  const [movimientosKardex, setMovimientosKardex] = useState<MovimientoInventarioItem[]>([]);
+
   useEffect(() => {
     if (!contenedor) return;
     setEstadoPlan(contenedor.plan.obtenerEstado());
@@ -97,6 +121,25 @@ export default function PaginaReportes() {
     }
     setHistorialCostos(contenedor.compras.listarHistorialCostos(productoElegido.id, desde, hasta));
   }, [contenedor, esPremium, productoElegido, desde, hasta, rangoInvalido]);
+
+  useEffect(() => {
+    if (!contenedor || !productoElegidoKardex || rangoInvalido || !desde || !hasta) {
+      setMovimientosKardex([]);
+      return;
+    }
+    setMovimientosKardex(contenedor.productos.listarMovimientosInventario(productoElegidoKardex.id, desde, hasta));
+  }, [contenedor, productoElegidoKardex, desde, hasta, rangoInvalido]);
+
+  const resultadosBusquedaProductoKardex = useMemo(() => {
+    const texto = busquedaProductoKardex.trim().toLowerCase();
+    if (!texto) return [];
+    return productos.filter((p) => p.nombre.toLowerCase().includes(texto)).slice(0, 8);
+  }, [busquedaProductoKardex, productos]);
+
+  function elegirProductoKardex(producto: Producto) {
+    setProductoElegidoKardex(producto);
+    setBusquedaProductoKardex('');
+  }
 
   const resultadosBusquedaProducto = useMemo(() => {
     const texto = busquedaProducto.trim().toLowerCase();
@@ -149,6 +192,13 @@ export default function PaginaReportes() {
       await descargarExcel(`costos-${productoElegido.nombre}-${desde}-a-${hasta}.xlsx`, libro);
       return;
     }
+    if (pestana === 'kardex') {
+      if (!productoElegidoKardex || movimientosKardex.length === 0) return;
+      const hoja = construirHojaKardex(productoElegidoKardex.nombre, movimientosKardex);
+      const libro = generarLibroExcel([hoja]);
+      await descargarExcel(`kardex-${productoElegidoKardex.nombre}-${desde}-a-${hasta}.xlsx`, libro);
+      return;
+    }
     if (pestana === 'compras') {
       // Mismo detalle línea por línea que "Exportar todo a Excel", pero
       // acotado al rango de fechas elegido acá arriba.
@@ -181,7 +231,10 @@ export default function PaginaReportes() {
   );
 
   const botonExcelDeshabilitado =
-    !esPremium || rangoInvalido || (pestana === 'costos' && (!productoElegido || historialCostos.length === 0));
+    !esPremium ||
+    rangoInvalido ||
+    (pestana === 'costos' && (!productoElegido || historialCostos.length === 0)) ||
+    (pestana === 'kardex' && (!productoElegidoKardex || movimientosKardex.length === 0));
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
@@ -497,6 +550,97 @@ export default function PaginaReportes() {
                         </ul>
                       )}
                     </>
+                  )}
+                </>
+              )}
+            </section>
+          )}
+          {pestana === 'kardex' && (
+            <section className="mt-4">
+              <div className="relative">
+                {productoElegidoKardex ? (
+                  <div className="flex items-center justify-between rounded-xl border border-linea bg-white px-4 py-3">
+                    <div>
+                      <p className="text-sm text-tinta">{productoElegidoKardex.nombre}</p>
+                      <p className="text-xs text-tinta/50">
+                        Stock actual: {productoElegidoKardex.stockActual} {productoElegidoKardex.unidadMedida}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setProductoElegidoKardex(null)}
+                      className="text-tinta/40"
+                      aria-label="Quitar producto"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <input
+                      value={busquedaProductoKardex}
+                      onChange={(e) => setBusquedaProductoKardex(e.target.value)}
+                      placeholder="Buscar producto…"
+                      className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+                    />
+                    {resultadosBusquedaProductoKardex.length > 0 && (
+                      <ul className="absolute inset-x-0 top-full z-10 mt-1 max-h-64 overflow-y-auto rounded-xl border border-linea bg-white shadow-sm">
+                        {resultadosBusquedaProductoKardex.map((producto) => (
+                          <li key={producto.id}>
+                            <button
+                              onClick={() => elegirProductoKardex(producto)}
+                              className="flex w-full items-center justify-between px-4 py-3 text-left text-sm"
+                            >
+                              <span>{producto.nombre}</span>
+                              <span className="text-tinta/60">
+                                {producto.stockActual} {producto.unidadMedida}
+                              </span>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {productoElegidoKardex && (
+                <>
+                  <button
+                    onClick={descargarExcelDelReporte}
+                    disabled={botonExcelDeshabilitado}
+                    className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-bodega text-sm font-semibold text-white active:bg-bodega-oscuro disabled:opacity-40"
+                  >
+                    Descargar Excel ↓
+                  </button>
+                  {!esPremium && (
+                    <p className="mt-2 text-center text-xs text-tinta/50">
+                      🔒 Descargar el Kardex a Excel es una función Premium — verlo acá es gratis.
+                    </p>
+                  )}
+
+                  {movimientosKardex.length === 0 ? (
+                    <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                      No hay movimientos de stock de este producto en el rango elegido.
+                    </p>
+                  ) : (
+                    <ul className="mt-4 divide-y divide-linea border-y border-linea">
+                      {movimientosKardex.map((m) => {
+                        const { entrada, salida } = desglosarMovimientoInventario(m);
+                        return (
+                          <li key={m.id} className="py-3">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-tinta/80">{ETIQUETAS_TIPO_MOVIMIENTO_KARDEX[m.tipo]}</span>
+                              <span className="font-semibold text-tinta">
+                                {entrada !== null ? `+${entrada}` : `-${salida}`} → saldo {m.stockResultante}
+                              </span>
+                            </div>
+                            <p className="mt-0.5 text-xs text-tinta/40">
+                              {new Date(m.fechaHora).toLocaleString('es-PE')} · {m.motivo}
+                            </p>
+                          </li>
+                        );
+                      })}
+                    </ul>
                   )}
                 </>
               )}

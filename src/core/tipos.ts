@@ -240,6 +240,17 @@ export interface LineaVentaMensaje {
   subtotal: number;
 }
 
+/** Una fila de resultado en Más > Reimprimir documentos. */
+export interface VentaReimpresionItem {
+  id: number;
+  fechaHora: string;
+  metodoPago: MetodoPago;
+  total: number;
+  clienteNombre: string | null;
+  clienteDocumento: string | null;
+  anulada: boolean;
+}
+
 /**
  * Una deuda pendiente individual (una venta al fiado, con sus
  * productos), para armar el mensaje de WhatsApp de cobranza.
@@ -280,4 +291,16 @@ export interface HistorialCostoItem {
   cantidad: number;
   proveedorNombre: string | null;
   compraId: number;
+}
+
+/** Un movimiento de stock de un producto (Kardex), leído de movimiento_inventario. */
+export interface MovimientoInventarioItem {
+  id: number;
+  fechaHora: string;
+  tipo: 'entrada' | 'salida' | 'ajuste';
+  cantidad: number;
+  /** 'venta', 'compra', 'ajuste_manual', 'importacion_stock', etc. */
+  motivo: string;
+  /** Stock del producto justo después de este movimiento. */
+  stockResultante: number;
 }

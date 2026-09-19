@@ -14,6 +14,8 @@ import {
 import { CLAVE_PREFIJO_PAIS, obtenerPrefijoPais } from '@/core/paises';
 import { construirMensajeVenta } from '@/core/whatsapp';
 import { construirEnlaceWhatsApp } from '@/infraestructura/whatsapp/enlace';
+import { imprimirComprobanteDeVenta } from '@/infraestructura/impresora-bluetooth/imprimir-venta';
+import { CLAVE_IMPRESORA_ACTIVA, IMPRESION_BLUETOOTH_DISPONIBLE } from '@/core/impresora';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 /**
@@ -35,6 +37,9 @@ export default function PaginaInicio() {
   const { contenedor, error, cargando } = usarContenedor();
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
   const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
+  const [imprimiendoVentaId, setImprimiendoVentaId] = useState<number | null>(null);
+  const [mensajeImpresion, setMensajeImpresion] = useState<string | null>(null);
+  const [impresoraActiva, setImpresoraActiva] = useState(false);
 
   useEffect(() => {
     if (!contenedor) return;
@@ -76,6 +81,7 @@ export default function PaginaInicio() {
     setVentasDeHoy(contenedor.ventas.listarDeHoyConDetalle());
     setTotalHistorico(contenedor.ventas.contarTotalHistorico());
     setEstadoPlan(contenedor.plan.obtenerEstado());
+    setImpresoraActiva(contenedor.configuracion.obtenerValor(CLAVE_IMPRESORA_ACTIVA) === '1');
     setNombreTienda(obtenerNombreTienda(contenedor.configuracion.obtenerValor(CLAVE_NOMBRE_TIENDA)));
   }
 
@@ -167,6 +173,21 @@ export default function PaginaInicio() {
     const mensaje = construirMensajeVenta(nombreTienda, ventaCompleta, lineasMensaje, simboloMoneda);
     const enlace = construirEnlaceWhatsApp(telefono, mensaje, prefijoPais);
     window.open(enlace, '_blank');
+  }
+
+  /** Botón de impresora al lado del de WhatsApp — reimprime el comprobante en la ticketera Bluetooth configurada. */
+  async function imprimirVentaDesdeInicio(venta: VentaListaItem, evento: React.MouseEvent) {
+    evento.stopPropagation();
+    if (!contenedor) return;
+    setMensajeImpresion(null);
+    setImprimiendoVentaId(venta.id);
+    try {
+      await imprimirComprobanteDeVenta(contenedor, venta.id);
+    } catch {
+      setMensajeImpresion('No está correctamente configurada la impresora.');
+    } finally {
+      setImprimiendoVentaId(null);
+    }
   }
 
   return (
@@ -316,6 +337,8 @@ export default function PaginaInicio() {
                       className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
                     />
 
+                    {mensajeImpresion && <p className="mt-2 text-xs text-alerta">{mensajeImpresion}</p>}
+
                     {pedidosFiltrados.length === 0 ? (
                       <p className="border-y border-linea py-6 text-center text-sm text-tinta/50 mt-3">
                         Ningún pedido coincide con "{busquedaPedidos}".
@@ -353,6 +376,19 @@ export default function PaginaInicio() {
                                     >
                                       💬
                                     </span>
+                                    {IMPRESION_BLUETOOTH_DISPONIBLE &&
+                                      estadoPlan?.tipo === 'premium' &&
+                                      impresoraActiva && (
+                                        <span
+                                          role="button"
+                                          onClick={(e) => imprimirVentaDesdeInicio(venta, e)}
+                                          className={`text-lg text-bodega-oscuro ${imprimiendoVentaId === venta.id ? 'opacity-40' : ''}`}
+                                          aria-label={`Reimprimir el pedido V-${venta.id}`}
+                                          title="Reimprimir"
+                                        >
+                                          🖨️
+                                        </span>
+                                      )}
                                     <span
                                       role="button"
                                       onClick={(e) => anularVenta(venta, e)}

@@ -9,6 +9,11 @@
  * bodeguero no abre la app ese día, ese día no hay backup — para eso
  * está la notificación de aviso.
  *
+ * Solo guarda en el almacenamiento del teléfono — se evaluó también
+ * Google Drive, pero se descartó: exige que el bodeguero autorice con
+ * un toque cada vez (Google no permite subir en silencio), lo que
+ * contradice la idea de "automático". Queda solo local.
+ *
  * Todo lo de acá es lógica PURA (sin DOM ni SQLite), igual que
  * `core/plan.ts` / `core/configuracion.ts`.
  */
@@ -19,11 +24,8 @@ export const CLAVE_BACKUP_AUTO_ACTIVO = 'backup_automatico_activo';
 export const CLAVE_BACKUP_AUTO_NOMBRE = 'backup_automatico_nombre';
 export const CLAVE_BACKUP_AUTO_HORA = 'backup_automatico_hora';
 export const CLAVE_BACKUP_AUTO_FRECUENCIA_DIAS = 'backup_automatico_frecuencia_dias';
-export const CLAVE_BACKUP_AUTO_DESTINO = 'backup_automatico_destino';
-/** Última fecha 'YYYY-MM-DD' en que el backup automático terminó bien (local o subido a Drive). */
+/** Última fecha 'YYYY-MM-DD' en que el backup automático terminó bien. */
 export const CLAVE_BACKUP_AUTO_ULTIMA_FECHA = 'backup_automatico_ultima_fecha';
-
-export type DestinoBackupAutomatico = 'local' | 'drive';
 
 export const HORA_BACKUP_PREDETERMINADA = '03:00';
 export const FRECUENCIA_BACKUP_MINIMA_DIAS = 1;
@@ -36,7 +38,6 @@ export interface ConfigBackupAutomatico {
   /** 'HH:MM' en hora local. */
   hora: string;
   frecuenciaDias: number;
-  destino: DestinoBackupAutomatico;
   /** 'YYYY-MM-DD' de la última vez que se completó, o null si nunca corrió. */
   ultimaFecha: string | null;
 }
@@ -46,10 +47,20 @@ function fechaDdMmAaaa(fechaIso: string): string {
   return `${dia}-${mes}-${anio}`;
 }
 
-/** Nombre por defecto: "respaldo-vende-facil-dd-mm-aaaa". Si el bodeguero configuró uno propio, se usa tal cual. */
-export function nombreArchivoBackupAutomatico(nombreConfigurado: string, fechaIso: string): string {
+/**
+ * Nombre por defecto: "respaldo-vende-facil-dd-mm-aaaa-hhmmss" (la
+ * hora va sin separadores y siempre está presente, para que dos
+ * backups del mismo día — por ejemplo uno automático y otro manual —
+ * nunca se pisen entre sí). Si el bodeguero configuró un nombre
+ * propio, se usa tal cual, sin agregarle nada.
+ */
+export function nombreArchivoBackupAutomatico(
+  nombreConfigurado: string,
+  fechaIso: string,
+  horaCompacta: string,
+): string {
   const limpio = nombreConfigurado.trim();
-  const base = limpio || `respaldo-vende-facil-${fechaDdMmAaaa(fechaIso)}`;
+  const base = limpio || `respaldo-vende-facil-${fechaDdMmAaaa(fechaIso)}-${horaCompacta}`;
   return base.toLowerCase().endsWith('.sqlite') ? base : `${base}.sqlite`;
 }
 

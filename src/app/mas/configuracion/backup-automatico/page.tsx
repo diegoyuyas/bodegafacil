@@ -6,7 +6,6 @@ import { usarContenedor } from '@/hooks/usar-contenedor';
 import type { EstadoPlan } from '@/core/plan';
 import {
   CLAVE_BACKUP_AUTO_ACTIVO,
-  CLAVE_BACKUP_AUTO_DESTINO,
   CLAVE_BACKUP_AUTO_FRECUENCIA_DIAS,
   CLAVE_BACKUP_AUTO_HORA,
   CLAVE_BACKUP_AUTO_NOMBRE,
@@ -15,9 +14,8 @@ import {
   HORA_BACKUP_PREDETERMINADA,
   frecuenciaBackupValida,
   nombreArchivoBackupAutomatico,
-  type DestinoBackupAutomatico,
 } from '@/core/backup-automatico';
-import { hoyLocalSql } from '@/core/tiempo';
+import { horaLocalCompacta, hoyLocalSql } from '@/core/tiempo';
 
 function fechaHoraLegible(fechaHoraSql: string): string {
   const [fecha = '', hora = ''] = fechaHoraSql.split(' ');
@@ -33,7 +31,6 @@ export default function PaginaConfigurarBackupAutomatico() {
   const [nombreArchivo, setNombreArchivo] = useState('');
   const [hora, setHora] = useState(HORA_BACKUP_PREDETERMINADA);
   const [frecuenciaDias, setFrecuenciaDias] = useState('1');
-  const [destino, setDestino] = useState<DestinoBackupAutomatico>('local');
   const [ultimoBackup, setUltimoBackup] = useState<string | null>(null);
 
   const [guardando, setGuardando] = useState(false);
@@ -48,7 +45,6 @@ export default function PaginaConfigurarBackupAutomatico() {
     setNombreArchivo(c.obtenerValor(CLAVE_BACKUP_AUTO_NOMBRE) ?? '');
     setHora(c.obtenerValor(CLAVE_BACKUP_AUTO_HORA) ?? HORA_BACKUP_PREDETERMINADA);
     setFrecuenciaDias(c.obtenerValor(CLAVE_BACKUP_AUTO_FRECUENCIA_DIAS) ?? '1');
-    setDestino((c.obtenerValor(CLAVE_BACKUP_AUTO_DESTINO) as DestinoBackupAutomatico | null) ?? 'local');
 
     const ultimo = contenedor.respaldos.obtenerUltimoAutomaticoExitoso();
     setUltimoBackup(ultimo ? fechaHoraLegible(ultimo.fechaHora) : null);
@@ -76,7 +72,6 @@ export default function PaginaConfigurarBackupAutomatico() {
     c.establecerValor(CLAVE_BACKUP_AUTO_NOMBRE, nombreArchivo.trim());
     c.establecerValor(CLAVE_BACKUP_AUTO_HORA, hora);
     c.establecerValor(CLAVE_BACKUP_AUTO_FRECUENCIA_DIAS, String(frecuenciaNumero));
-    c.establecerValor(CLAVE_BACKUP_AUTO_DESTINO, destino);
     await contenedor.persistir();
     setGuardando(false);
     setMensajeEsError(false);
@@ -96,9 +91,9 @@ export default function PaginaConfigurarBackupAutomatico() {
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       <p className="mt-4 text-sm text-tinta/70">
-        Respalda tu base de datos sola, cada cierto número de días. Se ejecuta al abrir la app (si
-        tocaba según la hora y frecuencia de abajo) — si un día no abres Vende Fácil, ese día no hay
-        backup.
+        Respalda tu base de datos sola, cada cierto número de días, en el almacenamiento del
+        teléfono. Se ejecuta al abrir la app (si tocaba según la hora y frecuencia de abajo) — si un
+        día no abres Vende Fácil, ese día no hay backup.
       </p>
 
       {estadoPlan && !esPremium && (
@@ -136,14 +131,13 @@ export default function PaginaConfigurarBackupAutomatico() {
           <section className="mt-6">
             <p className="text-sm font-semibold text-tinta">Nombre del archivo</p>
             <p className="mt-0.5 text-xs text-tinta/50">
-              Si lo dejas vacío se usa: respaldo-vende-facil-
-              {nombreArchivoBackupAutomatico('', hoyLocalSql()).replace('respaldo-vende-facil-', '').replace('.sqlite', '')}
-              .sqlite
+              Si lo dejas vacío se usa:{' '}
+              {nombreArchivoBackupAutomatico('', hoyLocalSql(), horaLocalCompacta())}
             </p>
             <input
               value={nombreArchivo}
               onChange={(e) => setNombreArchivo(e.target.value)}
-              placeholder="respaldo-vende-facil-dd-mm-aaaa"
+              placeholder="respaldo-vende-facil-dd-mm-aaaa-hhmmss"
               maxLength={60}
               className="mt-2 h-11 w-full rounded-xl border border-linea px-3 text-sm"
             />
@@ -173,41 +167,10 @@ export default function PaginaConfigurarBackupAutomatico() {
             />
           </section>
 
-          <section className="mt-6">
-            <p className="text-sm font-semibold text-tinta">Dónde guardarlo</p>
-            <div className="mt-2 flex flex-col gap-2">
-              <label className="flex items-center gap-2 rounded-xl border border-linea p-3 text-sm">
-                <input
-                  type="radio"
-                  name="destino-backup"
-                  checked={destino === 'local'}
-                  onChange={() => setDestino('local')}
-                />
-                Almacenamiento del teléfono (carpeta Documents/VendeFacil)
-              </label>
-              <label className="flex items-center gap-2 rounded-xl border border-linea p-3 text-sm">
-                <input
-                  type="radio"
-                  name="destino-backup"
-                  checked={destino === 'drive'}
-                  onChange={() => setDestino('drive')}
-                />
-                Google Drive
-              </label>
-            </div>
-            {destino === 'drive' && (
-              <p className="mt-2 text-xs text-tinta/50">
-                Google exige autorizar con un toque cada vez: cuando toque backup, verás un aviso para
-                abrir la app y confirmar la subida — necesitas conexión a internet en ese momento.
-              </p>
-            )}
-            {destino === 'local' && (
-              <p className="mt-2 text-xs text-tinta/50">
-                Te pediremos el permiso de almacenamiento del teléfono la primera vez que toque
-                guardar.
-              </p>
-            )}
-          </section>
+          <p className="mt-4 text-xs text-tinta/50">
+            Se guarda en la carpeta Documents/VendeFacil del teléfono. Te pediremos el permiso de
+            almacenamiento la primera vez que toque guardar.
+          </p>
 
           {mensaje && (
             <p className={`mt-4 text-sm ${mensajeEsError ? 'text-alerta' : 'text-bodega-oscuro'}`}>{mensaje}</p>

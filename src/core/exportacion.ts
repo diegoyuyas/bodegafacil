@@ -12,6 +12,7 @@ import type {
   CompraListaItem,
   HistorialCostoItem,
   MovimientoCaja,
+  MovimientoInventarioItem,
   Producto,
   ProductoMasVendidoItem,
   Proveedor,
@@ -254,5 +255,37 @@ export function construirHojaHistorialCostos(
       i.proveedorNombre ?? 'Sin especificar',
       `C-${i.compraId}`,
     ]),
+  };
+}
+
+const ETIQUETAS_TIPO_MOVIMIENTO: Record<MovimientoInventarioItem['tipo'], string> = {
+  entrada: 'Entrada',
+  salida: 'Salida',
+  ajuste: 'Ajuste',
+};
+
+/**
+ * `cantidad` en movimiento_inventario no siempre es "positivo = entrada":
+ * venta/compra guardan siempre una magnitud positiva y usan `tipo` para
+ * indicar la dirección; solo 'ajuste' (ajuste manual de stock) guarda un
+ * delta con signo. Esta función lee ambos casos correctamente.
+ */
+export function desglosarMovimientoInventario(m: MovimientoInventarioItem): {
+  entrada: number | null;
+  salida: number | null;
+} {
+  if (m.tipo === 'entrada') return { entrada: m.cantidad, salida: null };
+  if (m.tipo === 'salida') return { entrada: null, salida: m.cantidad };
+  return m.cantidad >= 0 ? { entrada: m.cantidad, salida: null } : { entrada: null, salida: Math.abs(m.cantidad) };
+}
+
+export function construirHojaKardex(nombreProducto: string, movimientos: MovimientoInventarioItem[]): HojaExcel {
+  return {
+    nombre: `Kardex - ${nombreProducto}`.slice(0, 31),
+    encabezados: ['Fecha y hora', 'Tipo', 'Motivo', 'Entrada', 'Salida', 'Saldo'],
+    filas: movimientos.map((m) => {
+      const { entrada, salida } = desglosarMovimientoInventario(m);
+      return [m.fechaHora, ETIQUETAS_TIPO_MOVIMIENTO[m.tipo], m.motivo, entrada, salida, m.stockResultante];
+    }),
   };
 }

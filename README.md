@@ -155,6 +155,49 @@ Todas las funciones son **puras**: no tocan SQLite ni la UI. Esto permite
 reutilizarlas igual si la venta viene de un botón, de voz, o de una futura
 integración (sección 5.1 del documento maestro).
 
+## Configurar Google Drive (para "Exportar a Drive" y Backup Automático)
+
+Subir un archivo a Google Drive desde la app requiere que Google la
+reconozca con una credencial llamada **Client ID**, generada gratis en
+Google Cloud Console. Sin esto, tocar "Subir a Drive" (en Exportar a
+Drive o en el banner del Backup Automático) muestra el error *"Falta
+configurar NEXT_PUBLIC_GOOGLE_CLIENT_ID..."*.
+
+1. Entra a [console.cloud.google.com](https://console.cloud.google.com)
+   y crea un proyecto (gratis, no pide tarjeta) — por ejemplo "Vende
+   Fácil".
+2. **APIs y servicios → Biblioteca** → busca "Google Drive API" →
+   **Habilitar**.
+3. **APIs y servicios → Pantalla de consentimiento de OAuth** → tipo
+   **Externo** → nombre de la app y correo de soporte. En "Público
+   previsto" puedes dejarla en modo **Prueba**: ahí agregas como
+   "usuarios de prueba" las cuentas de Google de tus bodegueros (hasta
+   100), y Google no exige ninguna revisión para que esas cuentas
+   autoricen. Fuera de esa lista, nadie más puede conectar Drive hasta
+   que la app pase por verificación de Google (necesario solo si algún
+   día quieres abrirla a cualquier cuenta, sin lista).
+4. **APIs y servicios → Credenciales → Crear credenciales → ID de
+   cliente de OAuth** → tipo **Aplicación web**. En "Orígenes de
+   JavaScript autorizados" agrega la dirección exacta donde corre la
+   app:
+   - Para el APK (Capacitor/Android): `https://localhost` — es el
+     origen que reporta el WebView por defecto.
+   - Si además la hosteas como PWA en un dominio propio, agrega
+     también esa dirección (ej. `https://app.itectperu.com`).
+   - Para desarrollo local: `http://localhost:3000`.
+5. Copia el **Client ID** que termina en `.apps.googleusercontent.com`.
+6. Pégalo en un archivo `.env.local` en la raíz del proyecto (junto a
+   `package.json`, nunca subir ese archivo a git — ver `.env.example`):
+
+   ```
+   NEXT_PUBLIC_GOOGLE_CLIENT_ID=tu-client-id-aqui.apps.googleusercontent.com
+   ```
+
+7. **Importante**: esta variable se incrusta en el código al momento
+   de compilar (no se lee en tiempo real), así que tiene que existir
+   *antes* de correr `npm run build:apk` — y hay que repetir el build
+   (y reinstalar el APK) cada vez que cambie.
+
 ## Siguiente paso
 
 Con esto se cierra el **Plan Gratis funcional completo** (venta, stock,

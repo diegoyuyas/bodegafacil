@@ -1,4 +1,9 @@
+'use client';
+
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
+import { usarContenedor } from '@/hooks/usar-contenedor';
+import { CLAVE_IMPRESORA_ACTIVA, IMPRESION_BLUETOOTH_DISPONIBLE } from '@/core/impresora';
 
 const OPCIONES = [
   { href: '/caja', etiqueta: 'Caja', descripcion: 'Saldo, ingresos y egresos' },
@@ -24,13 +29,33 @@ const OPCIONES = [
   {
     href: '/mas/configuracion',
     etiqueta: 'Configuración',
-    descripcion: 'Precio editable, notificación de stock bajo y nombre de tienda',
+    descripcion: 'Precio editable, notificación de stock bajo, tienda e impresoras',
   },
 ];
 
-const PROXIMAMENTE: string[] = [];
+const OPCION_REIMPRIMIR = {
+  href: '/mas/reimprimir-documentos',
+  etiqueta: 'Reimprimir documentos',
+  descripcion: 'Buscar una venta pasada y volver a imprimir su comprobante',
+};
 
 export default function PaginaMas() {
+  const { contenedor } = usarContenedor();
+  const [mostrarReimprimir, setMostrarReimprimir] = useState(false);
+
+  useEffect(() => {
+    if (!contenedor) return;
+    // "Reimprimir documentos" solo aparece con Premium Y la impresora
+    // Bluetooth activada en Más > Configuración > Configuración de
+    // Impresoras — mientras no se cumplan las dos cosas, queda oculta
+    // en vez de mostrarse deshabilitada.
+    const esPremium = contenedor.plan.obtenerEstado().tipo === 'premium';
+    const impresoraActiva = contenedor.configuracion.obtenerValor(CLAVE_IMPRESORA_ACTIVA) === '1';
+    setMostrarReimprimir(IMPRESION_BLUETOOTH_DISPONIBLE && esPremium && impresoraActiva);
+  }, [contenedor]);
+
+  const opciones = mostrarReimprimir ? [...OPCIONES, OPCION_REIMPRIMIR] : OPCIONES;
+
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
@@ -41,7 +66,7 @@ export default function PaginaMas() {
       </header>
 
       <ul className="mt-6 divide-y divide-linea border-y border-linea">
-        {OPCIONES.map((opcion) => (
+        {opciones.map((opcion) => (
           <li key={opcion.href}>
             <Link href={opcion.href} className="flex items-center justify-between py-4">
               <div>
@@ -53,19 +78,6 @@ export default function PaginaMas() {
           </li>
         ))}
       </ul>
-
-      {PROXIMAMENTE.length > 0 && (
-        <>
-          <p className="mt-6 text-xs uppercase tracking-wide text-tinta/40">Próximamente</p>
-          <ul className="mt-2 divide-y divide-linea border-y border-linea opacity-50">
-            {PROXIMAMENTE.map((etiqueta) => (
-              <li key={etiqueta} className="py-3 text-sm text-tinta/60">
-                {etiqueta}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
     </div>
   );
 }

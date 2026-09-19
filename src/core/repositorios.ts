@@ -20,6 +20,7 @@ import type {
   MetadatoRespaldo,
   MetodoPagoSinFiado,
   MovimientoCaja,
+  MovimientoInventarioItem,
   Producto,
   ProductoMasVendidoItem,
   Proveedor,
@@ -28,6 +29,7 @@ import type {
   TipoRespaldo,
   Venta,
   VentaListaItem,
+  VentaReimpresionItem,
 } from './tipos';
 import type { FilaVentaDetallada, FilaCompraDetallada } from './exportacion';
 import type { EstadoPlan } from './plan';
@@ -50,6 +52,8 @@ export interface ProductoRepositorio {
    * dejaría el stock en negativo o si no se da un motivo.
    */
   ajustarStock(id: number, delta: number, motivo: string): Producto;
+  /** Kardex: movimientos de stock de un producto en un rango de fechas ('YYYY-MM-DD'), de más antiguo a más reciente. */
+  listarMovimientosInventario(productoId: number, desde: string, hasta: string): MovimientoInventarioItem[];
 }
 
 export interface DatosNuevoProducto {
@@ -126,6 +130,14 @@ export interface VentaRepositorio {
    * (Premium).
    */
   listarProductosMasVendidos(desde: string, hasta: string, limite?: number): ProductoMasVendidoItem[];
+  /**
+   * Para Más > Reimprimir documentos: ventas dentro de un rango de
+   * fechas 'YYYY-MM-DD' inclusive que además coincidan con `texto`
+   * libre (número de comprobante "V-1", nombre o documento del
+   * cliente, o monto) — `texto` vacío no filtra por texto, solo por
+   * fecha. De más reciente a más antigua.
+   */
+  buscarParaReimprimir(desde: string, hasta: string, texto: string): VentaReimpresionItem[];
 }
 
 /**

@@ -15,6 +15,7 @@ import type {
   ResumenDia,
   Venta,
   VentaListaItem,
+  VentaReimpresionItem,
 } from '@/core/tipos';
 import type { FilaVentaDetallada } from '@/core/exportacion';
 import { ahoraLocalSql, hoyLocalSql } from '@/core/tiempo';
@@ -149,6 +150,44 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         metodoPago: fila.metodo_pago,
         total: fila.total,
         clienteNombre: fila.cliente,
+        anulada: fila.anulada === 1,
+      }));
+  }
+
+  buscarParaReimprimir(desde: string, hasta: string, texto: string): VentaReimpresionItem[] {
+    const textoLimpio = texto.trim();
+    return this.bd
+      .consultar<{
+        id: number;
+        fecha_hora: string;
+        metodo_pago: Venta['metodoPago'];
+        total: number;
+        cliente: string | null;
+        documento: string | null;
+        anulada: number;
+      }>(
+        `SELECT v.id AS id, v.fecha_hora AS fecha_hora, v.metodo_pago AS metodo_pago,
+                v.total AS total, c.nombre AS cliente, c.documento AS documento, v.anulada AS anulada
+         FROM venta v
+         LEFT JOIN cliente c ON c.id = v.cliente_id
+         WHERE date(v.fecha_hora) BETWEEN ? AND ?
+           AND (
+             ? = '' OR
+             ('V-' || v.id) LIKE '%' || ? || '%' OR
+             c.nombre LIKE '%' || ? || '%' OR
+             c.documento LIKE '%' || ? || '%' OR
+             CAST(v.total AS TEXT) LIKE '%' || ? || '%'
+           )
+         ORDER BY v.id DESC`,
+        [desde, hasta, textoLimpio, textoLimpio, textoLimpio, textoLimpio, textoLimpio],
+      )
+      .map((fila) => ({
+        id: fila.id,
+        fechaHora: fila.fecha_hora,
+        metodoPago: fila.metodo_pago,
+        total: fila.total,
+        clienteNombre: fila.cliente,
+        clienteDocumento: fila.documento,
         anulada: fila.anulada === 1,
       }));
   }

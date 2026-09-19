@@ -4,12 +4,9 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import {
-  CLAVE_NOMBRE_TIENDA,
   CLAVE_NOTIFICAR_STOCK_BAJO,
   CLAVE_PRECIO_EDITABLE_VENTA,
-  NOMBRE_TIENDA_PREDETERMINADO,
   estaActivado,
-  obtenerNombreTienda,
   valorParaGuardar,
 } from '@/core/configuracion';
 import { CLAVE_MONEDA, MONEDAS_DISPONIBLES, obtenerMoneda } from '@/core/moneda';
@@ -61,10 +58,6 @@ export default function PaginaConfiguracion() {
   const [notificarStockBajo, setNotificarStockBajo] = useState(false);
   const [mensajePermiso, setMensajePermiso] = useState<string | null>(null);
 
-  const [nombreTienda, setNombreTienda] = useState('');
-  const [guardandoNombre, setGuardandoNombre] = useState(false);
-  const [nombreGuardado, setNombreGuardado] = useState(false);
-
   const [codigoMoneda, setCodigoMoneda] = useState(obtenerMoneda(null).codigo);
   const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
 
@@ -81,7 +74,6 @@ export default function PaginaConfiguracion() {
     setNotificarStockBajo(
       estaActivado(contenedor.configuracion.obtenerValor(CLAVE_NOTIFICAR_STOCK_BAJO)),
     );
-    setNombreTienda(obtenerNombreTienda(contenedor.configuracion.obtenerValor(CLAVE_NOMBRE_TIENDA)));
     setCodigoMoneda(obtenerMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)).codigo);
     setPrefijoPais(obtenerPrefijoPais(contenedor.configuracion.obtenerValor(CLAVE_PREFIJO_PAIS)));
 
@@ -126,22 +118,6 @@ export default function PaginaConfiguracion() {
     setNotificarStockBajo(nuevoValor);
     contenedor.configuracion.establecerValor(CLAVE_NOTIFICAR_STOCK_BAJO, valorParaGuardar(nuevoValor));
     await contenedor.persistir();
-  }
-
-  async function guardarNombreTienda() {
-    if (!contenedor || !esPremium) return;
-    setGuardandoNombre(true);
-    setNombreGuardado(false);
-    const limpio = nombreTienda.trim();
-    if (limpio) {
-      contenedor.configuracion.establecerValor(CLAVE_NOMBRE_TIENDA, limpio);
-    } else {
-      contenedor.configuracion.eliminarValor(CLAVE_NOMBRE_TIENDA);
-    }
-    await contenedor.persistir();
-    setNombreTienda(limpio || NOMBRE_TIENDA_PREDETERMINADO);
-    setGuardandoNombre(false);
-    setNombreGuardado(true);
   }
 
   async function cambiarMoneda(nuevoCodigo: string) {
@@ -237,43 +213,40 @@ export default function PaginaConfiguracion() {
           >
             <div>
               <p className="text-sm font-semibold text-tinta">Configurar Backup Automático</p>
-              <p className="mt-0.5 text-xs text-tinta/50">Respaldo periódico al teléfono o a Google Drive.</p>
+              <p className="mt-0.5 text-xs text-tinta/50">Respaldo periódico al almacenamiento del teléfono.</p>
+              <p className="mt-1 text-xs font-semibold text-acento-oscuro">Función Premium</p>
+            </div>
+            <span className="text-tinta/40">›</span>
+          </Link>
+        </li>
+        <li>
+          <Link
+            href="/mas/configuracion/informacion-tienda"
+            className="flex items-center justify-between gap-4 py-4"
+          >
+            <div>
+              <p className="text-sm font-semibold text-tinta">Información de la Tienda</p>
+              <p className="mt-0.5 text-xs text-tinta/50">Nombre, DNI/RUC, ubicación, contacto y leyenda.</p>
+              <p className="mt-1 text-xs font-semibold text-acento-oscuro">Función Premium</p>
+            </div>
+            <span className="text-tinta/40">›</span>
+          </Link>
+        </li>
+
+        <li>
+          <Link
+            href="/mas/configuracion/configuracion-impresoras"
+            className="flex items-center justify-between gap-4 py-4"
+          >
+            <div>
+              <p className="text-sm font-semibold text-tinta">Configuración de Impresoras</p>
+              <p className="mt-0.5 text-xs text-tinta/50">Imprimir comprobantes en ticketera Bluetooth.</p>
               <p className="mt-1 text-xs font-semibold text-acento-oscuro">Función Premium</p>
             </div>
             <span className="text-tinta/40">›</span>
           </Link>
         </li>
       </ul>
-
-      <section className="mt-6">
-        <p className="text-sm font-semibold text-tinta">Nombre de tienda</p>
-        <p className="mt-0.5 text-xs text-tinta/50">
-          Reemplaza &quot;{NOMBRE_TIENDA_PREDETERMINADO}&quot; por el nombre de tu negocio en Inicio.
-        </p>
-        {!esPremium && <p className="mt-1 text-xs font-semibold text-acento-oscuro">Función Premium</p>}
-
-        <div className="mt-3 flex gap-2">
-          <input
-            value={nombreTienda}
-            onChange={(e) => {
-              setNombreTienda(e.target.value);
-              setNombreGuardado(false);
-            }}
-            disabled={!contenedor || !esPremium}
-            placeholder={NOMBRE_TIENDA_PREDETERMINADO}
-            maxLength={40}
-            className="h-11 flex-1 rounded-xl border border-linea px-3 text-sm disabled:opacity-40"
-          />
-          <button
-            onClick={guardarNombreTienda}
-            disabled={!contenedor || !esPremium || guardandoNombre}
-            className="h-11 rounded-xl border border-bodega px-4 text-sm font-semibold text-bodega-oscuro disabled:opacity-40"
-          >
-            Guardar
-          </button>
-        </div>
-        {nombreGuardado && <p className="mt-2 text-xs text-bodega-oscuro">Nombre guardado.</p>}
-      </section>
 
       <section className="mt-6">
         <p className="text-sm font-semibold text-tinta">Tipo de moneda</p>
