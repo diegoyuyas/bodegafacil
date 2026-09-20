@@ -29,8 +29,8 @@ next-env.d.ts
 /src/infraestructura/sqlite/esquema-sql.generado.ts
 /public/sql-wasm.wasm
 
-# llave privada de activación Premium — NUNCA subir esto a git
-scripts/activacion/.llave-privada.local
+# scripts de activación Premium (.bat, .mjs, llave privada, README) — NUNCA subir esto a git
+/scripts/activacion/
 
 # Base de datos local - NO subir
 *.db

@@ -29,7 +29,7 @@ const OPCIONES = [
   {
     href: '/mas/configuracion',
     etiqueta: 'Configuración',
-    descripcion: 'Precio editable, notificación de stock bajo, tienda e impresoras',
+    descripcion: 'Precio editable, notificación de stock bajo, negocio e impresoras',
   },
 ];
 

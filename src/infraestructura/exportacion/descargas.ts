@@ -37,6 +37,12 @@ export async function descargarExcel(nombreArchivo: string, datos: Uint8Array): 
   await disparaDescarga(blob, nombreArchivo);
 }
 
+/** Guardar ticket como... (Más > Nueva venta): comparte la imagen del comprobante — nunca se guarda sola, sin interacción. */
+export async function descargarImagen(nombreArchivo: string, datos: Uint8Array): Promise<void> {
+  const blob = new Blob([datos], { type: 'image/png' });
+  await disparaDescarga(blob, nombreArchivo);
+}
+
 async function disparaDescarga(blob: Blob, nombreArchivo: string): Promise<void> {
   if (Capacitor.isNativePlatform()) {
     await descargarDentroDelApp(blob, nombreArchivo);

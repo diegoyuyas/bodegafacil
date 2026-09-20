@@ -1,66 +1,58 @@
 /**
- * Vende Fácil — Comprobante de venta impreso (ESC/POS, ticketeras Bluetooth)
+ * Vende Fácil — Comprobante de venta (impresora Bluetooth + imagen para WhatsApp)
  * ------------------------------------------------------------
- * Arma el texto que se manda tal cual al socket Bluetooth de la
- * impresora (ver `infraestructura/impresora-bluetooth/impresora.ts`).
- * Función pura: sin DOM, sin Capacitor — solo texto.
+ * Función pura: sin DOM, sin Capacitor — solo texto. Arma primero una
+ * lista de líneas "neutra" (`construirLineasComprobante`, con
+ * alineación/negrita como datos, no como bytes de impresora), y dos
+ * consumidores la convierten a lo que necesitan:
+ *  - `construirTextoComprobante` → texto ESC/POS real para la
+ *    ticketera Bluetooth (ver infraestructura/impresora-bluetooth/).
+ *  - `infraestructura/comprobante-imagen/generar-imagen.ts` → un PNG
+ *    para compartir por WhatsApp (Guardar ticket como...), con un
+ *    ancho más cómodo de leer en pantalla.
  *
- * Dos decisiones técnicas importantes, tomadas sin poder probar en
- * una impresora física real (ver README del proyecto):
- *
- * 1. Ancho fijo de 32 caracteres por línea — es el estándar para
- *    ticketeras de 58mm (las que se recomendaron: Xprinter P103 /
- *    XP-58IIH). El formato de ejemplo que se pidió está pensado para
- *    un papel más ancho (columnas CANT/DESCRIPCIÓN/P.UNIT/TOTAL en
- *    una sola línea no entran en 32 caracteres con nombres de
- *    producto reales) — acá cada línea de producto se partió en 2
- *    renglones para que quepa igual.
- * 2. `normalizarParaImpresora` saca tildes, ñ, ¿ y ¡ antes de imprimir.
- *    El plugin manda el texto como UTF-8 crudo, pero la mayoría de
- *    ticketeras económicas usan una página de códigos de un solo byte
- *    (no UTF-8) — con tildes se arriesga a imprimir símbolos
- *    corruptos. Sin tildes, se ve bien en cualquier modelo.
+ * Dos decisiones técnicas tomadas sin poder probar en una impresora
+ * física real (ver README del proyecto):
+ * 1. Ancho fijo de 32 caracteres para la impresora — estándar de
+ *    ticketeras de 58mm. El formato de ejemplo original estaba
+ *    pensado para papel más ancho, así que cada producto se imprime
+ *    en 2 renglones para que quepa. La imagen para WhatsApp SÍ usa un
+ *    ancho más generoso (ver `ANCHO_IMAGEN` en el renderer de imagen).
+ * 2. `normalizarParaImpresora` saca tildes, ñ, ¿ y ¡ antes de mandar a
+ *    la impresora (no a la imagen): el plugin manda el texto como
+ *    UTF-8 crudo, pero la mayoría de ticketeras económicas usan una
+ *    página de códigos de un solo byte — con tildes se arriesga a
+ *    imprimir símbolos corruptos. La imagen no tiene ese problema
+ *    (es texto renderizado, no bytes a un dispositivo), así que ahí
+ *    sí se muestran las tildes normalmente.
  */
 
 import { redondear } from './reglas-negocio';
 
 export const ANCHO_TICKET = 32;
 
-const ESC = '\x1B';
-const GS = '\x1D';
-
-const INICIALIZAR = `${ESC}@`;
-const NEGRITA_ON = `${ESC}E\x01`;
-const NEGRITA_OFF = `${ESC}E\x00`;
-const CENTRAR = `${ESC}a\x01`;
-const IZQUIERDA = `${ESC}a\x00`;
-const TEXTO_GRANDE = `${GS}!\x11`;
-const TEXTO_NORMAL = `${GS}!\x00`;
-/** Corte de papel — en ticketeras sin cuchilla (la mayoría de las portátiles) el comando simplemente no hace nada. */
-const CORTAR_PAPEL = `${GS}V\x00`;
-
 const REEMPLAZOS_EXTRA: Record<string, string> = { '¿': '', '¡': '', '°': 'o' };
 
-/** Saca tildes/ñ (vía descomposición Unicode) y unos pocos símbolos sueltos que no todas las ticketeras tienen. */
+/** Saca tildes/ñ (vía descomposición Unicode) y unos pocos símbolos sueltos — solo para la impresora térmica. */
 export function normalizarParaImpresora(texto: string): string {
   let limpio = texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   for (const [de, a] of Object.entries(REEMPLAZOS_EXTRA)) limpio = limpio.split(de).join(a);
   return limpio;
 }
 
-function centrarTexto(texto: string, ancho = ANCHO_TICKET): string {
+export function centrarTexto(texto: string, ancho: number): string {
   if (texto.length >= ancho) return texto.slice(0, ancho);
   const relleno = ancho - texto.length;
   const izquierda = Math.floor(relleno / 2);
   return ' '.repeat(izquierda) + texto + ' '.repeat(relleno - izquierda);
 }
 
-function lineaSeparadora(ancho = ANCHO_TICKET): string {
+export function lineaSeparadora(ancho: number): string {
   return '-'.repeat(ancho);
 }
 
 /** Dos textos en la misma línea: uno pegado a la izquierda, otro pegado a la derecha. */
-function columnas(izquierda: string, derecha: string, ancho = ANCHO_TICKET): string {
+export function columnas(izquierda: string, derecha: string, ancho: number): string {
   const espacio = Math.max(1, ancho - izquierda.length - derecha.length);
   return izquierda.slice(0, ancho - derecha.length - 1) + ' '.repeat(espacio) + derecha;
 }
@@ -91,7 +83,7 @@ export interface DatosComprobante {
   };
 }
 
-const ETIQUETAS_METODO_PAGO_TICKET: Record<string, string> = {
+export const ETIQUETAS_METODO_PAGO_TICKET: Record<string, string> = {
   efectivo: 'Efectivo',
   yape: 'Yape',
   plin: 'Plin',
@@ -103,63 +95,134 @@ function monto(valor: number, simbolo: string): string {
   return `${simbolo} ${valor.toFixed(2)}`;
 }
 
-export function construirTextoComprobante(datos: DatosComprobante): string {
+/** OP. GRAVADA + IGV (18%), calculados hacia atrás desde el total (los precios ya incluyen IGV). */
+export function calcularDesgloseIgv(total: number): { opGravada: number; igv: number } {
+  const opGravada = redondear(total / 1.18);
+  return { opGravada, igv: redondear(total - opGravada) };
+}
+
+export interface LineaTexto {
+  texto: string;
+  alineacion: 'izquierda' | 'centro';
+  negrita?: boolean;
+  /** Solo la usa la impresora (letra más grande); la imagen ignora esto y usa su propio tamaño de fuente por línea. */
+  grande?: boolean;
+}
+
+/** Envuelve por palabras si no entra en `ancho` — para nombre de tienda, ubicación, leyenda o nombres de cliente largos. */
+function envolverTexto(texto: string, ancho: number): string[] {
+  if (texto.length <= ancho) return [texto];
+  const palabras = texto.split(' ');
+  const envueltas: string[] = [];
+  let actual = '';
+  for (const palabra of palabras) {
+    const candidato = actual ? `${actual} ${palabra}` : palabra;
+    if (candidato.length > ancho && actual) {
+      envueltas.push(actual);
+      actual = palabra;
+    } else {
+      actual = candidato;
+    }
+  }
+  if (actual) envueltas.push(actual);
+  return envueltas;
+}
+
+/**
+ * Arma el comprobante como una lista de líneas "neutras" — el dato de
+ * qué va centrado/negrita, no los bytes para lograrlo. `ancho` es en
+ * caracteres (monoespaciado), distinto según quién la consuma. Los
+ * textos largos (nombre de tienda, ubicación, leyenda, cliente) se
+ * envuelven en varias líneas en vez de cortarse.
+ */
+export function construirLineasComprobante(datos: DatosComprobante, ancho: number): LineaTexto[] {
   const s = datos.simboloMoneda;
-  const renglones: string[] = [];
+  const lineas: LineaTexto[] = [];
+  const c = (texto: string, extra: Partial<LineaTexto> = {}) => {
+    // Una línea "grande" (el nombre de la tienda) se dibuja en una
+    // fuente más ancha que el resto del ticket — si se envuelve al
+    // mismo número de caracteres que el resto, puede terminar bastante
+    // más ancha visualmente que los separadores. Se envuelve más corta
+    // a propósito, para que no se vea más ancha que el resto del ticket.
+    const anchoEfectivo = extra.grande ? Math.round(ancho * 0.7) : ancho;
+    for (const sub of envolverTexto(texto, anchoEfectivo)) lineas.push({ texto: sub, alineacion: 'centro', ...extra });
+  };
+  const i = (texto: string, extra: Partial<LineaTexto> = {}) => {
+    for (const sub of envolverTexto(texto, ancho)) lineas.push({ texto: sub, alineacion: 'izquierda', ...extra });
+  };
 
-  renglones.push(INICIALIZAR, CENTRAR, NEGRITA_ON, TEXTO_GRANDE, datos.tienda.nombre, '\n', TEXTO_NORMAL);
-  if (datos.tienda.documento) renglones.push(datos.tienda.documento, '\n');
-  if (datos.tienda.ubicacion) renglones.push(datos.tienda.ubicacion, '\n');
-  renglones.push(NEGRITA_OFF, '\n');
+  c(datos.tienda.nombre, { negrita: true, grande: true });
+  if (datos.tienda.documento) c(datos.tienda.documento);
+  if (datos.tienda.ubicacion) c(datos.tienda.ubicacion);
+  c('');
 
-  renglones.push(NEGRITA_ON, 'COMPROBANTE DE VENTA', '\n', datos.numeroComprobante, '\n', NEGRITA_OFF);
-  renglones.push(IZQUIERDA);
-  renglones.push(lineaSeparadora(), '\n');
+  c('COMPROBANTE DE VENTA', { negrita: true });
+  c(datos.numeroComprobante, { negrita: true });
+  i(lineaSeparadora(ancho));
 
-  renglones.push(`Fecha: ${datos.fecha}  Hora: ${datos.hora}`, '\n');
+  i(`Fecha: ${datos.fecha}  Hora: ${datos.hora}`);
   const documentoCliente = datos.clienteDocumento ? ` / DNI: ${datos.clienteDocumento}` : '';
-  renglones.push(`Cliente: ${datos.clienteNombre}${documentoCliente}`, '\n');
-  renglones.push(lineaSeparadora(), '\n');
+  i(`Cliente: ${datos.clienteNombre}${documentoCliente}`);
+  i(lineaSeparadora(ancho));
 
   for (const linea of datos.lineas) {
-    renglones.push(`${linea.cantidad} ${linea.descripcion}`, '\n');
-    renglones.push(
-      columnas(`  ${monto(linea.precioUnitario, s)} c/u`, monto(linea.subtotal, s)),
-      '\n',
-    );
+    i(`${linea.cantidad} ${linea.descripcion}`);
+    i(columnas(`  ${monto(linea.precioUnitario, s)} c/u`, monto(linea.subtotal, s), ancho));
   }
-  renglones.push(lineaSeparadora(), '\n');
+  i(lineaSeparadora(ancho));
 
-  const opGravada = redondear(datos.total / 1.18);
-  const igv = redondear(datos.total - opGravada);
-  renglones.push(columnas('OP. GRAVADA:', monto(opGravada, s)), '\n');
-  renglones.push(columnas('IGV (18%):', monto(igv, s)), '\n');
-  renglones.push(NEGRITA_ON, columnas('IMPORTE TOTAL:', monto(datos.total, s)), '\n', NEGRITA_OFF);
-  renglones.push(lineaSeparadora(), '\n');
+  const { opGravada, igv } = calcularDesgloseIgv(datos.total);
+  i(columnas('OP. GRAVADA:', monto(opGravada, s), ancho));
+  i(columnas('IGV (18%):', monto(igv, s), ancho));
+  i(columnas('IMPORTE TOTAL:', monto(datos.total, s), ancho), { negrita: true });
+  i(lineaSeparadora(ancho));
 
-  renglones.push(
-    `Forma de pago: ${ETIQUETAS_METODO_PAGO_TICKET[datos.metodoPago] ?? datos.metodoPago}`,
-    '\n',
-  );
+  const etiquetaPago = ETIQUETAS_METODO_PAGO_TICKET[datos.metodoPago] ?? datos.metodoPago;
+  i(`Forma de pago: ${etiquetaPago}`);
   // La app no guarda el efectivo recibido ni el vuelto de una venta
   // (no es un dato que exista hoy en ningún lado) — se restata el
   // monto pagado por el método elegido, igual que en el formato
   // pedido ("Efectivo: S/ 48.50"); en Fiado no aplica, no se pagó nada.
   if (datos.metodoPago !== 'fiado') {
-    renglones.push(
-      columnas(`${ETIQUETAS_METODO_PAGO_TICKET[datos.metodoPago] ?? datos.metodoPago}:`, monto(datos.total, s)),
-      '\n',
-    );
+    i(columnas(`${etiquetaPago}:`, monto(datos.total, s), ancho));
   }
-  renglones.push(lineaSeparadora(), '\n');
+  i(lineaSeparadora(ancho));
 
-  renglones.push(CENTRAR);
-  renglones.push('Representacion impresa de la', '\n', 'Boleta de Venta.', '\n\n');
-  renglones.push(NEGRITA_ON, 'Gracias por su compra!', NEGRITA_OFF, '\n');
-  if (datos.tienda.contacto) renglones.push(datos.tienda.contacto, '\n');
-  if (datos.tienda.leyenda) renglones.push(datos.tienda.leyenda, '\n');
+  c('Representacion impresa de la');
+  c('Boleta de Venta.');
+  c('');
+  c('Gracias por su compra!', { negrita: true });
+  if (datos.tienda.contacto) c(datos.tienda.contacto);
+  if (datos.tienda.leyenda) c(datos.tienda.leyenda);
 
-  renglones.push('\n\n\n', CORTAR_PAPEL);
+  return lineas;
+}
 
-  return normalizarParaImpresora(renglones.join(''));
+const ESC = '\x1B';
+const GS = '\x1D';
+const INICIALIZAR = `${ESC}@`;
+const NEGRITA_ON = `${ESC}E\x01`;
+const NEGRITA_OFF = `${ESC}E\x00`;
+const CENTRAR = `${ESC}a\x01`;
+const IZQUIERDA = `${ESC}a\x00`;
+const TEXTO_GRANDE = `${GS}!\x11`;
+const TEXTO_NORMAL = `${GS}!\x00`;
+/** Corte de papel — en ticketeras sin cuchilla (la mayoría de las portátiles) el comando simplemente no hace nada. */
+const CORTAR_PAPEL = `${GS}V\x00`;
+
+/** Texto ESC/POS real para mandar al socket Bluetooth de la impresora. */
+export function construirTextoComprobante(datos: DatosComprobante): string {
+  const partes: string[] = [INICIALIZAR];
+
+  for (const linea of construirLineasComprobante(datos, ANCHO_TICKET)) {
+    partes.push(linea.alineacion === 'centro' ? CENTRAR : IZQUIERDA);
+    if (linea.negrita) partes.push(NEGRITA_ON);
+    if (linea.grande) partes.push(TEXTO_GRANDE);
+    partes.push(linea.texto, '\n');
+    if (linea.grande) partes.push(TEXTO_NORMAL);
+    if (linea.negrita) partes.push(NEGRITA_OFF);
+  }
+
+  partes.push('\n\n\n', CORTAR_PAPEL);
+  return normalizarParaImpresora(partes.join(''));
 }

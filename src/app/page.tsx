@@ -204,7 +204,7 @@ export default function PaginaInicio() {
         </span>
       </header>
 
-      <main className="flex-1 px-5 pb-28 pt-6">
+      <main className="flex-1 px-5 pb-40 pt-6">
         {cargando && <p className="text-sm text-tinta/60">Cargando tu bodega…</p>}
         {error && (
           <p className="text-sm text-alerta">
@@ -424,7 +424,7 @@ export default function PaginaInicio() {
       </main>
 
       {/* Acción principal, alcanzable con el pulgar (diseño a una mano) */}
-      <div className="fixed inset-x-0 bottom-16 mx-auto max-w-app px-5">
+      <div className="fixed inset-x-0 bottom-16 z-30 mx-auto max-w-app px-5">
         <Link
           href="/ventas/nueva"
           className="flex h-14 items-center justify-center rounded-full bg-bodega text-base font-semibold text-white shadow-sm active:bg-bodega-oscuro"
@@ -449,7 +449,7 @@ function BarraNavegacion() {
   return (
     <nav
       aria-label="Navegación principal"
-      className="fixed inset-x-0 bottom-0 mx-auto flex h-16 max-w-app border-t border-linea bg-papel"
+      className="fixed inset-x-0 bottom-0 z-30 mx-auto flex h-16 max-w-app border-t border-linea bg-papel"
     >
       {enlaces.map(({ href, etiqueta, icono: Icono }) => (
         <Link

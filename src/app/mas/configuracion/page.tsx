@@ -221,11 +221,11 @@ export default function PaginaConfiguracion() {
         </li>
         <li>
           <Link
-            href="/mas/configuracion/informacion-tienda"
+            href="/mas/configuracion/informacion-negocio"
             className="flex items-center justify-between gap-4 py-4"
           >
             <div>
-              <p className="text-sm font-semibold text-tinta">Información de la Tienda</p>
+              <p className="text-sm font-semibold text-tinta">Información del Negocio</p>
               <p className="mt-0.5 text-xs text-tinta/50">Nombre, DNI/RUC, ubicación, contacto y leyenda.</p>
               <p className="mt-1 text-xs font-semibold text-acento-oscuro">Función Premium</p>
             </div>

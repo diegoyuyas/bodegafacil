@@ -141,7 +141,7 @@ export default function PaginaAdmin() {
       <div className="mx-auto flex min-h-dvh max-w-app flex-col justify-center px-5">
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Configurar administrador</h1>
         <p className="mt-1 text-sm text-tinta/60">
-          Este PIN es tuyo. Úsalo en cada tienda para entrar a este panel.
+          Este PIN es tuyo. Úsalo en cada negocio para entrar a este panel.
         </p>
         <input
           type="password"

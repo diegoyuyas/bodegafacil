@@ -12,6 +12,7 @@ import { construirMensajeVenta } from '@/core/whatsapp';
 import { construirEnlaceWhatsApp } from '@/infraestructura/whatsapp/enlace';
 import type { Cliente, MetodoPago, Producto, Venta } from '@/core/tipos';
 import { limpiarNumeroEscrito } from '@/core/texto';
+import { guardarTicketComoImagen } from '@/infraestructura/comprobante-imagen/compartir-ticket';
 import {
   mostrarNotificacionSinStock,
   mostrarNotificacionStockBajoProducto,
@@ -66,6 +67,8 @@ export default function PaginaNuevaVenta() {
   // registrado; si no (o si es cliente eventual), queda editable.
   const [telefonoCelular, setTelefonoCelular] = useState('');
   const [enviarWhatsApp, setEnviarWhatsApp] = useState(false);
+  const [guardarTicket, setGuardarTicket] = useState(false);
+  const [mensajeTicket, setMensajeTicket] = useState<string | null>(null);
   const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
 
   useEffect(() => {
@@ -284,6 +287,14 @@ export default function PaginaNuevaVenta() {
       if (enviarWhatsApp && telefonoFinal) {
         abrirWhatsAppDeVenta(venta, telefonoFinal);
       }
+      if (guardarTicket && esPremium) {
+        setMensajeTicket(null);
+        try {
+          await guardarTicketComoImagen(contenedor, venta.id);
+        } catch {
+          setMensajeTicket('No se pudo generar la imagen del ticket.');
+        }
+      }
     } catch (e) {
       setMensajeError(e instanceof ErrorDeNegocio ? e.message : 'No se pudo guardar la venta.');
     } finally {
@@ -298,6 +309,8 @@ export default function PaginaNuevaVenta() {
     setMetodoPago('efectivo');
     setTelefonoCelular('');
     setEnviarWhatsApp(false);
+    setGuardarTicket(false);
+    setMensajeTicket(null);
     setMensajeError(null);
     setEtapa('armando');
     if (contenedor) setProductos(contenedor.productos.listarActivos());
@@ -339,6 +352,7 @@ export default function PaginaNuevaVenta() {
           <p className="text-sm text-tinta/60">Venta guardada</p>
           <p className="text-4xl font-extrabold text-tinta">{formatearMonto(totalGuardado, simboloMoneda)}</p>
         </div>
+        {mensajeTicket && <p className="text-sm text-alerta">{mensajeTicket}</p>}
         <div className="flex w-full flex-col gap-3">
           <button
             onClick={empezarNuevaVenta}
@@ -630,6 +644,22 @@ export default function PaginaNuevaVenta() {
           />
           Enviar venta a WhatsApp
         </label>
+        <label
+          className={`mt-2 flex items-center gap-2 text-sm ${esPremium ? 'text-tinta/80' : 'text-tinta/40'}`}
+        >
+          <input
+            type="checkbox"
+            checked={guardarTicket}
+            disabled={!esPremium}
+            onChange={(e) => setGuardarTicket(e.target.checked)}
+            className="h-4 w-4 rounded border-linea disabled:opacity-40"
+          />
+          Guardar ticket como...
+          {!esPremium && <span className="text-xs font-semibold text-acento-oscuro">Premium</span>}
+        </label>
+        <p className="ml-6 mt-0.5 text-xs text-tinta/40">
+          Genera una imagen del comprobante y abre "Compartir" — tú eliges si la mandas a tu WhatsApp, a otro contacto, o la guardas.
+        </p>
       </section>
 
       {/* Acción principal */}

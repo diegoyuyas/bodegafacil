@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
 import type { Cliente, MetodoPagoSinFiado } from '@/core/tipos';
@@ -11,6 +11,7 @@ import { construirEnlaceWhatsApp } from '@/infraestructura/whatsapp/enlace';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { CLAVE_PREFIJO_PAIS, obtenerPrefijoPais } from '@/core/paises';
 import { limpiarNumeroEscrito } from '@/core/texto';
+import { hoyLocalSql } from '@/core/tiempo';
 
 const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
   { valor: 'efectivo', etiqueta: 'Efectivo' },
@@ -30,11 +31,21 @@ export default function PaginaFiados() {
   const [metodo, setMetodo] = useState<MetodoPagoSinFiado>('efectivo');
   const [mensajeError, setMensajeError] = useState<string | null>(null);
 
+  // Buscador (nombre, DNI o monto de deuda) + rango de fechas: para
+  // cobrar fiados de días anteriores, no solo los de hoy. Sin rango
+  // (desde/hasta vacíos), se comporta igual que antes — todos los
+  // clientes con deuda activa hoy, sin importar cuándo se originó.
+  const [busqueda, setBusqueda] = useState('');
+  const [desde, setDesde] = useState(hoyLocalSql());
+  const [hasta, setHasta] = useState(hoyLocalSql());
+  const rangoInvalido = Boolean(desde) && Boolean(hasta) && desde > hasta;
+
   function recargar() {
-    if (contenedor) setClientes(contenedor.fiados.listarClientesConDeuda());
+    if (!contenedor || rangoInvalido) return;
+    setClientes(contenedor.fiados.listarClientesConDeuda(desde || undefined, hasta || undefined));
   }
 
-  useEffect(recargar, [contenedor]);
+  useEffect(recargar, [contenedor, desde, hasta, rangoInvalido]);
   useEffect(() => {
     if (!contenedor) return;
     setEstadoPlan(contenedor.plan.obtenerEstado());
@@ -43,6 +54,17 @@ export default function PaginaFiados() {
   }, [contenedor]);
 
 const esPremium = estadoPlan?.tipo === 'premium';
+
+  const clientesFiltrados = useMemo(() => {
+    const texto = busqueda.trim().toLowerCase();
+    if (!texto) return clientes;
+    return clientes.filter(
+      (c) =>
+        c.nombre.toLowerCase().includes(texto) ||
+        (c.documento ?? '').toLowerCase().includes(texto) ||
+        c.saldoPendiente.toFixed(2).includes(texto),
+    );
+  }, [busqueda, clientes]);
 
   function abrirPago(cliente: Cliente) {
     setClienteAbierto(cliente.id);
@@ -89,6 +111,54 @@ const esPremium = estadoPlan?.tipo === 'premium';
         </p>
       )}
 
+      <div className="mt-4">
+        <p className="text-xs font-semibold text-tinta/70">Rango de fechas (opcional)</p>
+        <p className="mt-0.5 text-xs text-tinta/50">Filtra por cuándo se originó el fiado, para cobrar deudas de días anteriores.</p>
+        <div className="mt-2 flex gap-2">
+          <div className="flex-1">
+            <label className="mb-1 block text-xs text-tinta/50">Desde</label>
+            <input
+              type="date"
+              value={desde}
+              onChange={(e) => setDesde(e.target.value)}
+              max={hasta || undefined}
+              className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="mb-1 block text-xs text-tinta/50">Hasta</label>
+            <input
+              type="date"
+              value={hasta}
+              onChange={(e) => setHasta(e.target.value)}
+              min={desde || undefined}
+              className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
+            />
+          </div>
+          {(desde || hasta) && (
+            <button
+              onClick={() => {
+                setDesde('');
+                setHasta('');
+              }}
+              className="mt-6 h-11 shrink-0 rounded-lg border border-linea px-3 text-xs font-semibold text-tinta/60"
+            >
+              Quitar
+            </button>
+          )}
+        </div>
+        {rangoInvalido && (
+          <p className="mt-2 text-xs text-alerta">La fecha "desde" no puede ser posterior a "hasta".</p>
+        )}
+      </div>
+
+      <input
+        value={busqueda}
+        onChange={(e) => setBusqueda(e.target.value)}
+        placeholder="Buscar por cliente, DNI o monto…"
+        className="mt-3 h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+      />
+
       <main className="mt-4 flex-1">
         {cargando && <p className="text-sm text-tinta/60">Cargando…</p>}
         {error && <p className="text-sm text-alerta">{error.message}</p>}
@@ -99,8 +169,14 @@ const esPremium = estadoPlan?.tipo === 'premium';
           </p>
         )}
 
+        {!cargando && clientes.length > 0 && clientesFiltrados.length === 0 && (
+          <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
+            Ningún cliente coincide con "{busqueda}".
+          </p>
+        )}
+
         <ul className="divide-y divide-linea border-y border-linea">
-          {clientes.map((cliente) => (
+          {clientesFiltrados.map((cliente) => (
             <li key={cliente.id} className="py-3">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-tinta">{cliente.nombre}</span>
