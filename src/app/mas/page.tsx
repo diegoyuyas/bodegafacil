@@ -39,6 +39,12 @@ const OPCION_REIMPRIMIR = {
   descripcion: 'Buscar una venta pasada y volver a imprimir su comprobante',
 };
 
+const OPCION_ACERCA_DE = {
+  href: '/mas/acerca-de',
+  etiqueta: 'Acerca de Vende Fácil',
+  descripcion: 'Versión, sistema operativo y datos del desarrollador',
+};
+
 export default function PaginaMas() {
   const { contenedor } = usarContenedor();
   const [mostrarReimprimir, setMostrarReimprimir] = useState(false);
@@ -54,7 +60,11 @@ export default function PaginaMas() {
     setMostrarReimprimir(IMPRESION_BLUETOOTH_DISPONIBLE && esPremium && impresoraActiva);
   }, [contenedor]);
 
-  const opciones = mostrarReimprimir ? [...OPCIONES, OPCION_REIMPRIMIR] : OPCIONES;
+  // "Acerca de Vende Fácil" siempre va al final de todas las opciones,
+  // incluso debajo de "Reimprimir documentos" cuando esta aparece.
+  const opciones = mostrarReimprimir
+    ? [...OPCIONES, OPCION_REIMPRIMIR, OPCION_ACERCA_DE]
+    : [...OPCIONES, OPCION_ACERCA_DE];
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">

@@ -4,13 +4,21 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
+import { mayusculasAlEscribir } from '@/core/texto';
 import type { Proveedor } from '@/core/tipos';
+import { SelectorEstado, filtrarPorEstado, type FiltroEstado } from '@/components/selector-estado';
+import { CLAVE_PREFIJO_PAIS, obtenerPrefijoPais } from '@/core/paises';
+import type { EstadoPlan } from '@/core/plan';
+import { construirEnlaceChatWhatsApp } from '@/infraestructura/whatsapp/enlace';
 
 export default function PaginaProveedores() {
   const { contenedor, cargando, error } = usarContenedor();
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
+  const [estadoPlan, setEstadoPlan] = useState<EstadoPlan | null>(null);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [busqueda, setBusqueda] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>('activos');
   const [nombre, setNombre] = useState('');
   const [ruc, setRuc] = useState('');
   const [celular, setCelular] = useState('');
@@ -24,21 +32,32 @@ export default function PaginaProveedores() {
   const [mensajeErrorEdit, setMensajeErrorEdit] = useState<string | null>(null);
 
   function recargar() {
-    if (contenedor) setProveedores(contenedor.proveedores.listarTodos());
+    if (!contenedor) return;
+    setProveedores(contenedor.proveedores.listarTodos());
+    setPrefijoPais(obtenerPrefijoPais(contenedor.configuracion.obtenerValor(CLAVE_PREFIJO_PAIS)));
+    setEstadoPlan(contenedor.plan.obtenerEstado());
+  }
+
+  const esPremium = estadoPlan?.tipo === 'premium';
+
+  // Abre el chat de WhatsApp de ese proveedor (sin mensaje escrito). Solo Premium.
+  function abrirChatWhatsApp(telefonoProveedor: string) {
+    window.open(construirEnlaceChatWhatsApp(telefonoProveedor, prefijoPais), '_blank');
   }
 
   useEffect(recargar, [contenedor]);
 
   const proveedoresFiltrados = useMemo(() => {
     const texto = busqueda.trim().toLowerCase();
-    if (!texto) return proveedores;
-    return proveedores.filter((p) => {
+    const base = filtrarPorEstado(proveedores, filtroEstado);
+    if (!texto) return base;
+    return base.filter((p) => {
       if (p.nombre.toLowerCase().includes(texto)) return true;
       if ((p.ruc ?? '').toLowerCase().includes(texto)) return true;
       if ((p.telefono ?? '').toLowerCase().includes(texto)) return true;
       return false;
     });
-  }, [proveedores, busqueda]);
+  }, [proveedores, busqueda, filtroEstado]);
 
   const rucValido = ruc.trim() === '' || /^[A-Za-z0-9]{1,15}$/.test(ruc.trim());
   const celularValido = celular.trim() === '' || /^[0-9]{6,12}$/.test(celular.trim());
@@ -119,9 +138,10 @@ export default function PaginaProveedores() {
         <section className="mt-4 space-y-3 rounded-xl border border-linea p-4">
           <input
             value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
+            onChange={(e) => setNombre(mayusculasAlEscribir(e.target.value))}
+            autoCapitalize="characters"
             placeholder="Nombre del proveedor"
-            className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+            className="uppercase placeholder:normal-case h-11 w-full rounded-lg border border-linea px-3 text-sm"
           />
           <div>
             <input
@@ -156,13 +176,14 @@ export default function PaginaProveedores() {
       )}
 
       {proveedores.length > 0 && (
-        <div className="mt-4">
+        <div className="mt-4 flex gap-2">
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar por nombre, RUC o celular…"
-            className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+            className="h-11 min-w-0 flex-1 rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
           />
+          <SelectorEstado valor={filtroEstado} onCambiar={setFiltroEstado} />
         </div>
       )}
 
@@ -178,7 +199,9 @@ export default function PaginaProveedores() {
 
         {!cargando && proveedores.length > 0 && proveedoresFiltrados.length === 0 && (
           <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
-            Ningún proveedor coincide con &quot;{busqueda}&quot;.
+            {busqueda.trim()
+              ? `Ningún proveedor coincide con "${busqueda}".`
+              : `No hay proveedores ${filtroEstado === 'inactivos' ? 'inactivos' : 'activos'}.`}
           </p>
         )}
 
@@ -200,23 +223,36 @@ export default function PaginaProveedores() {
                     {proveedor.telefono && ` · ${proveedor.telefono}`}
                   </p>
                 </div>
-                <button
-                  onClick={() =>
-                    editandoId === proveedor.id ? cancelarEdicion() : abrirEdicion(proveedor)
-                  }
-                  className="shrink-0 text-sm font-semibold text-bodega-oscuro"
-                >
-                  {editandoId === proveedor.id ? 'Cancelar' : 'Editar'}
-                </button>
+                <div className="flex shrink-0 items-center gap-3">
+                  {proveedor.telefono && (
+                    <button
+                      onClick={() => abrirChatWhatsApp(proveedor.telefono as string)}
+                      disabled={!esPremium}
+                      title={!esPremium ? 'Función Premium' : undefined}
+                      className="text-sm font-semibold text-bodega-oscuro disabled:text-tinta/30"
+                    >
+                      {esPremium ? 'WhatsApp' : '🔒 WhatsApp'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() =>
+                      editandoId === proveedor.id ? cancelarEdicion() : abrirEdicion(proveedor)
+                    }
+                    className="text-sm font-semibold text-bodega-oscuro"
+                  >
+                    {editandoId === proveedor.id ? 'Cancelar' : 'Editar'}
+                  </button>
+                </div>
               </div>
 
               {editandoId === proveedor.id && (
                 <div className="mt-3 space-y-3 rounded-xl border border-linea p-4">
                   <input
                     value={nombreEdit}
-                    onChange={(e) => setNombreEdit(e.target.value)}
+                    onChange={(e) => setNombreEdit(mayusculasAlEscribir(e.target.value))}
+                    autoCapitalize="characters"
                     placeholder="Nombre del proveedor"
-                    className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+                    className="uppercase placeholder:normal-case h-11 w-full rounded-lg border border-linea px-3 text-sm"
                   />
                   <div>
                     <input

@@ -28,3 +28,8 @@ export function construirEnlaceWhatsApp(telefono: string, mensaje: string, prefi
   const numero = normalizarTelefono(telefono, prefijoPais);
   return `https://wa.me/${numero}?text=${encodeURIComponent(mensaje)}`;
 }
+
+/** Enlace que abre directamente el chat con ese número, sin mensaje escrito. */
+export function construirEnlaceChatWhatsApp(telefono: string, prefijoPais: string): string {
+  return `https://wa.me/${normalizarTelefono(telefono, prefijoPais)}`;
+}

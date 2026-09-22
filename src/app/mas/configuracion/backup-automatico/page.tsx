@@ -16,6 +16,7 @@ import {
   nombreArchivoBackupAutomatico,
 } from '@/core/backup-automatico';
 import { horaLocalCompacta, hoyLocalSql } from '@/core/tiempo';
+import { ejecutarBackupAutomaticoAhora } from '@/infraestructura/backup-automatico/ejecutar';
 
 function fechaHoraLegible(fechaHoraSql: string): string {
   const [fecha = '', hora = ''] = fechaHoraSql.split(' ');
@@ -36,6 +37,7 @@ export default function PaginaConfigurarBackupAutomatico() {
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [mensajeEsError, setMensajeEsError] = useState(false);
+  const [probando, setProbando] = useState(false);
 
   useEffect(() => {
     if (!contenedor) return;
@@ -78,6 +80,23 @@ export default function PaginaConfigurarBackupAutomatico() {
     setMensaje('Configuración guardada.');
   }
 
+  async function probarAhora() {
+    if (!contenedor || !esPremium) return;
+    setProbando(true);
+    setMensaje(null);
+    const resultado = await ejecutarBackupAutomaticoAhora(contenedor, nombreArchivo);
+    setProbando(false);
+    if (resultado.ok) {
+      setMensajeEsError(false);
+      setMensaje('Backup de prueba generado.');
+      const ultimo = contenedor.respaldos.obtenerUltimoAutomaticoExitoso();
+      setUltimoBackup(ultimo ? fechaHoraLegible(ultimo.fechaHora) : null);
+    } else {
+      setMensajeEsError(true);
+      setMensaje(`No se pudo generar el backup de prueba: ${resultado.mensaje}`);
+    }
+  }
+
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
@@ -92,8 +111,9 @@ export default function PaginaConfigurarBackupAutomatico() {
 
       <p className="mt-4 text-sm text-tinta/70">
         Respalda tu base de datos sola, cada cierto número de días, en el almacenamiento del
-        teléfono. Se ejecuta al abrir la app (si tocaba según la hora y frecuencia de abajo) — si un
-        día no abres Vende Fácil, ese día no hay backup.
+        teléfono. Se ejecuta al abrir la app (si tocaba según la hora y frecuencia de abajo), y
+        sigue revisando cada 10 minutos mientras la dejes abierta — si un día no abres Vende
+        Fácil, ese día no hay backup.
       </p>
 
       {estadoPlan && !esPremium && (
@@ -183,6 +203,19 @@ export default function PaginaConfigurarBackupAutomatico() {
           >
             {guardando ? 'Guardando…' : 'Guardar configuración'}
           </button>
+
+          <button
+            onClick={probarAhora}
+            disabled={probando}
+            className="mt-3 h-12 w-full rounded-xl border border-linea text-sm font-semibold text-bodega-oscuro disabled:opacity-40"
+          >
+            {probando ? 'Generando…' : 'Probar backup automático ahora'}
+          </button>
+          <p className="mt-2 text-xs text-tinta/50">
+            Genera un backup en este instante, sin esperar la hora ni la frecuencia — útil para
+            probar. No cuenta contra la frecuencia configurada ni afecta cuándo toca el próximo
+            backup automático real.
+          </p>
         </>
       )}
     </div>

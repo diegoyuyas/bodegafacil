@@ -6,7 +6,8 @@ import { usarContenedor } from '@/hooks/usar-contenedor';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import type { Producto } from '@/core/tipos';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
-import { limpiarNumeroEscrito } from '@/core/texto';
+import { limpiarNumeroEscrito, mayusculasAlEscribir } from '@/core/texto';
+import { SelectorEstado, filtrarPorEstado, type FiltroEstado } from '@/components/selector-estado';
 
 export default function PaginaProductos() {
   const { contenedor, cargando, error } = usarContenedor();
@@ -19,6 +20,7 @@ export default function PaginaProductos() {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [busqueda, setBusqueda] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>('activos');
 
   const [nombre, setNombre] = useState('');
   const [precioVenta, setPrecioVenta] = useState('');
@@ -128,14 +130,15 @@ export default function PaginaProductos() {
 
   const productosFiltrados = useMemo(() => {
     const texto = busqueda.trim().toLowerCase();
-    if (!texto) return productos;
-    return productos.filter((p) => {
+    const base = filtrarPorEstado(productos, filtroEstado);
+    if (!texto) return base;
+    return base.filter((p) => {
       if (p.nombre.toLowerCase().includes(texto)) return true;
       if (p.precioVenta.toFixed(2).includes(texto)) return true;
       if (String(p.precioVenta).includes(texto)) return true;
       return false;
     });
-  }, [productos, busqueda]);
+  }, [productos, busqueda, filtroEstado]);
 
   const formularioValido =
     nombre.trim().length > 0 && Number(precioVenta) >= 0 && Number(costo) >= 0;
@@ -189,9 +192,10 @@ export default function PaginaProductos() {
         <section className="mt-4 space-y-3 rounded-xl border border-linea p-4">
           <input
             value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
+            onChange={(e) => setNombre(mayusculasAlEscribir(e.target.value))}
+            autoCapitalize="characters"
             placeholder="Nombre del producto"
-            className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+            className="uppercase placeholder:normal-case h-11 w-full rounded-lg border border-linea px-3 text-sm"
           />
           <div className="flex gap-3">
             <input
@@ -255,13 +259,14 @@ export default function PaginaProductos() {
       )}
 
       {productos.length > 0 && (
-        <div className="mt-4">
+        <div className="mt-4 flex gap-2">
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar por nombre o precio…"
-            className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+            className="h-11 min-w-0 flex-1 rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
           />
+          <SelectorEstado valor={filtroEstado} onCambiar={setFiltroEstado} />
         </div>
       )}
 
@@ -277,7 +282,9 @@ export default function PaginaProductos() {
 
         {!cargando && productos.length > 0 && productosFiltrados.length === 0 && (
           <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
-            Ningún producto coincide con &quot;{busqueda}&quot;.
+            {busqueda.trim()
+              ? `Ningún producto coincide con "${busqueda}".`
+              : `No hay productos ${filtroEstado === 'inactivos' ? 'inactivos' : 'activos'}.`}
           </p>
         )}
 
@@ -386,9 +393,10 @@ export default function PaginaProductos() {
                   <div className="mt-3 space-y-3 rounded-xl border border-linea p-4">
                     <input
                       value={nombreEdit}
-                      onChange={(e) => setNombreEdit(e.target.value)}
+                      onChange={(e) => setNombreEdit(mayusculasAlEscribir(e.target.value))}
+                      autoCapitalize="characters"
                       placeholder="Nombre del producto"
-                      className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+                      className="uppercase placeholder:normal-case h-11 w-full rounded-lg border border-linea px-3 text-sm"
                     />
                     <div className="flex gap-3">
                       <input

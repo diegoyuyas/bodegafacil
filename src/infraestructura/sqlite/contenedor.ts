@@ -13,6 +13,8 @@ import { RespaldoRepositorioSqlite } from './respaldo.repositorio';
 import { cargarBinario, guardarBinario } from '../persistencia/almacen-indexeddb';
 
 const CLAVE_PERSISTENCIA = 'vende-facil-db';
+/** Marca de que ya se retiraron los productos de ejemplo de versiones anteriores (se hace una sola vez). */
+const CLAVE_EJEMPLOS_ANTIGUOS_RETIRADOS = 'ejemplos_antiguos_retirados';
 
 export interface ContenedorRepositorios {
   productos: ProductoRepositorioSqlite;
@@ -72,8 +74,14 @@ async function inicializar(): Promise<ContenedorRepositorios> {
   const persistir = () => guardarBinario(CLAVE_PERSISTENCIA, bd.exportar());
 
   if (!datosPrevios) {
-    sembrarDatosDeEjemplo(productos);
+    sembrarDatosDeEjemplo(productos, proveedores);
+    // Base nueva: no hay nada viejo que retirar. Se marca ya, para que un
+    // producto que el bodeguero cree después con un nombre parecido nunca
+    // se confunda con un ejemplo antiguo.
+    configuracion.establecerValor(CLAVE_EJEMPLOS_ANTIGUOS_RETIRADOS, '1');
     await persistir(); // deja guardados el esquema + los datos de ejemplo
+  } else if (retirarEjemplosAntiguos(bd, configuracion, productos, proveedores)) {
+    await persistir();
   }
 
   return {
@@ -120,15 +128,70 @@ export async function restaurarRespaldo(datos: Uint8Array): Promise<void> {
 /**
  * Solo para que el proyecto sea usable desde el primer momento en
  * desarrollo. En producción, un bodeguero real empieza con su propio
- * catálogo (Fase 3 del roadmap: CRUD de productos).
+ * catálogo (Fase 3 del roadmap: CRUD de productos). No duplica: si un
+ * ejemplo ya existe (mismo nombre / mismo RUC), no lo vuelve a crear.
  */
-function sembrarDatosDeEjemplo(productos: ProductoRepositorioSqlite): void {
+function sembrarDatosDeEjemplo(
+  productos: ProductoRepositorioSqlite,
+  proveedores: ProveedorRepositorioSqlite,
+): void {
   const ejemplos = [
-    { nombre: 'Inca Kola 500 ml', precioVenta: 4.0, costo: 2.8, stockActual: 24, stockMinimo: 6, controlaStock: true, unidadMedida: 'unidad' },
-    { nombre: 'Agua San Luis 625 ml', precioVenta: 2.0, costo: 1.2, stockActual: 30, stockMinimo: 8, controlaStock: true, unidadMedida: 'unidad' },
+    // Producto con control de stock.
+    { nombre: 'INKA COLA 500ML', precioVenta: 3.0, costo: 2.0, stockActual: 20, stockMinimo: 5, controlaStock: true, unidadMedida: 'unidad' },
+    // Plato a la carta: sin control de stock (stock y mínimo en 0) y sin costo fijo.
+    { nombre: 'LOMO SALTADO', precioVenta: 9.0, costo: 0, stockActual: 0, stockMinimo: 0, controlaStock: false, unidadMedida: 'unidad' },
   ];
 
+  const nombresExistentes = new Set(productos.listarTodos().map((p) => p.nombre));
   for (const ejemplo of ejemplos) {
-    productos.crear(ejemplo);
+    if (!nombresExistentes.has(ejemplo.nombre)) productos.crear(ejemplo);
   }
+
+  const RUC_MAKRO = '20492092313';
+  if (!proveedores.listarTodos().some((p) => p.ruc === RUC_MAKRO)) {
+    proveedores.crear('MAKRO SUPERMAYORISTA S.A.', RUC_MAKRO, '989032563');
+  }
+}
+
+/**
+ * Bases ya existentes (instaladas con una versión anterior) todavía traen los
+ * dos productos de ejemplo viejos. Se retiran UNA sola vez:
+ * - sin ventas ni compras registradas → se borran del todo (con sus movimientos
+ *   de inventario);
+ * - con historial → no se pueden borrar sin romper reportes (la base lo impide
+ *   a propósito), así que quedan como Inactivos.
+ * Si se retiró alguno, se agregan los ejemplos nuevos (INKA COLA 500ML, LOMO
+ * SALTADO y el proveedor MAKRO) para que la base quede igual que una nueva.
+ * Devuelve true si tocó la base (hay que persistir).
+ */
+function retirarEjemplosAntiguos(
+  bd: BaseDatosLocal,
+  configuracion: ConfiguracionRepositorioSqlite,
+  productos: ProductoRepositorioSqlite,
+  proveedores: ProveedorRepositorioSqlite,
+): boolean {
+  if (configuracion.obtenerValor(CLAVE_EJEMPLOS_ANTIGUOS_RETIRADOS) === '1') return false;
+
+  const antiguos = bd.consultar<{ id: number }>(
+    `SELECT id FROM producto WHERE UPPER(nombre) IN ('INCA KOLA 500 ML', 'AGUA SAN LUIS 625 ML')`,
+  );
+
+  for (const { id } of antiguos) {
+    const usos =
+      bd.consultar<{ n: number }>(
+        `SELECT (SELECT COUNT(*) FROM detalle_venta WHERE producto_id = ?)
+              + (SELECT COUNT(*) FROM detalle_compra WHERE producto_id = ?) AS n`,
+        [id, id],
+      )[0]?.n ?? 0;
+    if (usos === 0) {
+      bd.ejecutar('DELETE FROM movimiento_inventario WHERE producto_id = ?', [id]);
+      bd.ejecutar('DELETE FROM producto WHERE id = ?', [id]);
+    } else {
+      bd.ejecutar(`UPDATE producto SET activo = 0, actualizado_en = datetime('now') WHERE id = ?`, [id]);
+    }
+  }
+
+  if (antiguos.length > 0) sembrarDatosDeEjemplo(productos, proveedores);
+  configuracion.establecerValor(CLAVE_EJEMPLOS_ANTIGUOS_RETIRADOS, '1');
+  return true;
 }

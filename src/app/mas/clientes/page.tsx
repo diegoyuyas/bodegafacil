@@ -4,17 +4,23 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
+import { soloLetrasAlEscribir } from '@/core/texto';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { CLAVE_PREFIJO_PAIS, obtenerPrefijoPais } from '@/core/paises';
+import type { EstadoPlan } from '@/core/plan';
+import { construirEnlaceChatWhatsApp } from '@/infraestructura/whatsapp/enlace';
 import type { Cliente } from '@/core/tipos';
+import { SelectorEstado, filtrarPorEstado, type FiltroEstado } from '@/components/selector-estado';
 
 export default function PaginaClientes() {
   const { contenedor, cargando, error } = usarContenedor();
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
   const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
+  const [estadoPlan, setEstadoPlan] = useState<EstadoPlan | null>(null);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [busqueda, setBusqueda] = useState('');
+  const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>('activos');
   const [nombre, setNombre] = useState('');
   const [documento, setDocumento] = useState('');
   const [telefono, setTelefono] = useState('');
@@ -32,20 +38,29 @@ export default function PaginaClientes() {
     setClientes(contenedor.clientes.listarTodos());
     setSimboloMoneda(obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)));
     setPrefijoPais(obtenerPrefijoPais(contenedor.configuracion.obtenerValor(CLAVE_PREFIJO_PAIS)));
+    setEstadoPlan(contenedor.plan.obtenerEstado());
+  }
+
+  const esPremium = estadoPlan?.tipo === 'premium';
+
+  // Abre el chat de WhatsApp de ese cliente (sin mensaje escrito). Solo Premium.
+  function abrirChatWhatsApp(telefonoCliente: string) {
+    window.open(construirEnlaceChatWhatsApp(telefonoCliente, prefijoPais), '_blank');
   }
 
   useEffect(recargar, [contenedor]);
 
   const clientesFiltrados = useMemo(() => {
     const texto = busqueda.trim().toLowerCase();
-    if (!texto) return clientes;
-    return clientes.filter((c) => {
+    const base = filtrarPorEstado(clientes, filtroEstado);
+    if (!texto) return base;
+    return base.filter((c) => {
       if (c.nombre.toLowerCase().includes(texto)) return true;
       if ((c.documento ?? '').toLowerCase().includes(texto)) return true;
       if ((c.telefono ?? '').toLowerCase().includes(texto)) return true;
       return false;
     });
-  }, [clientes, busqueda]);
+  }, [clientes, busqueda, filtroEstado]);
 
   const documentoValido = /^[A-Za-z0-9]{1,15}$/.test(documento.trim());
   const formularioValido = nombre.trim().length > 0 && documentoValido;
@@ -124,9 +139,10 @@ export default function PaginaClientes() {
         <section className="mt-4 space-y-3 rounded-xl border border-linea p-4">
           <input
             value={nombre}
-            onChange={(e) => setNombre(e.target.value)}
-            placeholder="Nombre completo (ej: Diego Carrasco)"
-            className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+            onChange={(e) => setNombre(soloLetrasAlEscribir(e.target.value))}
+            autoCapitalize="characters"
+            placeholder="Nombre completo (solo letras)"
+            className="uppercase placeholder:normal-case h-11 w-full rounded-lg border border-linea px-3 text-sm"
           />
           <div>
             <input
@@ -166,13 +182,14 @@ export default function PaginaClientes() {
       )}
 
       {clientes.length > 0 && (
-        <div className="mt-4">
+        <div className="mt-4 flex gap-2">
           <input
             value={busqueda}
             onChange={(e) => setBusqueda(e.target.value)}
             placeholder="Buscar por nombre, DNI o celular…"
-            className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+            className="h-11 min-w-0 flex-1 rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
           />
+          <SelectorEstado valor={filtroEstado} onCambiar={setFiltroEstado} />
         </div>
       )}
 
@@ -188,7 +205,9 @@ export default function PaginaClientes() {
 
         {!cargando && clientes.length > 0 && clientesFiltrados.length === 0 && (
           <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
-            Ningún cliente coincide con &quot;{busqueda}&quot;.
+            {busqueda.trim()
+              ? `Ningún cliente coincide con "${busqueda}".`
+              : `No hay clientes ${filtroEstado === 'inactivos' ? 'inactivos' : 'activos'}.`}
           </p>
         )}
 
@@ -213,23 +232,36 @@ export default function PaginaClientes() {
                     )}
                   </p>
                 </div>
-                <button
-                  onClick={() =>
-                    editandoId === cliente.id ? cancelarEdicion() : abrirEdicion(cliente)
-                  }
-                  className="shrink-0 text-sm font-semibold text-bodega-oscuro"
-                >
-                  {editandoId === cliente.id ? 'Cancelar' : 'Editar'}
-                </button>
+                <div className="flex shrink-0 items-center gap-3">
+                  {cliente.telefono && (
+                    <button
+                      onClick={() => abrirChatWhatsApp(cliente.telefono as string)}
+                      disabled={!esPremium}
+                      title={!esPremium ? 'Función Premium' : undefined}
+                      className="text-sm font-semibold text-bodega-oscuro disabled:text-tinta/30"
+                    >
+                      {esPremium ? 'WhatsApp' : '🔒 WhatsApp'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() =>
+                      editandoId === cliente.id ? cancelarEdicion() : abrirEdicion(cliente)
+                    }
+                    className="text-sm font-semibold text-bodega-oscuro"
+                  >
+                    {editandoId === cliente.id ? 'Cancelar' : 'Editar'}
+                  </button>
+                </div>
               </div>
 
               {editandoId === cliente.id && (
                 <div className="mt-3 space-y-3 rounded-xl border border-linea p-4">
                   <input
                     value={nombreEdit}
-                    onChange={(e) => setNombreEdit(e.target.value)}
+                    onChange={(e) => setNombreEdit(soloLetrasAlEscribir(e.target.value))}
+                    autoCapitalize="characters"
                     placeholder="Nombre completo"
-                    className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+                    className="uppercase placeholder:normal-case h-11 w-full rounded-lg border border-linea px-3 text-sm"
                   />
                   <div>
                     <input

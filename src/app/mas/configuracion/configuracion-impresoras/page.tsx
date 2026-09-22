@@ -27,7 +27,7 @@ export default function PaginaConfiguracionImpresoras() {
           <Link href="/mas/configuracion" className="text-xl text-tinta/60" aria-label="Volver">
             ←
           </Link>
-          <h1 className="text-lg font-extrabold text-bodega-oscuro">Configuración de Impresoras</h1>
+          <h1 className="text-lg font-extrabold text-bodega-oscuro">Configuración de Impresión</h1>
         </header>
         <Proximamente
           titulo="Próximamente"
@@ -123,7 +123,7 @@ export default function PaginaConfiguracionImpresoras() {
         <Link href="/mas/configuracion" className="text-xl text-tinta/60" aria-label="Volver">
           ←
         </Link>
-        <h1 className="text-lg font-extrabold text-bodega-oscuro">Configuración de Impresoras</h1>
+        <h1 className="text-lg font-extrabold text-bodega-oscuro">Configuración de Impresión</h1>
       </header>
 
       {cargando && <p className="mt-4 text-sm text-tinta/60">Cargando…</p>}
@@ -137,7 +137,7 @@ export default function PaginaConfiguracionImpresoras() {
 
       {estadoPlan && !esPremium && (
         <section className="mt-6 rounded-xl border border-linea p-5 text-center">
-          <p className="text-sm font-semibold text-tinta">Configuración de Impresoras es una función Premium</p>
+          <p className="text-sm font-semibold text-tinta">Configuración de Impresión es una función Premium</p>
           <p className="mt-2 text-xs text-tinta/60">Actívala desde el panel de administrador.</p>
         </section>
       )}

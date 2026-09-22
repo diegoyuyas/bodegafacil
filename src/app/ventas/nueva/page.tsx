@@ -13,6 +13,7 @@ import { construirEnlaceWhatsApp } from '@/infraestructura/whatsapp/enlace';
 import type { Cliente, MetodoPago, Producto, Venta } from '@/core/tipos';
 import { limpiarNumeroEscrito } from '@/core/texto';
 import { guardarTicketComoImagen } from '@/infraestructura/comprobante-imagen/compartir-ticket';
+import { capturarFotoComprobantePago } from '@/infraestructura/comprobante-pago/capturar-foto';
 import {
   mostrarNotificacionSinStock,
   mostrarNotificacionStockBajoProducto,
@@ -77,6 +78,11 @@ export default function PaginaNuevaVenta() {
 
   const [etapa, setEtapa] = useState<'armando' | 'revisando' | 'guardada'>('armando');
   const [totalGuardado, setTotalGuardado] = useState(0);
+  const [ventaGuardadaId, setVentaGuardadaId] = useState<number | null>(null);
+  const [metodoPagoGuardado, setMetodoPagoGuardado] = useState<MetodoPago>('efectivo');
+  const [capturandoFoto, setCapturandoFoto] = useState(false);
+  const [fotoComprobanteGuardada, setFotoComprobanteGuardada] = useState(false);
+  const [mensajeFotoPago, setMensajeFotoPago] = useState<string | null>(null);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [limiteAlcanzado, setLimiteAlcanzado] = useState(false);
@@ -283,6 +289,8 @@ export default function PaginaNuevaVenta() {
       await contenedor.persistir();
       notificarStockBajoTrasVenta(carrito);
       setTotalGuardado(venta.total);
+      setVentaGuardadaId(venta.id);
+      setMetodoPagoGuardado(venta.metodoPago);
       setEtapa('guardada');
       if (enviarWhatsApp && telefonoFinal) {
         abrirWhatsAppDeVenta(venta, telefonoFinal);
@@ -302,6 +310,23 @@ export default function PaginaNuevaVenta() {
     }
   }
 
+  async function adjuntarFotoComprobante(origen: 'camara' | 'galeria') {
+    if (!contenedor || !ventaGuardadaId) return;
+    setMensajeFotoPago(null);
+    setCapturandoFoto(true);
+    try {
+      const ruta = await capturarFotoComprobantePago(origen);
+      if (!ruta) return; // el bodeguero canceló — no es un error
+      contenedor.ventas.guardarComprobantePago(ventaGuardadaId, ruta);
+      await contenedor.persistir();
+      setFotoComprobanteGuardada(true);
+    } catch (e) {
+      setMensajeFotoPago(e instanceof Error ? e.message : 'No se pudo adjuntar la foto.');
+    } finally {
+      setCapturandoFoto(false);
+    }
+  }
+
   function empezarNuevaVenta() {
     setCarrito([]);
     setClienteSeleccionado(null);
@@ -311,6 +336,9 @@ export default function PaginaNuevaVenta() {
     setEnviarWhatsApp(false);
     setGuardarTicket(false);
     setMensajeTicket(null);
+    setVentaGuardadaId(null);
+    setFotoComprobanteGuardada(false);
+    setMensajeFotoPago(null);
     setMensajeError(null);
     setEtapa('armando');
     if (contenedor) setProductos(contenedor.productos.listarActivos());
@@ -353,6 +381,35 @@ export default function PaginaNuevaVenta() {
           <p className="text-4xl font-extrabold text-tinta">{formatearMonto(totalGuardado, simboloMoneda)}</p>
         </div>
         {mensajeTicket && <p className="text-sm text-alerta">{mensajeTicket}</p>}
+
+        {esPremium && (metodoPagoGuardado === 'yape' || metodoPagoGuardado === 'plin') && (
+          <div className="w-full rounded-xl border border-linea p-4">
+            <p className="text-sm font-semibold text-tinta">Foto del comprobante de pago</p>
+            <p className="mt-0.5 text-xs text-tinta/50">Opcional — queda guardada junto a esta venta.</p>
+            {fotoComprobanteGuardada ? (
+              <p className="mt-2 text-sm text-bodega-oscuro">✓ Foto guardada.</p>
+            ) : (
+              <div className="mt-3 flex gap-2">
+                <button
+                  onClick={() => adjuntarFotoComprobante('camara')}
+                  disabled={capturandoFoto}
+                  className="h-11 flex-1 rounded-xl border border-bodega text-sm font-semibold text-bodega-oscuro disabled:opacity-40"
+                >
+                  📷 Tomar foto
+                </button>
+                <button
+                  onClick={() => adjuntarFotoComprobante('galeria')}
+                  disabled={capturandoFoto}
+                  className="h-11 flex-1 rounded-xl border border-bodega text-sm font-semibold text-bodega-oscuro disabled:opacity-40"
+                >
+                  🖼️ Elegir de galería
+                </button>
+              </div>
+            )}
+            {mensajeFotoPago && <p className="mt-2 text-sm text-alerta">{mensajeFotoPago}</p>}
+          </div>
+        )}
+
         <div className="flex w-full flex-col gap-3">
           <button
             onClick={empezarNuevaVenta}
@@ -429,7 +486,7 @@ export default function PaginaNuevaVenta() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-40 pt-6">
+    <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-[calc(7rem+var(--area-segura-abajo))] pt-6">
       <header className="flex items-center gap-3">
         <Link href="/" className="text-xl text-tinta/60" aria-label="Volver a inicio">
           ←
@@ -664,7 +721,7 @@ export default function PaginaNuevaVenta() {
 
       {/* Acción principal */}
       {calculoValido && (
-        <div className="fixed inset-x-0 bottom-0 mx-auto max-w-app border-t border-linea bg-papel px-5 py-4">
+        <div className="fixed inset-x-0 bottom-0 mx-auto max-w-app border-t border-linea bg-papel px-5 pt-4 pb-[calc(1rem+var(--area-segura-abajo))]">
           <button
             onClick={() => setEtapa('revisando')}
             className="flex h-14 w-full items-center justify-center rounded-full bg-bodega text-base font-semibold text-white active:bg-bodega-oscuro"

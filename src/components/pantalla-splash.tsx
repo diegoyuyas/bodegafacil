@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { obtenerContenedor } from '@/infraestructura/sqlite/contenedor';
+import { VERSION_APP } from '@/core/version';
 
 /**
  * Splash de arranque — logo + crédito, visible mientras se prepara la
@@ -76,9 +77,18 @@ export function PantallaSplash({ children }: { children: React.ReactNode }) {
             <span className="pantalla-splash-punto" style={{ animationDelay: '300ms' }} />
           </div>
 
-          <p className="absolute bottom-8 text-xs text-tinta/50">
-            Desarrollado por ITECT
-          </p>
+          <div className="absolute bottom-8 flex flex-col items-center gap-1 text-xs text-tinta/50">
+            <img
+              src="/logo-itect.png"
+              alt="ITECT"
+              width={1023}
+              height={1501}
+              className="h-14 w-auto"
+            />
+            <p>Desarrollado por ITECT</p>
+            <p>© 2026 ITECT</p>
+            <p>v{VERSION_APP}</p>
+          </div>
         </div>
       )}
     </>

@@ -6,15 +6,15 @@ import { usarContenedor } from '@/hooks/usar-contenedor';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import type { EstadoPlan } from '@/core/plan';
 import type {
-  CompraListaItem,
   HistorialCostoItem,
+  MetodoPagoSinFiado,
   MovimientoCaja,
   MovimientoInventarioItem,
   Producto,
   ProductoMasVendidoItem,
 } from '@/core/tipos';
 import { hoyLocalSql } from '@/core/tiempo';
-import type { FilaVentaDetallada } from '@/core/exportacion';
+import type { FilaCompraDetallada, FilaVentaDetallada } from '@/core/exportacion';
 import {
   construirHojaCaja,
   construirHojaComprasDetallado,
@@ -26,6 +26,7 @@ import {
 } from '@/core/exportacion';
 import { generarLibroExcel } from '@/infraestructura/exportacion/excel';
 import { descargarExcel } from '@/infraestructura/exportacion/descargas';
+import { IconoImagen, VisorFotoComprobante } from '@/components/visor-foto-comprobante';
 
 const PESTANAS = [
   { valor: 'ventas', etiqueta: 'Ventas' },
@@ -57,7 +58,18 @@ interface VentaAgrupada {
   fecha: string;
   cliente: string;
   metodoPago: string;
+  comprobanteRuta: string | null;
   lineas: FilaVentaDetallada[];
+  total: number;
+}
+
+interface CompraAgrupada {
+  compra: string;
+  fecha: string;
+  proveedor: string;
+  comprobante: string | null;
+  estado: string;
+  lineas: FilaCompraDetallada[];
   total: number;
 }
 
@@ -78,8 +90,17 @@ export default function PaginaReportes() {
 
   const [detalleVentas, setDetalleVentas] = useState<FilaVentaDetallada[]>([]);
   const [movimientosCaja, setMovimientosCaja] = useState<MovimientoCaja[]>([]);
-  const [compras, setCompras] = useState<CompraListaItem[]>([]);
+  const [detalleCompras, setDetalleCompras] = useState<FilaCompraDetallada[]>([]);
   const [masVendidos, setMasVendidos] = useState<ProductoMasVendidoItem[]>([]);
+
+  // Filtros de cada pestaña — todos se aplican sobre lo ya cargado en
+  // el rango de fechas de arriba, sin volver a consultar la base.
+  const [busquedaVentas, setBusquedaVentas] = useState('');
+  // Foto del pago (Yape/Plin) abierta a pantalla completa desde la pestaña Ventas.
+  const [fotoAbierta, setFotoAbierta] = useState<{ ruta: string; titulo: string } | null>(null);
+  const [filtroMetodoCaja, setFiltroMetodoCaja] = useState<'todos' | MetodoPagoSinFiado>('todos');
+  const [busquedaCompras, setBusquedaCompras] = useState('');
+  const [busquedaMasVendidos, setBusquedaMasVendidos] = useState('');
 
   // Historial de costos (Premium): elige un producto y ve lo que costó
   // cada vez que se compró, dentro del mismo rango de fechas de arriba.
@@ -108,7 +129,7 @@ export default function PaginaReportes() {
     if (!contenedor || rangoInvalido || !desde || !hasta) return;
     setDetalleVentas(contenedor.ventas.listarDetalleParaExportar(desde, hasta));
     setMovimientosCaja(contenedor.caja.listarMovimientosPorRango(desde, hasta));
-    setCompras(contenedor.compras.listarPorRango(desde, hasta));
+    setDetalleCompras(contenedor.compras.listarDetalleParaExportar(desde, hasta));
     setMasVendidos(contenedor.ventas.listarProductosMasVendidos(desde, hasta));
   }
 
@@ -162,6 +183,7 @@ export default function PaginaReportes() {
           fecha: fila.fecha,
           cliente: fila.cliente,
           metodoPago: fila.metodoPago,
+          comprobanteRuta: fila.comprobanteRuta ?? null,
           lineas: [],
           total: 0,
         };
@@ -173,15 +195,74 @@ export default function PaginaReportes() {
     return Array.from(mapa.values());
   }, [detalleVentas]);
 
+  const ventasFiltradas = useMemo(() => {
+    const texto = busquedaVentas.trim().toLowerCase();
+    if (!texto) return ventasAgrupadas;
+    return ventasAgrupadas.filter(
+      (v) =>
+        v.cliente.toLowerCase().includes(texto) ||
+        (ETIQUETAS_METODO_PAGO_REPORTE[v.metodoPago] ?? v.metodoPago).toLowerCase().includes(texto) ||
+        v.lineas.some((l) => l.producto.toLowerCase().includes(texto)),
+    );
+  }, [busquedaVentas, ventasAgrupadas]);
+
   const totalVentasReporte = useMemo(
-    () => ventasAgrupadas.reduce((suma, v) => suma + v.total, 0),
-    [ventasAgrupadas],
+    () => ventasFiltradas.reduce((suma, v) => suma + v.total, 0),
+    [ventasFiltradas],
   );
+
+  const comprasAgrupadas = useMemo<CompraAgrupada[]>(() => {
+    const mapa = new Map<string, CompraAgrupada>();
+    for (const fila of detalleCompras) {
+      let grupo = mapa.get(fila.compra);
+      if (!grupo) {
+        grupo = {
+          compra: fila.compra,
+          fecha: fila.fecha,
+          proveedor: fila.proveedor,
+          comprobante: fila.comprobante,
+          estado: fila.estado,
+          lineas: [],
+          total: fila.totalCompra,
+        };
+        mapa.set(fila.compra, grupo);
+      }
+      grupo.lineas.push(fila);
+    }
+    return Array.from(mapa.values());
+  }, [detalleCompras]);
+
+  const comprasFiltradas = useMemo(() => {
+    const texto = busquedaCompras.trim().toLowerCase();
+    if (!texto) return comprasAgrupadas;
+    return comprasAgrupadas.filter(
+      (c) =>
+        c.proveedor.toLowerCase().includes(texto) ||
+        c.total.toFixed(2).includes(texto) ||
+        c.lineas.some((l) => l.producto.toLowerCase().includes(texto)),
+    );
+  }, [busquedaCompras, comprasAgrupadas]);
+
+  const totalCompras = useMemo(
+    () => comprasFiltradas.reduce((suma, c) => suma + c.total, 0),
+    [comprasFiltradas],
+  );
+
+  const movimientosCajaFiltrados = useMemo(() => {
+    if (filtroMetodoCaja === 'todos') return movimientosCaja;
+    return movimientosCaja.filter((m) => m.metodoPago === filtroMetodoCaja);
+  }, [filtroMetodoCaja, movimientosCaja]);
+
+  const masVendidosFiltrados = useMemo(() => {
+    const texto = busquedaMasVendidos.trim().toLowerCase();
+    if (!texto) return masVendidos;
+    return masVendidos.filter((p) => p.nombre.toLowerCase().includes(texto));
+  }, [busquedaMasVendidos, masVendidos]);
 
   async function descargarExcelDelReporte() {
     if (!esPremium || !contenedor) return;
     if (pestana === 'ventas') {
-      const libro = generarLibroExcel([construirHojaVentas(detalleVentas)]);
+      const libro = generarLibroExcel([construirHojaVentas(ventasFiltradas.flatMap((v) => v.lineas))]);
       await descargarExcel(`reporte-ventas-${desde}-a-${hasta}.xlsx`, libro);
       return;
     }
@@ -200,41 +281,35 @@ export default function PaginaReportes() {
       return;
     }
     if (pestana === 'compras') {
-      // Mismo detalle línea por línea que "Exportar todo a Excel", pero
-      // acotado al rango de fechas elegido acá arriba.
-      const detalle = contenedor.compras.listarDetalleParaExportar(
-        desde || undefined,
-        hasta || undefined,
-      );
-      const libro = generarLibroExcel([construirHojaComprasDetallado(detalle)]);
+      const libro = generarLibroExcel([construirHojaComprasDetallado(comprasFiltradas.flatMap((c) => c.lineas))]);
       await descargarExcel(`reporte-compras-${desde}-a-${hasta}.xlsx`, libro);
       return;
     }
-    const hoja = pestana === 'caja' ? construirHojaCaja(movimientosCaja) : construirHojaMasVendidos(masVendidos);
+    const hoja =
+      pestana === 'caja' ? construirHojaCaja(movimientosCajaFiltrados) : construirHojaMasVendidos(masVendidosFiltrados);
     const libro = generarLibroExcel([hoja]);
     await descargarExcel(`reporte-${pestana}-${desde}-a-${hasta}.xlsx`, libro);
   }
 
   const totalesCaja = useMemo(() => {
-    const ingresos = movimientosCaja
+    const ingresos = movimientosCajaFiltrados
       .filter((m) => m.tipo === 'ingreso')
       .reduce((suma, m) => suma + m.monto, 0);
-    const egresos = movimientosCaja
+    const egresos = movimientosCajaFiltrados
       .filter((m) => m.tipo === 'egreso')
       .reduce((suma, m) => suma + m.monto, 0);
     return { ingresos, egresos, neto: ingresos - egresos };
-  }, [movimientosCaja]);
-
-  const totalCompras = useMemo(
-    () => compras.reduce((suma, c) => suma + c.total, 0),
-    [compras],
-  );
+  }, [movimientosCajaFiltrados]);
 
   const botonExcelDeshabilitado =
     !esPremium ||
     rangoInvalido ||
     (pestana === 'costos' && (!productoElegido || historialCostos.length === 0)) ||
-    (pestana === 'kardex' && (!productoElegidoKardex || movimientosKardex.length === 0));
+    (pestana === 'kardex' && (!productoElegidoKardex || movimientosKardex.length === 0)) ||
+    (pestana === 'ventas' && ventasFiltradas.length === 0) ||
+    (pestana === 'caja' && movimientosCajaFiltrados.length === 0) ||
+    (pestana === 'compras' && comprasFiltradas.length === 0) ||
+    (pestana === 'productos' && masVendidosFiltrados.length === 0);
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
@@ -308,20 +383,29 @@ export default function PaginaReportes() {
 
           {pestana === 'ventas' && (
             <section className="mt-4">
-              <div className="rounded-xl border border-linea px-4 py-3">
+              <input
+                value={busquedaVentas}
+                onChange={(e) => setBusquedaVentas(e.target.value)}
+                placeholder="Buscar por cliente, producto o forma de pago…"
+                className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+              />
+
+              <div className="mt-3 rounded-xl border border-linea px-4 py-3">
                 <p className="text-xs text-tinta/60">Total vendido en el rango</p>
                 <p className="text-2xl font-extrabold text-tinta">
                   {formatearMonto(totalVentasReporte, simboloMoneda)}
                 </p>
               </div>
 
-              {ventasAgrupadas.length === 0 ? (
+              {ventasFiltradas.length === 0 ? (
                 <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
-                  No hay ventas registradas en este rango.
+                  {busquedaVentas
+                    ? `Ninguna venta coincide con "${busquedaVentas}".`
+                    : 'No hay ventas registradas en este rango.'}
                 </p>
               ) : (
                 <ul className="mt-4 divide-y divide-linea border-y border-linea">
-                  {ventasAgrupadas.map((venta) => (
+                  {ventasFiltradas.map((venta) => (
                     <li key={venta.pedido} className="py-3">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-tinta/80">
@@ -331,10 +415,27 @@ export default function PaginaReportes() {
                           {formatearMonto(venta.total, simboloMoneda)}
                         </span>
                       </div>
-                      <p className="mt-0.5 text-xs text-tinta/40">
-                        {new Date(venta.fecha).toLocaleString('es-PE')} ·{' '}
-                        {ETIQUETAS_METODO_PAGO_REPORTE[venta.metodoPago] ?? venta.metodoPago}
-                      </p>
+                      <div className="mt-0.5 flex items-center justify-between gap-2">
+                        <p className="text-xs text-tinta/40">
+                          {new Date(venta.fecha).toLocaleString('es-PE')} ·{' '}
+                          {ETIQUETAS_METODO_PAGO_REPORTE[venta.metodoPago] ?? venta.metodoPago}
+                        </p>
+                        {venta.comprobanteRuta && (
+                          <button
+                            type="button"
+                            aria-label={`Ver foto del pago de ${venta.pedido}`}
+                            onClick={() =>
+                              setFotoAbierta({
+                                ruta: venta.comprobanteRuta as string,
+                                titulo: `${venta.pedido} · ${ETIQUETAS_METODO_PAGO_REPORTE[venta.metodoPago] ?? venta.metodoPago}`,
+                              })
+                            }
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-linea text-bodega"
+                          >
+                            <IconoImagen />
+                          </button>
+                        )}
+                      </div>
                       <div className="mt-1.5 space-y-0.5 pl-2">
                         {venta.lineas.map((linea, i) => (
                           <p key={i} className="text-xs text-tinta/60">
@@ -352,7 +453,22 @@ export default function PaginaReportes() {
 
           {pestana === 'caja' && (
             <section className="mt-4">
-              <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="mb-1 block text-xs text-tinta/50">Forma de pago</label>
+                <select
+                  value={filtroMetodoCaja}
+                  onChange={(e) => setFiltroMetodoCaja(e.target.value as 'todos' | MetodoPagoSinFiado)}
+                  className="h-11 w-full rounded-xl border border-linea bg-white px-3 text-sm"
+                >
+                  <option value="todos">Todos</option>
+                  <option value="efectivo">Efectivo</option>
+                  <option value="yape">Yape</option>
+                  <option value="plin">Plin</option>
+                  <option value="tarjeta">Tarjeta</option>
+                </select>
+              </div>
+
+              <div className="mt-3 grid grid-cols-3 gap-2">
                 <div className="rounded-xl bg-bodega-claro/40 px-3 py-3 text-center">
                   <p className="text-xs text-tinta/60">Ingresos</p>
                   <p className="text-sm font-extrabold text-bodega-oscuro">
@@ -373,13 +489,14 @@ export default function PaginaReportes() {
                 </div>
               </div>
 
-              {movimientosCaja.length === 0 ? (
+              {movimientosCajaFiltrados.length === 0 ? (
                 <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
-                  No hay movimientos de caja en este rango.
+                  No hay movimientos de caja {filtroMetodoCaja !== 'todos' ? 'con esa forma de pago ' : ''}en
+                  este rango.
                 </p>
               ) : (
                 <ul className="mt-4 divide-y divide-linea border-y border-linea">
-                  {movimientosCaja.map((mov) => (
+                  {movimientosCajaFiltrados.map((mov) => (
                     <li key={mov.id} className="py-3">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-tinta/80">{mov.concepto}</span>
@@ -401,23 +518,30 @@ export default function PaginaReportes() {
 
           {pestana === 'compras' && (
             <section className="mt-4">
-              <div className="rounded-xl border border-linea px-4 py-3">
+              <input
+                value={busquedaCompras}
+                onChange={(e) => setBusquedaCompras(e.target.value)}
+                placeholder="Buscar por proveedor, producto o monto…"
+                className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+              />
+
+              <div className="mt-3 rounded-xl border border-linea px-4 py-3">
                 <p className="text-xs text-tinta/60">Total comprado en el rango</p>
                 <p className="text-2xl font-extrabold text-tinta">{formatearMonto(totalCompras, simboloMoneda)}</p>
               </div>
 
-              {compras.length === 0 ? (
+              {comprasFiltradas.length === 0 ? (
                 <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
-                  No hay compras registradas en este rango.
+                  {busquedaCompras
+                    ? `Ninguna compra coincide con "${busquedaCompras}".`
+                    : 'No hay compras registradas en este rango.'}
                 </p>
               ) : (
                 <ul className="mt-4 divide-y divide-linea border-y border-linea">
-                  {compras.map((compra) => (
-                    <li key={compra.id} className="py-3">
+                  {comprasFiltradas.map((compra) => (
+                    <li key={compra.compra} className="py-3">
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-tinta/80">
-                          {compra.proveedorNombre ?? 'Proveedor no especificado'}
-                        </span>
+                        <span className="text-tinta/80">{compra.proveedor}</span>
                         <span className="font-semibold text-tinta">{formatearMonto(compra.total, simboloMoneda)}</span>
                       </div>
                       <p className="mt-0.5 text-xs text-tinta/40">
@@ -425,6 +549,13 @@ export default function PaginaReportes() {
                         {compra.comprobante ? ` · ${compra.comprobante}` : ''}
                         {compra.estado === 'anulada' ? ' · Anulada' : ''}
                       </p>
+                      <div className="mt-1.5 space-y-0.5 pl-2">
+                        {compra.lineas.map((linea, i) => (
+                          <p key={i} className="text-xs text-tinta/60">
+                            {linea.cantidad} × {linea.producto} — {formatearMonto(linea.subtotal, simboloMoneda)}
+                          </p>
+                        ))}
+                      </div>
                     </li>
                   ))}
                 </ul>
@@ -434,13 +565,22 @@ export default function PaginaReportes() {
 
           {pestana === 'productos' && (
             <section className="mt-4">
-              {masVendidos.length === 0 ? (
-                <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
-                  No hay ventas registradas en este rango.
+              <input
+                value={busquedaMasVendidos}
+                onChange={(e) => setBusquedaMasVendidos(e.target.value)}
+                placeholder="Buscar producto…"
+                className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+              />
+
+              {masVendidosFiltrados.length === 0 ? (
+                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                  {busquedaMasVendidos
+                    ? `Ningún producto coincide con "${busquedaMasVendidos}".`
+                    : 'No hay ventas registradas en este rango.'}
                 </p>
               ) : (
-                <ul className="divide-y divide-linea border-y border-linea">
-                  {masVendidos.map((item, indice) => (
+                <ul className="mt-4 divide-y divide-linea border-y border-linea">
+                  {masVendidosFiltrados.map((item, indice) => (
                     <li key={item.productoId} className="flex items-center justify-between py-3">
                       <div className="flex min-w-0 items-center gap-3">
                         <span className="w-5 shrink-0 text-sm font-semibold text-tinta/40">
@@ -605,15 +745,8 @@ export default function PaginaReportes() {
 
               {productoElegidoKardex && (
                 <>
-                  <button
-                    onClick={descargarExcelDelReporte}
-                    disabled={botonExcelDeshabilitado}
-                    className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-bodega text-sm font-semibold text-white active:bg-bodega-oscuro disabled:opacity-40"
-                  >
-                    Descargar Excel ↓
-                  </button>
                   {!esPremium && (
-                    <p className="mt-2 text-center text-xs text-tinta/50">
+                    <p className="mt-3 text-center text-xs text-tinta/50">
                       🔒 Descargar el Kardex a Excel es una función Premium — verlo acá es gratis.
                     </p>
                   )}
@@ -647,6 +780,14 @@ export default function PaginaReportes() {
             </section>
           )}
         </>
+
+      {fotoAbierta && (
+        <VisorFotoComprobante
+          ruta={fotoAbierta.ruta}
+          titulo={fotoAbierta.titulo}
+          onCerrar={() => setFotoAbierta(null)}
+        />
+      )}
     </div>
   );
 }

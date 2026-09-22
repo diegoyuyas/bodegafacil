@@ -15,7 +15,7 @@
 
 import { diferenciaEnDiasSql } from './tiempo';
 
-export const LIMITE_VENTAS_PLAN_GRATIS = 250;
+export const LIMITE_VENTAS_PLAN_GRATIS = 100;
 export const DURACIONES_PREMIUM_DIAS = [30, 90, 365] as const;
 export type DuracionPremiumDias = (typeof DURACIONES_PREMIUM_DIAS)[number];
 export const DIAS_PREMIUM_MINIMO = 1;

@@ -228,6 +228,10 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
       }));
   }
 
+  guardarComprobantePago(ventaId: number, ruta: string): void {
+    this.bd.ejecutar('UPDATE venta SET comprobante_pago_ruta = ? WHERE id = ?', [ruta, ventaId]);
+  }
+
   /**
    * Anula una venta: repone el stock vendido, revierte el efecto en
    * caja (si se pagó al contado) o reduce la deuda del cliente (si
@@ -362,6 +366,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         subtotal: number;
         metodo_pago: string;
         cliente: string | null;
+        comprobante_pago_ruta: string | null;
       }>(
         `SELECT
            v.id AS id,
@@ -371,7 +376,8 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
            dv.precio_unitario AS precio_unitario,
            dv.subtotal AS subtotal,
            v.metodo_pago AS metodo_pago,
-           c.nombre AS cliente
+           c.nombre AS cliente,
+           v.comprobante_pago_ruta AS comprobante_pago_ruta
          FROM detalle_venta dv
          JOIN venta v ON v.id = dv.venta_id
          JOIN producto p ON p.id = dv.producto_id
@@ -389,6 +395,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         subtotal: fila.subtotal,
         metodoPago: fila.metodo_pago,
         cliente: fila.cliente ?? 'Cliente Eventual',
+        comprobanteRuta: fila.comprobante_pago_ruta,
       }));
   }
 

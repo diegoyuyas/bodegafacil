@@ -25,6 +25,9 @@ const MIGRACIONES: string[] = [
   // 0004: teléfono usado para WhatsApp en una venta puntual — necesario para poder
   // reenviar el detalle después a un cliente eventual (sin registro de cliente propio).
   `ALTER TABLE venta ADD COLUMN telefono_whatsapp TEXT;`,
+  // 0005: foto del comprobante de pago (Yape/Plin, Premium, opcional) — solo la
+  // ruta del archivo; la foto en sí se guarda aparte, nunca dentro de esta base.
+  `ALTER TABLE venta ADD COLUMN comprobante_pago_ruta TEXT;`,
 ];
 
 export function aplicarMigraciones(bd: BaseDatosLocal): void {

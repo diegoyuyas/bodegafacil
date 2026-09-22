@@ -98,6 +98,7 @@ export interface FilaVenta {
   anulada: number;
   motivo_anulacion: string | null;
   telefono_whatsapp: string | null;
+  comprobante_pago_ruta: string | null;
   creado_en: string;
 }
 
@@ -113,6 +114,7 @@ export function mapearVenta(fila: FilaVenta): Venta {
     anulada: fila.anulada === 1,
     motivoAnulacion: fila.motivo_anulacion,
     telefonoWhatsapp: fila.telefono_whatsapp,
+    comprobantePagoRuta: fila.comprobante_pago_ruta,
     creadoEn: fila.creado_en,
   };
 }

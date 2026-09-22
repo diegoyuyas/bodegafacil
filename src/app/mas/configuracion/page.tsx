@@ -66,6 +66,7 @@ export default function PaginaConfiguracion() {
   const [activandoCodigo, setActivandoCodigo] = useState(false);
   const [mensajeCodigo, setMensajeCodigo] = useState<string | null>(null);
   const [mensajeCodigoEsError, setMensajeCodigoEsError] = useState(false);
+  const [idCopiado, setIdCopiado] = useState(false);
 
   useEffect(() => {
     if (!contenedor) return;
@@ -239,7 +240,7 @@ export default function PaginaConfiguracion() {
             className="flex items-center justify-between gap-4 py-4"
           >
             <div>
-              <p className="text-sm font-semibold text-tinta">Configuración de Impresoras</p>
+              <p className="text-sm font-semibold text-tinta">Configuración de Impresión</p>
               <p className="mt-0.5 text-xs text-tinta/50">Imprimir comprobantes en ticketera Bluetooth.</p>
               <p className="mt-1 text-xs font-semibold text-acento-oscuro">Función Premium</p>
             </div>
@@ -300,10 +301,14 @@ export default function PaginaConfiguracion() {
             <code className="flex-1 select-all break-all text-sm text-tinta">{idDispositivo}</code>
             <button
               type="button"
-              onClick={() => navigator.clipboard?.writeText(idDispositivo)}
+              onClick={async () => {
+                await navigator.clipboard?.writeText(idDispositivo);
+                setIdCopiado(true);
+                setTimeout(() => setIdCopiado(false), 2000);
+              }}
               className="shrink-0 text-xs font-semibold text-bodega-oscuro"
             >
-              Copiar
+              {idCopiado ? 'Código copiado' : 'Copiar'}
             </button>
           </div>
         </div>

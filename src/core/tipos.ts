@@ -65,6 +65,8 @@ export interface Venta {
   motivoAnulacion: string | null;
   /** Número usado para WhatsApp en esta venta puntual (clientes eventuales no tienen teléfono propio guardado). */
   telefonoWhatsapp: string | null;
+  /** Foto del comprobante de pago (Yape/Plin, Premium, opcional) — ruta del archivo, no la foto en sí. */
+  comprobantePagoRuta: string | null;
   creadoEn: string;
 }
 

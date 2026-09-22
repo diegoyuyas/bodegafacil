@@ -22,3 +22,47 @@ export function limpiarNumeroEscrito(textoTipeado: string): string {
   // recortan; un "0" seguido de "." ("0.5") no se toca.
   return textoTipeado.replace(/^0+(?=\d)/, '');
 }
+
+/**
+ * Nombres de productos, clientes y proveedores: siempre en MAYÚSCULAS.
+ * Se aplica en los repositorios (único punto por el que pasan la
+ * pantalla, la importación masiva y los datos de ejemplo), así que ningún
+ * camino puede guardar un nombre en minúsculas. Se usa la configuración
+ * regional "es" para que ñ y las tildes suban bien (ñ → Ñ, á → Á).
+ */
+export function aMayusculas(texto: string): string {
+  return texto.trim().toLocaleUpperCase('es');
+}
+
+/**
+ * Mayúsculas mientras se escribe en un campo de nombre. A diferencia de
+ * `aMayusculas` NO recorta espacios: si recortara, el usuario no podría
+ * escribir el espacio entre dos palabras.
+ */
+export function mayusculasAlEscribir(texto: string): string {
+  return texto.toLocaleUpperCase('es');
+}
+
+/**
+ * Nombre de una PERSONA (clientes): solo letras —con tildes, ñ, ü—
+ * separadas por espacios simples. Sin números ni símbolos.
+ */
+const PATRON_NOMBRE_PERSONA = /^[\p{L}\p{M}]+(?: [\p{L}\p{M}]+)*$/u;
+
+export function esNombrePersonaValido(texto: string): boolean {
+  return PATRON_NOMBRE_PERSONA.test(texto.trim().replace(/\s+/g, ' '));
+}
+
+/**
+ * Para el `onChange` del campo de nombre de cliente: descarta al vuelo
+ * todo lo que no sea letra o espacio, evita espacios dobles o al inicio,
+ * y pasa a mayúsculas. Deja un espacio final para poder seguir tipeando.
+ */
+export function soloLetrasAlEscribir(texto: string): string {
+  return mayusculasAlEscribir(
+    texto
+      .replace(/[^\p{L}\p{M}\s]/gu, '')
+      .replace(/\s+/g, ' ')
+      .replace(/^ /, ''),
+  );
+}

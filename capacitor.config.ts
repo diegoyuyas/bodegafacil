@@ -26,6 +26,18 @@ const config: CapacitorConfig = {
     // Mismo motivo que en android — ver comentario de arriba.
     backgroundColor: '#F4FAF9',
   },
+  plugins: {
+    // Explícito a propósito, aunque ya sea el valor por defecto desde
+    // Capacitor 8.3: le pide al SystemBars integrado (parte de
+    // @capacitor/core, sin instalar nada aparte) que inyecte el
+    // tamaño real de las barras del sistema como variables CSS —
+    // ver la nota completa en globals.css sobre por qué esto
+    // reemplazó al intento anterior con env(safe-area-inset-bottom)
+    // solo.
+    SystemBars: {
+      insetsHandling: 'css',
+    },
+  },
 };
 
 export default config;

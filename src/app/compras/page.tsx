@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
+import { mayusculasAlEscribir } from '@/core/texto';
 import type { LineaCompraEntrada } from '@/core/repositorios';
 import type { MetodoPagoSinFiado, Producto, Proveedor } from '@/core/tipos';
 
@@ -158,7 +159,7 @@ export default function PaginaCompras() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-40 pt-6">
+    <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-[calc(7rem+var(--area-segura-abajo))] pt-6">
       <header className="flex items-center gap-3">
         <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver">
           ←
@@ -309,7 +310,8 @@ export default function PaginaCompras() {
 
             <input
               value={proveedorNombreLibre}
-              onChange={(e) => setProveedorNombreLibre(e.target.value)}
+              onChange={(e) => setProveedorNombreLibre(mayusculasAlEscribir(e.target.value))}
+              autoCapitalize="characters"
               placeholder="O escribe cualquier nombre de proveedor (no se guarda)"
               className="mt-2 h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
             />
@@ -357,7 +359,7 @@ export default function PaginaCompras() {
       {mensajeError && <p className="mt-4 text-sm text-alerta">{mensajeError}</p>}
 
       {carrito.length > 0 && (
-        <div className="fixed inset-x-0 bottom-0 mx-auto max-w-app border-t border-linea bg-papel px-5 py-4">
+        <div className="fixed inset-x-0 bottom-0 mx-auto max-w-app border-t border-linea bg-papel px-5 pt-4 pb-[calc(1rem+var(--area-segura-abajo))]">
           <button
             onClick={confirmarCompra}
             disabled={guardando}

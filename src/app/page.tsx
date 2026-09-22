@@ -204,7 +204,7 @@ export default function PaginaInicio() {
         </span>
       </header>
 
-      <main className="flex-1 px-5 pb-40 pt-6">
+      <main className="flex-1 px-5 pb-[calc(8.5rem+var(--area-segura-abajo))] pt-6">
         {cargando && <p className="text-sm text-tinta/60">Cargando tu bodega…</p>}
         {error && (
           <p className="text-sm text-alerta">
@@ -424,7 +424,7 @@ export default function PaginaInicio() {
       </main>
 
       {/* Acción principal, alcanzable con el pulgar (diseño a una mano) */}
-      <div className="fixed inset-x-0 bottom-16 z-30 mx-auto max-w-app px-5">
+      <div className="fixed inset-x-0 bottom-[calc(4rem+var(--area-segura-abajo))] z-30 mx-auto max-w-app px-5">
         <Link
           href="/ventas/nueva"
           className="flex h-14 items-center justify-center rounded-full bg-bodega text-base font-semibold text-white shadow-sm active:bg-bodega-oscuro"
@@ -449,18 +449,20 @@ function BarraNavegacion() {
   return (
     <nav
       aria-label="Navegación principal"
-      className="fixed inset-x-0 bottom-0 z-30 mx-auto flex h-16 max-w-app border-t border-linea bg-papel"
+      className="fixed inset-x-0 bottom-0 z-30 mx-auto max-w-app border-t border-linea bg-papel pb-[var(--area-segura-abajo)]"
     >
-      {enlaces.map(({ href, etiqueta, icono: Icono }) => (
-        <Link
-          key={href}
-          href={href}
-          className="flex flex-1 flex-col items-center justify-center gap-1 text-tinta/60"
-        >
-          <Icono />
-          <span className="text-[11px]">{etiqueta}</span>
-        </Link>
-      ))}
+      <div className="flex h-16">
+        {enlaces.map(({ href, etiqueta, icono: Icono }) => (
+          <Link
+            key={href}
+            href={href}
+            className="flex flex-1 flex-col items-center justify-center gap-1 text-tinta/60"
+          >
+            <Icono />
+            <span className="text-[11px]">{etiqueta}</span>
+          </Link>
+        ))}
+      </div>
     </nav>
   );
 }

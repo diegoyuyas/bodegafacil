@@ -27,6 +27,8 @@ export interface FilaVentaDetallada {
   subtotal: number;
   metodoPago: string;
   cliente: string;
+  /** URI de la foto del pago (Yape/Plin), si el bodeguero adjuntó una. Solo para verla en pantalla; no va a Excel/CSV. */
+  comprobanteRuta?: string | null;
 }
 
 function escaparCsv(valor: string | number | null | undefined): string {

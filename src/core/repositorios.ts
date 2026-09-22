@@ -108,6 +108,8 @@ export interface VentaRepositorio {
   obtenerLineas(ventaId: number): LineaVentaResumen[];
   /** Líneas con precio unitario y subtotal, para armar el mensaje de WhatsApp de una venta. */
   obtenerLineasParaMensaje(ventaId: number): LineaVentaMensaje[];
+  /** Foto del comprobante de pago (Yape/Plin, Premium) — guarda solo la ruta del archivo. */
+  guardarComprobantePago(ventaId: number, ruta: string): void;
   /** Repone stock, revierte caja/deuda, y marca la venta como anulada. */
   anularVenta(id: number, motivo?: string): void;
   /**

@@ -111,7 +111,7 @@ export default function PaginaReimprimirDocumentos() {
           <p className="mt-2 text-xs text-tinta/60">
             {!esPremium
               ? 'Actívala desde el panel de administrador.'
-              : 'Ve a Más > Configuración > Configuración de Impresoras y activa "Activar impresión Bluetooth".'}
+              : 'Ve a Más > Configuración > Configuración de Impresión y activa "Activar impresión Bluetooth".'}
           </p>
         </section>
       </div>

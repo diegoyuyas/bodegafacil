@@ -23,6 +23,10 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   themeColor: '#0C6B7D',
+  // NO agregar `viewportFit: 'cover'`: en Capacitor 8 (SystemBars) esa
+  // etiqueta le avisa a Android que la app dibujará por detrás de las
+  // barras del sistema (edge-to-edge). Sin ella, Capacitor mismo deja el
+  // contenido entre la barra de estado y la de navegación.
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
