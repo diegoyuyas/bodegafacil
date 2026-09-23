@@ -12,6 +12,12 @@ import {
 import type { DuracionPremiumDias, EstadoPlan } from '@/core/plan';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
 import { limpiarNumeroEscrito } from '@/core/texto';
+import { generarCodigoActivacion } from '@/infraestructura/seguridad/generar-codigo-activacion';
+import {
+  borrarLlavePrivada,
+  guardarLlavePrivada,
+  obtenerLlavePrivadaGuardada,
+} from '@/infraestructura/seguridad/llave-privada-local';
 
 /**
  * Panel de administrador — no aparece en ningún menú. Se llega tocando
@@ -39,6 +45,20 @@ export default function PaginaAdmin() {
   const [pinNuevoParaCambio, setPinNuevoParaCambio] = useState('');
   const [mensajeCambioPin, setMensajeCambioPin] = useState<string | null>(null);
 
+  // Generar código de activación para OTRA tienda, sin necesitar la laptop.
+  // La llave privada vive en localStorage (ver llave-privada-local.ts),
+  // separada a propósito de configuracion_app / los backups de la app.
+  const [llavePrivada, setLlavePrivada] = useState<string | null>(null);
+  const [llaveIngresada, setLlaveIngresada] = useState('');
+  const [mensajeErrorLlave, setMensajeErrorLlave] = useState<string | null>(null);
+  const [dispositivoRemoto, setDispositivoRemoto] = useState('');
+  const [diasCodigoRemoto, setDiasCodigoRemoto] = useState('30');
+  const [venceEnDiasCodigo, setVenceEnDiasCodigo] = useState('7');
+  const [generandoCodigo, setGenerandoCodigo] = useState(false);
+  const [mensajeErrorCodigo, setMensajeErrorCodigo] = useState<string | null>(null);
+  const [codigoGenerado, setCodigoGenerado] = useState<{ codigo: string; venceEn: string } | null>(null);
+  const [codigoCopiado, setCodigoCopiado] = useState(false);
+
   function recargarEstado() {
     if (!contenedor) return;
     setEstadoPlan(contenedor.plan.obtenerEstado());
@@ -47,6 +67,75 @@ export default function PaginaAdmin() {
   }
 
   useEffect(recargarEstado, [contenedor]);
+  useEffect(() => setLlavePrivada(obtenerLlavePrivadaGuardada()), []);
+
+  function guardarLlave() {
+    setMensajeErrorLlave(null);
+    if (!/^[0-9a-fA-F]{64}$/.test(llaveIngresada.trim())) {
+      setMensajeErrorLlave('La llave privada debe ser hexadecimal de 64 caracteres (32 bytes).');
+      return;
+    }
+    if (!guardarLlavePrivada(llaveIngresada.trim())) {
+      setMensajeErrorLlave('No se pudo guardar la llave en este celular.');
+      return;
+    }
+    setLlaveIngresada('');
+    setLlavePrivada(obtenerLlavePrivadaGuardada());
+  }
+
+  function quitarLlave() {
+    if (!confirm('¿Quitar la llave privada de este celular?')) return;
+    borrarLlavePrivada();
+    setLlavePrivada(null);
+    setCodigoGenerado(null);
+  }
+
+  async function generarCodigoRemoto() {
+    if (!llavePrivada) return;
+    setMensajeErrorCodigo(null);
+    setCodigoGenerado(null);
+
+    const dias = Number(diasCodigoRemoto);
+    const venceEnDias = Number(venceEnDiasCodigo);
+    if (!dispositivoRemoto.trim()) {
+      setMensajeErrorCodigo('Falta el ID de dispositivo del bodeguero.');
+      return;
+    }
+    if (!Number.isInteger(dias) || dias < DIAS_PREMIUM_MINIMO || dias > DIAS_PREMIUM_MAXIMO) {
+      setMensajeErrorCodigo(`Los días de Premium deben ser un número entero entre ${DIAS_PREMIUM_MINIMO} y ${DIAS_PREMIUM_MAXIMO}.`);
+      return;
+    }
+    if (!Number.isInteger(venceEnDias) || venceEnDias < 1) {
+      setMensajeErrorCodigo('Los días para canjear deben ser un número entero positivo.');
+      return;
+    }
+
+    setGenerandoCodigo(true);
+    const resultado = await generarCodigoActivacion(llavePrivada, dispositivoRemoto.trim(), dias, venceEnDias);
+    setGenerandoCodigo(false);
+    if (!resultado.ok) {
+      setMensajeErrorCodigo(resultado.mensaje);
+      return;
+    }
+    setCodigoGenerado({ codigo: resultado.codigo, venceEn: resultado.venceEn });
+  }
+
+  async function copiarCodigoGenerado() {
+    if (!codigoGenerado) return;
+    try {
+      await navigator.clipboard.writeText(codigoGenerado.codigo);
+      setCodigoCopiado(true);
+      setTimeout(() => setCodigoCopiado(false), 1500);
+    } catch {
+      setMensajeErrorCodigo('No se pudo copiar. Cópialo a mano desde el recuadro.');
+    }
+  }
+
+  function enviarCodigoPorWhatsApp() {
+    if (!codigoGenerado) return;
+    const texto = `Tu código de activación Premium (${diasCodigoRemoto} días, válido hasta ${codigoGenerado.venceEn}):\n\n${codigoGenerado.codigo}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
+  }
 
   async function crearPin() {
     if (!contenedor) return;
@@ -265,8 +354,113 @@ export default function PaginaAdmin() {
         {mensajeErrorPlan && <p className="mt-2 text-sm text-alerta">{mensajeErrorPlan}</p>}
       </section>
 
+      <section className="mt-8 rounded-xl border border-linea p-4">
+        <p className="text-sm font-semibold text-tinta">Generar código para OTRA tienda</p>
+        <p className="mt-1 text-xs text-tinta/50">
+          Para activar Premium a distancia por WhatsApp, sin necesitar la laptop. El bodeguero te
+          manda su ID de dispositivo desde este mismo panel (en su celular), tú generas el código
+          acá, y él lo pega en Más → Configuración de su app.
+        </p>
+
+        {!llavePrivada ? (
+          <div className="mt-3">
+            <input
+              type="password"
+              autoComplete="off"
+              value={llaveIngresada}
+              onChange={(e) => setLlaveIngresada(e.target.value)}
+              placeholder="Llave privada (hex) — pégala una sola vez"
+              className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+            />
+            <p className="mt-1 text-xs text-tinta/50">
+              La misma que te dio <code>generar-llaves.mjs</code>. Queda guardada solo en este
+              celular — no se guarda en la base de datos, así que nunca sale en ningún backup ni
+              exportación de la app. Ver comentario en llave-privada-local.ts sobre el backup del
+              propio sistema Android.
+            </p>
+            {mensajeErrorLlave && <p className="mt-2 text-sm text-alerta">{mensajeErrorLlave}</p>}
+            <button
+              onClick={guardarLlave}
+              className="mt-2 h-11 w-full rounded-lg bg-bodega text-sm font-semibold text-white"
+            >
+              Guardar llave en este celular
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="mt-3 flex items-center justify-between rounded-lg bg-papel px-3 py-2 text-xs">
+              <span>🔑 Llave privada guardada en este celular</span>
+              <button onClick={quitarLlave} className="font-semibold text-alerta">
+                Quitar
+              </button>
+            </div>
+
+            <input
+              value={dispositivoRemoto}
+              onChange={(e) => setDispositivoRemoto(e.target.value)}
+              placeholder="ID de dispositivo del bodeguero"
+              className="mt-3 h-11 w-full rounded-lg border border-linea px-3 text-sm"
+            />
+            <div className="mt-2 flex gap-2">
+              <input
+                type="number"
+                inputMode="numeric"
+                min={DIAS_PREMIUM_MINIMO}
+                max={DIAS_PREMIUM_MAXIMO}
+                value={diasCodigoRemoto}
+                onChange={(e) => setDiasCodigoRemoto(limpiarNumeroEscrito(e.target.value))}
+                placeholder="Días Premium"
+                className="h-11 flex-1 rounded-lg border border-linea px-3 text-sm"
+              />
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                value={venceEnDiasCodigo}
+                onChange={(e) => setVenceEnDiasCodigo(limpiarNumeroEscrito(e.target.value))}
+                placeholder="Días para canjear"
+                className="h-11 flex-1 rounded-lg border border-linea px-3 text-sm"
+              />
+            </div>
+            {mensajeErrorCodigo && <p className="mt-2 text-sm text-alerta">{mensajeErrorCodigo}</p>}
+            <button
+              onClick={generarCodigoRemoto}
+              disabled={generandoCodigo}
+              className="mt-2 h-11 w-full rounded-lg bg-bodega text-sm font-semibold text-white disabled:opacity-40"
+            >
+              {generandoCodigo ? 'Generando…' : 'Generar código'}
+            </button>
+
+            {codigoGenerado && (
+              <div className="mt-3 rounded-lg border border-dashed border-bodega bg-papel p-3 text-center">
+                <p className="break-all font-mono text-sm font-bold text-bodega-oscuro">
+                  {codigoGenerado.codigo}
+                </p>
+                <p className="mt-1 text-xs text-tinta/50">
+                  {diasCodigoRemoto} días de Premium · válido para canjear hasta {codigoGenerado.venceEn}
+                </p>
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={copiarCodigoGenerado}
+                    className="h-10 flex-1 rounded-lg border border-linea text-xs font-semibold text-bodega-oscuro"
+                  >
+                    {codigoCopiado ? 'Copiado ✓' : 'Copiar código'}
+                  </button>
+                  <button
+                    onClick={enviarCodigoPorWhatsApp}
+                    className="h-10 flex-1 rounded-lg bg-bodega text-xs font-semibold text-white"
+                  >
+                    Enviar por WhatsApp
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
       <p className="mt-6 text-xs text-tinta/50">
-        ¿Vas a activar Premium a distancia con un código? Eso se hace desde{' '}
+        ¿Es esta misma tienda y ya tienes el código? Se canjea desde{' '}
         <Link href="/mas/configuracion" className="font-semibold text-bodega-oscuro">
           Más → Configuración
         </Link>{' '}

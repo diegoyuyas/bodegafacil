@@ -80,8 +80,10 @@ async function inicializar(): Promise<ContenedorRepositorios> {
     // se confunda con un ejemplo antiguo.
     configuracion.establecerValor(CLAVE_EJEMPLOS_ANTIGUOS_RETIRADOS, '1');
     await persistir(); // deja guardados el esquema + los datos de ejemplo
-  } else if (retirarEjemplosAntiguos(bd, configuracion, productos, proveedores)) {
-    await persistir();
+  } else {
+    let huboCambios = retirarEjemplosAntiguos(bd, configuracion, productos, proveedores);
+    huboCambios = corregirNombreEjemploInkaCola(bd) || huboCambios;
+    if (huboCambios) await persistir();
   }
 
   return {
@@ -137,7 +139,7 @@ function sembrarDatosDeEjemplo(
 ): void {
   const ejemplos = [
     // Producto con control de stock.
-    { nombre: 'INKA COLA 500ML', precioVenta: 3.0, costo: 2.0, stockActual: 20, stockMinimo: 5, controlaStock: true, unidadMedida: 'unidad' },
+    { nombre: 'INCA KOLA 500ML', precioVenta: 3.0, costo: 2.0, stockActual: 20, stockMinimo: 5, controlaStock: true, unidadMedida: 'unidad' },
     // Plato a la carta: sin control de stock (stock y mínimo en 0) y sin costo fijo.
     { nombre: 'LOMO SALTADO', precioVenta: 9.0, costo: 0, stockActual: 0, stockMinimo: 0, controlaStock: false, unidadMedida: 'unidad' },
   ];
@@ -154,13 +156,31 @@ function sembrarDatosDeEjemplo(
 }
 
 /**
+ * Bases donde ya se había sembrado el ejemplo con el nombre mal
+ * escrito "INKA COLA 500ML" (versión anterior de este archivo) lo
+ * corrigen a "INCA KOLA 500ML" — sin crear un producto nuevo, para no
+ * duplicar. Es idempotente: después de corregirlo una vez, el WHERE
+ * ya no encuentra ninguna fila y no hace nada en las siguientes
+ * aperturas, así que no necesita su propia bandera de "ya se hizo".
+ * Devuelve true si corrigió algo (hay que persistir).
+ */
+function corregirNombreEjemploInkaCola(bd: BaseDatosLocal): boolean {
+  const filas = bd.consultar<{ id: number }>(`SELECT id FROM producto WHERE nombre = 'INKA COLA 500ML'`);
+  if (filas.length === 0) return false;
+  bd.ejecutar(
+    `UPDATE producto SET nombre = 'INCA KOLA 500ML', actualizado_en = datetime('now') WHERE nombre = 'INKA COLA 500ML'`,
+  );
+  return true;
+}
+
+/**
  * Bases ya existentes (instaladas con una versión anterior) todavía traen los
  * dos productos de ejemplo viejos. Se retiran UNA sola vez:
  * - sin ventas ni compras registradas → se borran del todo (con sus movimientos
  *   de inventario);
  * - con historial → no se pueden borrar sin romper reportes (la base lo impide
  *   a propósito), así que quedan como Inactivos.
- * Si se retiró alguno, se agregan los ejemplos nuevos (INKA COLA 500ML, LOMO
+ * Si se retiró alguno, se agregan los ejemplos nuevos (INCA KOLA 500ML, LOMO
  * SALTADO y el proveedor MAKRO) para que la base quede igual que una nueva.
  * Devuelve true si tocó la base (hay que persistir).
  */

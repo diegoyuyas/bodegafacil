@@ -2,9 +2,11 @@ import type { ConfiguracionRepositorio, PlanRepositorio } from '@/core/repositor
 import {
   calcularEstadoPlan,
   CLAVE_ADMIN_PIN_HASH,
+  CLAVE_PLAN_FECHA_MAXIMA_VISTA,
   CLAVE_PLAN_VENCE_EN,
   DIAS_PREMIUM_MAXIMO,
   DIAS_PREMIUM_MINIMO,
+  fechaMasAlta,
   type EstadoPlan,
 } from '@/core/plan';
 import { CLAVE_CODIGOS_ACTIVACION_USADOS, CLAVE_DEVICE_ID, MAXIMO_CODIGOS_USADOS_GUARDADOS } from '@/core/activacion';
@@ -49,7 +51,25 @@ export class PlanRepositorioSqlite implements PlanRepositorio {
   constructor(private readonly configuracion: ConfiguracionRepositorio) {}
 
   obtenerEstado(): EstadoPlan {
-    return calcularEstadoPlan(this.configuracion.obtenerValor(CLAVE_PLAN_VENCE_EN), hoyLocalSql());
+    // Mitigación contra retroceder el reloj del celular para "revivir"
+    // un Premium vencido (ver el comentario de CLAVE_PLAN_FECHA_MAXIMA_VISTA
+    // en core/plan.ts): en vez de creerle a la fecha de hoy tal cual,
+    // se usa la más alta entre "hoy" y la última fecha que la app haya
+    // visto. Si el celular retrocedió, sigue mandando la guardada.
+    //
+    // El nuevo valor queda en memoria de una (se ve reflejado ya
+    // mismo en el resto de la sesión); se guarda en disco recién en
+    // el próximo `contenedor.persistir()` que dispare cualquier otra
+    // acción (una venta, un backup, un cambio de configuración, etc.)
+    // — este método no llama a persistir() él solo porque es síncrono
+    // y se usa en decenas de pantallas.
+    const hoy = hoyLocalSql();
+    const fechaMaximaVista = this.configuracion.obtenerValor(CLAVE_PLAN_FECHA_MAXIMA_VISTA);
+    const hoyEfectivo = fechaMasAlta(fechaMaximaVista, hoy);
+    if (hoyEfectivo !== fechaMaximaVista) {
+      this.configuracion.establecerValor(CLAVE_PLAN_FECHA_MAXIMA_VISTA, hoyEfectivo);
+    }
+    return calcularEstadoPlan(this.configuracion.obtenerValor(CLAVE_PLAN_VENCE_EN), hoyEfectivo);
   }
 
   activarPremium(dias: number): void {

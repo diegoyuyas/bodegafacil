@@ -1,5 +1,6 @@
 import type { DatosActualizarProducto, DatosNuevoProducto, ProductoRepositorio } from '@/core/repositorios';
 import { ErrorDeNegocio, calcularStockNuevo } from '@/core/reglas-negocio';
+import { aMayusculas } from '@/core/texto';
 import type { MovimientoInventarioItem, Producto } from '@/core/tipos';
 import { ahoraLocalSql } from '@/core/tiempo';
 import type { BaseDatosLocal } from './base-datos';
@@ -41,12 +42,17 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
   }
 
   crear(datos: DatosNuevoProducto): Producto {
+    const nombreNormalizado = aMayusculas(datos.nombre);
+    if (this.existeNombre(nombreNormalizado)) {
+      throw new ErrorDeNegocio(`Ya existe un producto llamado "${nombreNormalizado}".`);
+    }
+
     this.bd.ejecutar(
       `INSERT INTO producto
          (nombre, categoria_id, codigo, precio_venta, costo, stock_actual, stock_minimo, controla_stock, unidad_medida)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        datos.nombre,
+        nombreNormalizado,
         datos.categoriaId ?? null,
         datos.codigo ?? null,
         datos.precioVenta,
@@ -75,6 +81,10 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
     if (datos.precioVenta < 0 || datos.costo < 0 || datos.stockMinimo < 0) {
       throw new ErrorDeNegocio('Los montos y el stock mínimo no pueden ser negativos.');
     }
+    const nombreNormalizado = aMayusculas(datos.nombre);
+    if (this.existeNombre(nombreNormalizado, id)) {
+      throw new ErrorDeNegocio(`Ya existe un producto llamado "${nombreNormalizado}".`);
+    }
 
     this.bd.ejecutar(
       `UPDATE producto
@@ -82,7 +92,7 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
              stock_minimo = ?, controla_stock = ?, unidad_medida = ?, activo = ?, actualizado_en = datetime('now')
        WHERE id = ?`,
       [
-        datos.nombre.trim(),
+        nombreNormalizado,
         datos.categoriaId ?? null,
         datos.codigo ?? null,
         datos.precioVenta,
@@ -126,6 +136,18 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
       );
       return this.obtenerPorId(id);
     });
+  }
+
+  /**
+   * No se permiten 2 productos con el mismo nombre (comparación exacta
+   * tras `aMayusculas`, que ya es como se guardan todos). `idAExcluir`
+   * es el propio producto al editar, para no chocar contra sí mismo.
+   */
+  private existeNombre(nombreNormalizado: string, idAExcluir?: number): boolean {
+    const filas = this.bd.consultar<{ id: number }>('SELECT id FROM producto WHERE nombre = ?', [
+      nombreNormalizado,
+    ]);
+    return filas.some((fila) => fila.id !== idAExcluir);
   }
 
   listarMovimientosInventario(productoId: number, desde: string, hasta: string): MovimientoInventarioItem[] {
