@@ -4,6 +4,7 @@ import { PantallaSplash } from '@/components/pantalla-splash';
 import { ManejarBotonAtras } from '@/components/manejar-boton-atras';
 import { BloqueoPinAcceso } from '@/components/bloqueo-pin-acceso';
 import { RevisarBackupAutomatico } from '@/components/revisar-backup-automatico';
+import { SolicitarPermisosIniciales } from '@/components/solicitar-permisos-iniciales';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -37,6 +38,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <BloqueoPinAcceso>
             {children}
             <RevisarBackupAutomatico />
+            <SolicitarPermisosIniciales />
           </BloqueoPinAcceso>
         </PantallaSplash>
         <RegistrarServiceWorker />

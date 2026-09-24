@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
@@ -37,4 +37,15 @@
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!--
+      Requeridos por @capacitor/camera cuando se usa `saveToGallery: true`
+      (foto del comprobante de pago Yape/Plin, guardada también en la
+      galería del celular). El propio plugin NO los declara en su manifest
+      — hay que agregarlos a mano en la app, tal como indica su documentación.
+      Con maxSdkVersion acotado porque, a partir de esas versiones de Android,
+      guardar en la galería usa MediaStore y ya no hace falta el permiso.
+    -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
 </manifest>

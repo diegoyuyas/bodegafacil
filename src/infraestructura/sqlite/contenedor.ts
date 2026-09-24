@@ -35,6 +35,14 @@ export interface ContenedorRepositorios {
   persistir: () => Promise<void>;
   /** Bytes completos de la base, para el respaldo descargable (.sqlite). */
   exportarRespaldoCompleto: () => Uint8Array;
+  /**
+   * true solo la primera vez que se abre la app en este celular (no
+   * había ninguna base local guardada todavía). Se usa para decidir si
+   * corresponde mostrar la pantalla de "pedir todos los permisos de
+   * una" (ver components/solicitar-permisos-iniciales.tsx) — no tiene
+   * relación con si el bodeguero ya respondió esos permisos o no.
+   */
+  esInstalacionNueva: boolean;
 }
 
 let promesaContenedor: Promise<ContenedorRepositorios> | null = null;
@@ -100,6 +108,7 @@ async function inicializar(): Promise<ContenedorRepositorios> {
     configuracion,
     persistir,
     exportarRespaldoCompleto: () => bd.exportar(),
+    esInstalacionNueva: !datosPrevios,
   };
 }
 

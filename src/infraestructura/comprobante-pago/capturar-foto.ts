@@ -17,6 +17,16 @@
  * ya quedan en almacenamiento permanente del propio dispositivo por
  * defecto — la URI sigue siendo válida aunque se cierre y reabra la
  * app, sin que haga falta copiar el archivo a mano.
+ *
+ * Cuando se toma una foto nueva con la cámara (no cuando se elige una
+ * ya existente de la galería, que ahí ya estaba), se guarda además
+ * una copia en la galería del celular (`saveToGallery: true`) — así
+ * el bodeguero también la ve en su app de Fotos de siempre, por si
+ * quiere reenviarla o revisarla fuera de Vende Fácil. En Android esto
+ * requiere los permisos de almacenamiento declarados en
+ * AndroidManifest.xml (ver comentario ahí) — si el bodeguero los negó,
+ * la foto igual queda guardada y funcionando dentro de Vende Fácil,
+ * sin que se corte nada.
  */
 import { Camera } from '@capacitor/camera';
 import { Capacitor } from '@capacitor/core';
@@ -41,7 +51,7 @@ export async function capturarFotoComprobantePago(origen: OrigenFotoComprobante)
 
   try {
     if (origen === 'camara') {
-      const resultado = await Camera.takePhoto({ quality: CALIDAD_JPEG });
+      const resultado = await Camera.takePhoto({ quality: CALIDAD_JPEG, saveToGallery: true });
       return resultado.uri ?? null;
     }
     const resultado = await Camera.chooseFromGallery({});
