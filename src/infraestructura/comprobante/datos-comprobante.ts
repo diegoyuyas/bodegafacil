@@ -11,6 +11,7 @@ import {
   CLAVE_TIENDA_DOCUMENTO,
   CLAVE_TIENDA_LEYENDA,
   CLAVE_TIENDA_UBICACION,
+  CLAVE_TIENDA_VENDEDOR,
 } from '@/core/informacion-tienda';
 import { CLAVE_MONEDA, obtenerSimboloMoneda } from '@/core/moneda';
 import type { DatosComprobante } from '@/core/comprobante-impresion';
@@ -35,6 +36,7 @@ export function construirDatosComprobanteDeVenta(
     numeroComprobante: `V-${venta.id}`,
     fecha,
     hora,
+    nombreVendedor: c.obtenerValor(CLAVE_TIENDA_VENDEDOR),
     clienteNombre: cliente?.nombre ?? 'Cliente Eventual',
     clienteDocumento: cliente?.documento ?? null,
     lineas: lineas.map((l) => ({

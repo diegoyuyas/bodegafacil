@@ -18,6 +18,7 @@ import type {
   VentaReimpresionItem,
 } from '@/core/tipos';
 import type { FilaVentaDetallada } from '@/core/exportacion';
+import { CLAVE_TIENDA_VENDEDOR, CLAVE_TIENDA_VENDEDOR_DOCUMENTO } from '@/core/informacion-tienda';
 import { ahoraLocalSql, hoyLocalSql } from '@/core/tiempo';
 import type { BaseDatosLocal } from './base-datos';
 import { mapearVenta, type FilaVenta } from './mapeadores';
@@ -387,6 +388,11 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         parametros,
       )
       .map((fila) => ({
+        // Nombre/documento del vendedor: un solo dato de Información
+        // del Negocio (Más > Configuración), no algo por venta — sale
+        // igual en todas las filas del reporte.
+        nombreVendedor: this.configuracion.obtenerValor(CLAVE_TIENDA_VENDEDOR) ?? '',
+        documentoVendedor: this.configuracion.obtenerValor(CLAVE_TIENDA_VENDEDOR_DOCUMENTO) ?? '',
         pedido: `V-${fila.id}`,
         fecha: fila.fecha_hora,
         producto: fila.producto,

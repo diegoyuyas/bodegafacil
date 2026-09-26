@@ -16,6 +16,8 @@ import { construirMensajeVenta } from '@/core/whatsapp';
 import { construirEnlaceWhatsApp } from '@/infraestructura/whatsapp/enlace';
 import { imprimirComprobanteDeVenta } from '@/infraestructura/impresora-bluetooth/imprimir-venta';
 import { CLAVE_IMPRESORA_ACTIVA, IMPRESION_BLUETOOTH_DISPONIBLE } from '@/core/impresora';
+import { guardarTicketComoImagen } from '@/infraestructura/comprobante-imagen/compartir-ticket';
+import { MenuImprimirTicket } from '@/components/menu-imprimir-ticket';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 /**
@@ -39,6 +41,7 @@ export default function PaginaInicio() {
   const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
   const [imprimiendoVentaId, setImprimiendoVentaId] = useState<number | null>(null);
   const [mensajeImpresion, setMensajeImpresion] = useState<string | null>(null);
+  const [ventaMenuTicket, setVentaMenuTicket] = useState<VentaListaItem | null>(null);
   const [impresoraActiva, setImpresoraActiva] = useState(false);
 
   useEffect(() => {
@@ -175,16 +178,40 @@ export default function PaginaInicio() {
     window.open(enlace, '_blank');
   }
 
-  /** Botón de impresora al lado del de WhatsApp — reimprime el comprobante en la ticketera Bluetooth configurada. */
-  async function imprimirVentaDesdeInicio(venta: VentaListaItem, evento: React.MouseEvent) {
+  /**
+   * Botón de impresora al lado del de WhatsApp — abre el menú "Imprimir
+   * en ticketera / Guardar como..." para reconstruir el ticket de un
+   * pedido ya confirmado.
+   */
+  function abrirMenuTicket(venta: VentaListaItem, evento: React.MouseEvent) {
     evento.stopPropagation();
-    if (!contenedor) return;
     setMensajeImpresion(null);
-    setImprimiendoVentaId(venta.id);
+    setVentaMenuTicket(venta);
+  }
+
+  async function imprimirEnTicketeraDesdeMenu() {
+    if (!contenedor || !ventaMenuTicket) return;
+    const ventaId = ventaMenuTicket.id;
+    setVentaMenuTicket(null);
+    setImprimiendoVentaId(ventaId);
     try {
-      await imprimirComprobanteDeVenta(contenedor, venta.id);
+      await imprimirComprobanteDeVenta(contenedor, ventaId);
     } catch {
       setMensajeImpresion('No está correctamente configurada la impresora.');
+    } finally {
+      setImprimiendoVentaId(null);
+    }
+  }
+
+  async function guardarComoDesdeMenu() {
+    if (!contenedor || !ventaMenuTicket) return;
+    const ventaId = ventaMenuTicket.id;
+    setVentaMenuTicket(null);
+    setImprimiendoVentaId(ventaId);
+    try {
+      await guardarTicketComoImagen(contenedor, ventaId);
+    } catch {
+      setMensajeImpresion('No se pudo generar la imagen del ticket.');
     } finally {
       setImprimiendoVentaId(null);
     }
@@ -347,8 +374,24 @@ export default function PaginaInicio() {
                       <ul className="mt-3 divide-y divide-linea border-y border-linea">
                         {pedidosFiltrados.map((venta) => (
                           <li key={venta.id}>
-                            <button
+                            {/*
+                              A propósito NO es un <button>: los íconos de WhatsApp,
+                              impresora y anular van adentro, y cada uno YA es su propio
+                              elemento interactivo (role="button"). Un <button> dentro de
+                              otro <button> es HTML inválido — en el WebView de Android eso
+                              causaba que el toque en el ícono de impresora se quedara
+                              "pensado", y recién se destrababa con un segundo toque en la
+                              pantalla. Con <div role="button"> se evita esa mala
+                              anidación y el resto del comportamiento (expandir/contraer la
+                              fila) queda igual.
+                            */}
+                            <div
+                              role="button"
+                              tabIndex={0}
                               onClick={() => alternarExpandida(venta)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') alternarExpandida(venta);
+                              }}
                               className={`flex w-full items-center justify-between py-3 text-left ${
                                 venta.anulada ? 'opacity-40' : ''
                               }`}
@@ -376,19 +419,17 @@ export default function PaginaInicio() {
                                     >
                                       💬
                                     </span>
-                                    {IMPRESION_BLUETOOTH_DISPONIBLE &&
-                                      estadoPlan?.tipo === 'premium' &&
-                                      impresoraActiva && (
-                                        <span
-                                          role="button"
-                                          onClick={(e) => imprimirVentaDesdeInicio(venta, e)}
-                                          className={`text-lg text-bodega-oscuro ${imprimiendoVentaId === venta.id ? 'opacity-40' : ''}`}
-                                          aria-label={`Reimprimir el pedido V-${venta.id}`}
-                                          title="Reimprimir"
-                                        >
-                                          🖨️
-                                        </span>
-                                      )}
+                                    {estadoPlan?.tipo === 'premium' && (
+                                      <span
+                                        role="button"
+                                        onClick={(e) => abrirMenuTicket(venta, e)}
+                                        className={`text-lg text-bodega-oscuro ${imprimiendoVentaId === venta.id ? 'opacity-40' : ''}`}
+                                        aria-label={`Reconstruir el ticket del pedido V-${venta.id}`}
+                                        title="Reconstruir ticket"
+                                      >
+                                        🖨️
+                                      </span>
+                                    )}
                                     <span
                                       role="button"
                                       onClick={(e) => anularVenta(venta, e)}
@@ -400,7 +441,7 @@ export default function PaginaInicio() {
                                   </>
                                 )}
                               </div>
-                            </button>
+                            </div>
 
                             {ventaExpandida === venta.id && (
                               <div className="-mt-1 mb-3 rounded-lg bg-bodega-claro/40 px-3 py-2 text-xs text-tinta/70">
@@ -434,6 +475,16 @@ export default function PaginaInicio() {
       </div>
 
       <BarraNavegacion />
+
+      {ventaMenuTicket && (
+        <MenuImprimirTicket
+          imprimirEnTicketeraDisponible={IMPRESION_BLUETOOTH_DISPONIBLE && impresoraActiva}
+          onImprimirEnTicketera={imprimirEnTicketeraDesdeMenu}
+          onGuardarComo={guardarComoDesdeMenu}
+          onCerrar={() => setVentaMenuTicket(null)}
+          ocupado={imprimiendoVentaId === ventaMenuTicket.id}
+        />
+      )}
     </div>
   );
 }

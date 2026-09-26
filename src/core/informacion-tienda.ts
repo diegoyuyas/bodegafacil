@@ -13,6 +13,8 @@ export const CLAVE_TIENDA_DOCUMENTO = 'tienda_documento';
 export const CLAVE_TIENDA_UBICACION = 'tienda_ubicacion';
 export const CLAVE_TIENDA_CONTACTO = 'tienda_contacto';
 export const CLAVE_TIENDA_LEYENDA = 'tienda_leyenda';
+export const CLAVE_TIENDA_VENDEDOR = 'tienda_vendedor_nombre';
+export const CLAVE_TIENDA_VENDEDOR_DOCUMENTO = 'tienda_vendedor_documento';
 
 /** No obligatorio; cuando se llena, hasta 50 caracteres. */
 export const LONGITUD_MAXIMA_UBICACION = 50;
@@ -20,3 +22,7 @@ export const LONGITUD_MAXIMA_UBICACION = 50;
 export const LONGITUD_MAXIMA_CONTACTO = 15;
 /** No obligatoria; mensaje libre debajo del comprobante impreso. */
 export const LONGITUD_MAXIMA_LEYENDA = 150;
+/** No obligatorio; cuando se llena, hasta 50 caracteres. */
+export const LONGITUD_MAXIMA_VENDEDOR = 50;
+/** No obligatorio; cuando se llena, hasta 15 caracteres. No se imprime en el ticket, solo va al reporte de ventas. */
+export const LONGITUD_MAXIMA_VENDEDOR_DOCUMENTO = 15;

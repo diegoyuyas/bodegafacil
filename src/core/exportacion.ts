@@ -19,6 +19,8 @@ import type {
 } from './tipos';
 
 export interface FilaVentaDetallada {
+  nombreVendedor: string;
+  documentoVendedor: string;
   pedido: string;
   fecha: string;
   producto: string;
@@ -52,8 +54,21 @@ function filasACsv(
 
 export function exportarVentasACsv(filas: FilaVentaDetallada[]): string {
   return filasACsv(
-    ['Pedido', 'Fecha', 'Producto', 'Cantidad', 'Precio unitario', 'Subtotal', 'Método de pago', 'Cliente'],
+    [
+      'Nombre vendedor',
+      'Nro. Documento vendedor',
+      'Pedido',
+      'Fecha',
+      'Producto',
+      'Cantidad',
+      'Precio unitario',
+      'Subtotal',
+      'Método de pago',
+      'Cliente',
+    ],
     filas.map((f) => [
+      f.nombreVendedor,
+      f.documentoVendedor,
       f.pedido,
       f.fecha,
       f.producto,
@@ -185,8 +200,21 @@ export function construirHojaMasVendidos(items: ProductoMasVendidoItem[]): HojaE
 export function construirHojaVentas(filas: FilaVentaDetallada[]): HojaExcel {
   return {
     nombre: 'Ventas',
-    encabezados: ['Pedido', 'Fecha', 'Producto', 'Cantidad', 'Precio unitario', 'Subtotal', 'Método de pago', 'Cliente'],
+    encabezados: [
+      'Nombre vendedor',
+      'Nro. Documento vendedor',
+      'Pedido',
+      'Fecha',
+      'Producto',
+      'Cantidad',
+      'Precio unitario',
+      'Subtotal',
+      'Método de pago',
+      'Cliente',
+    ],
     filas: filas.map((f) => [
+      f.nombreVendedor,
+      f.documentoVendedor,
       f.pedido,
       f.fecha,
       f.producto,

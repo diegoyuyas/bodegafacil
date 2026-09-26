@@ -68,6 +68,8 @@ export interface DatosComprobante {
   numeroComprobante: string;
   fecha: string;
   hora: string;
+  /** Nombre del vendedor (Más > Configuración > Información del Negocio) — opcional; se imprime entre la fecha y el cliente. Su documento NO se imprime, solo va al reporte de ventas. */
+  nombreVendedor?: string | null;
   clienteNombre: string;
   clienteDocumento: string | null;
   lineas: LineaComprobante[];
@@ -156,11 +158,12 @@ export function construirLineasComprobante(datos: DatosComprobante, ancho: numbe
   if (datos.tienda.ubicacion) c(datos.tienda.ubicacion);
   c('');
 
-  c('COMPROBANTE DE VENTA', { negrita: true });
+  c('NOTA DE VENTA', { negrita: true });
   c(datos.numeroComprobante, { negrita: true });
   i(lineaSeparadora(ancho));
 
   i(`Fecha: ${datos.fecha}  Hora: ${datos.hora}`);
+  if (datos.nombreVendedor) i(`Vendedor: ${datos.nombreVendedor}`);
   const documentoCliente = datos.clienteDocumento ? ` / DNI: ${datos.clienteDocumento}` : '';
   i(`Cliente: ${datos.clienteNombre}${documentoCliente}`);
   i(lineaSeparadora(ancho));
@@ -178,21 +181,21 @@ export function construirLineasComprobante(datos: DatosComprobante, ancho: numbe
   i(lineaSeparadora(ancho));
 
   const etiquetaPago = ETIQUETAS_METODO_PAGO_TICKET[datos.metodoPago] ?? datos.metodoPago;
-  i(`Forma de pago: ${etiquetaPago}`);
   // La app no guarda el efectivo recibido ni el vuelto de una venta
-  // (no es un dato que exista hoy en ningún lado) — se restata el
-  // monto pagado por el método elegido, igual que en el formato
-  // pedido ("Efectivo: S/ 48.50"); en Fiado no aplica, no se pagó nada.
-  if (datos.metodoPago !== 'fiado') {
-    i(columnas(`${etiquetaPago}:`, monto(datos.total, s), ancho));
+  // (no es un dato que exista hoy en ningún lado) — se muestra el
+  // monto pagado a la derecha de la misma línea ("Forma de pago:
+  // Efectivo    S/ 48.50"), una sola vez; en Fiado no aplica, no se
+  // pagó nada, así que ahí va sin monto.
+  if (datos.metodoPago === 'fiado') {
+    i(`Forma de pago: ${etiquetaPago}`);
+  } else {
+    i(columnas(`Forma de pago: ${etiquetaPago}`, monto(datos.total, s), ancho));
   }
   i(lineaSeparadora(ancho));
 
-  c('Representacion impresa de la');
-  c('Boleta de Venta.');
   c('');
   c('Gracias por su compra!', { negrita: true });
-  if (datos.tienda.contacto) c(datos.tienda.contacto);
+  if (datos.tienda.contacto) c(`Contactanos: ${datos.tienda.contacto}`);
   if (datos.tienda.leyenda) c(datos.tienda.leyenda);
 
   return lineas;

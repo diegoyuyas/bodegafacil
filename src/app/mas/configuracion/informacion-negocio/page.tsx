@@ -14,9 +14,13 @@ import {
   CLAVE_TIENDA_DOCUMENTO,
   CLAVE_TIENDA_LEYENDA,
   CLAVE_TIENDA_UBICACION,
+  CLAVE_TIENDA_VENDEDOR,
+  CLAVE_TIENDA_VENDEDOR_DOCUMENTO,
   LONGITUD_MAXIMA_CONTACTO,
   LONGITUD_MAXIMA_LEYENDA,
   LONGITUD_MAXIMA_UBICACION,
+  LONGITUD_MAXIMA_VENDEDOR,
+  LONGITUD_MAXIMA_VENDEDOR_DOCUMENTO,
 } from '@/core/informacion-tienda';
 import { ErrorDeNegocio, validarRuc } from '@/core/reglas-negocio';
 
@@ -29,6 +33,8 @@ export default function PaginaInformacionNegocio() {
   const [ubicacion, setUbicacion] = useState('');
   const [contacto, setContacto] = useState('');
   const [leyenda, setLeyenda] = useState('');
+  const [nombreVendedor, setNombreVendedor] = useState('');
+  const [documentoVendedor, setDocumentoVendedor] = useState('');
 
   const [guardando, setGuardando] = useState(false);
   const [mensaje, setMensaje] = useState<string | null>(null);
@@ -43,6 +49,8 @@ export default function PaginaInformacionNegocio() {
     setUbicacion(c.obtenerValor(CLAVE_TIENDA_UBICACION) ?? '');
     setContacto(c.obtenerValor(CLAVE_TIENDA_CONTACTO) ?? '');
     setLeyenda(c.obtenerValor(CLAVE_TIENDA_LEYENDA) ?? '');
+    setNombreVendedor(c.obtenerValor(CLAVE_TIENDA_VENDEDOR) ?? '');
+    setDocumentoVendedor(c.obtenerValor(CLAVE_TIENDA_VENDEDOR_DOCUMENTO) ?? '');
   }, [contenedor]);
 
   const esPremium = estadoPlan?.tipo === 'premium';
@@ -76,6 +84,8 @@ export default function PaginaInformacionNegocio() {
     establecerOEliminar(CLAVE_TIENDA_UBICACION, ubicacion);
     establecerOEliminar(CLAVE_TIENDA_CONTACTO, contacto);
     establecerOEliminar(CLAVE_TIENDA_LEYENDA, leyenda);
+    establecerOEliminar(CLAVE_TIENDA_VENDEDOR, nombreVendedor);
+    establecerOEliminar(CLAVE_TIENDA_VENDEDOR_DOCUMENTO, documentoVendedor);
     await contenedor.persistir();
     setNombreTienda((v) => v.trim() || NOMBRE_TIENDA_PREDETERMINADO);
     setGuardando(false);
@@ -170,6 +180,38 @@ export default function PaginaInformacionNegocio() {
               maxLength={LONGITUD_MAXIMA_LEYENDA}
               rows={3}
               className="mt-2 w-full rounded-xl border border-linea px-3 py-2 text-sm"
+            />
+          </section>
+
+          <section className="mt-6">
+            <p className="text-sm font-semibold text-tinta">Nombre del vendedor</p>
+            <p className="mt-0.5 text-xs text-tinta/50">
+              No obligatorio — aparece en la nota de venta, entre la fecha y el cliente. Hasta{' '}
+              {LONGITUD_MAXIMA_VENDEDOR} caracteres.
+            </p>
+            <input
+              value={nombreVendedor}
+              onChange={(e) => setNombreVendedor(e.target.value.slice(0, LONGITUD_MAXIMA_VENDEDOR))}
+              placeholder="Ej. Juan Pérez"
+              maxLength={LONGITUD_MAXIMA_VENDEDOR}
+              className="mt-2 h-11 w-full rounded-xl border border-linea px-3 text-sm"
+            />
+          </section>
+
+          <section className="mt-6">
+            <p className="text-sm font-semibold text-tinta">N° Doc. Vendedor</p>
+            <p className="mt-0.5 text-xs text-tinta/50">
+              No obligatorio — no se imprime en la nota de venta, solo aparece en el reporte de
+              ventas. Hasta {LONGITUD_MAXIMA_VENDEDOR_DOCUMENTO} caracteres.
+            </p>
+            <input
+              value={documentoVendedor}
+              onChange={(e) =>
+                setDocumentoVendedor(e.target.value.slice(0, LONGITUD_MAXIMA_VENDEDOR_DOCUMENTO))
+              }
+              placeholder="Ej. 12345678"
+              maxLength={LONGITUD_MAXIMA_VENDEDOR_DOCUMENTO}
+              className="mt-2 h-11 w-full rounded-xl border border-linea px-3 text-sm"
             />
           </section>
 
