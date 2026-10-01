@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import type { EstadoPlan } from '@/core/plan';
+import type { FotoPagoFiado } from '@/core/tipos';
 import type {
   HistorialCostoItem,
   MetodoPagoSinFiado,
@@ -13,7 +14,7 @@ import type {
   Producto,
   ProductoMasVendidoItem,
 } from '@/core/tipos';
-import { hoyLocalSql } from '@/core/tiempo';
+import { formatearFechaHora, hoyLocalSql } from '@/core/tiempo';
 import type { FilaCompraDetallada, FilaVentaDetallada } from '@/core/exportacion';
 import {
   construirHojaCaja,
@@ -27,6 +28,7 @@ import {
 import { generarLibroExcel } from '@/infraestructura/exportacion/excel';
 import { descargarExcel } from '@/infraestructura/exportacion/descargas';
 import { IconoImagen, VisorFotoComprobante } from '@/components/visor-foto-comprobante';
+import { capturarFotoComprobantePago } from '@/infraestructura/comprobante-pago/capturar-foto';
 
 const PESTANAS = [
   { valor: 'ventas', etiqueta: 'Ventas' },
@@ -97,7 +99,12 @@ export default function PaginaReportes() {
   // el rango de fechas de arriba, sin volver a consultar la base.
   const [busquedaVentas, setBusquedaVentas] = useState('');
   // Foto del pago (Yape/Plin) abierta a pantalla completa desde la pestaña Ventas.
-  const [fotoAbierta, setFotoAbierta] = useState<{ ruta: string; titulo: string } | null>(null);
+  // pagoDeudaId presente = foto de un abono de fiado (se reenlaza con
+  // actualizarFotoPago); ausente = foto de la propia venta (comprobantePagoRuta).
+  const [fotoAbierta, setFotoAbierta] = useState<
+    { ventaId: number; pagoDeudaId?: number; ruta: string; titulo: string } | null
+  >(null);
+  const [fotosPagosFiado, setFotosPagosFiado] = useState<FotoPagoFiado[]>([]);
   const [filtroMetodoCaja, setFiltroMetodoCaja] = useState<'todos' | MetodoPagoSinFiado>('todos');
   const [busquedaCompras, setBusquedaCompras] = useState('');
   const [busquedaMasVendidos, setBusquedaMasVendidos] = useState('');
@@ -131,9 +138,32 @@ export default function PaginaReportes() {
     setMovimientosCaja(contenedor.caja.listarMovimientosPorRango(desde, hasta));
     setDetalleCompras(contenedor.compras.listarDetalleParaExportar(desde, hasta));
     setMasVendidos(contenedor.ventas.listarProductosMasVendidos(desde, hasta));
+    setFotosPagosFiado(contenedor.fiados.listarFotosPagosFiado(desde, hasta));
   }
 
   useEffect(consultar, [contenedor, desde, hasta, rangoInvalido]);
+
+  /**
+   * Cambia a mano la foto del pago de la venta abierta en el visor, eligiendo
+   * una de la galería. Sirve para volver a enlazar la foto cuando el archivo
+   * original ya no existe (p. ej. después de reinstalar la app y restaurar un
+   * respaldo: la venta conserva la ruta vieja, pero el archivo se perdió).
+   * Solo reemplaza la foto de una venta que ya tenía una; adjuntar fotos
+   * nuevas en ventas al momento de cobrar sigue siendo Premium.
+   */
+  async function elegirFotoDeGaleria() {
+    if (!contenedor || !fotoAbierta) return;
+    const nuevaRuta = await capturarFotoComprobantePago('galeria');
+    if (!nuevaRuta) return; // el bodeguero canceló — no es un error
+    if (fotoAbierta.pagoDeudaId) {
+      contenedor.fiados.actualizarFotoPago(fotoAbierta.pagoDeudaId, nuevaRuta);
+    } else {
+      contenedor.ventas.guardarComprobantePago(fotoAbierta.ventaId, nuevaRuta);
+    }
+    await contenedor.persistir();
+    setFotoAbierta({ ...fotoAbierta, ruta: nuevaRuta });
+    consultar();
+  }
 
   useEffect(() => {
     if (!contenedor || !esPremium || !productoElegido || rangoInvalido || !desde || !hasta) {
@@ -420,21 +450,45 @@ export default function PaginaReportes() {
                           {new Date(venta.fecha).toLocaleString('es-PE')} ·{' '}
                           {ETIQUETAS_METODO_PAGO_REPORTE[venta.metodoPago] ?? venta.metodoPago}
                         </p>
-                        {venta.comprobanteRuta && (
-                          <button
-                            type="button"
-                            aria-label={`Ver foto del pago de ${venta.pedido}`}
-                            onClick={() =>
-                              setFotoAbierta({
-                                ruta: venta.comprobanteRuta as string,
-                                titulo: `${venta.pedido} · ${ETIQUETAS_METODO_PAGO_REPORTE[venta.metodoPago] ?? venta.metodoPago}`,
-                              })
-                            }
-                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-linea text-bodega"
-                          >
-                            <IconoImagen />
-                          </button>
-                        )}
+                        <div className="flex shrink-0 items-center gap-1.5">
+                          {venta.comprobanteRuta && (
+                            <button
+                              type="button"
+                              aria-label={`Ver foto del pago de ${venta.pedido}`}
+                              onClick={() =>
+                                setFotoAbierta({
+                                  ventaId: Number(venta.pedido.replace('V-', '')),
+                                  ruta: venta.comprobanteRuta as string,
+                                  titulo: `${venta.pedido} · ${ETIQUETAS_METODO_PAGO_REPORTE[venta.metodoPago] ?? venta.metodoPago}`,
+                                })
+                              }
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-linea text-bodega"
+                            >
+                              <IconoImagen />
+                            </button>
+                          )}
+                          {fotosPagosFiado
+                            .filter((f) => f.ventaId === Number(venta.pedido.replace('V-', '')))
+                            .map((foto, indice) => (
+                              <button
+                                key={foto.pagoDeudaId}
+                                type="button"
+                                aria-label={`Ver foto del abono ${indice + 1} de ${venta.pedido}`}
+                                title={`Foto de un abono — ${formatearFechaHora(foto.fecha)}`}
+                                onClick={() =>
+                                  setFotoAbierta({
+                                    ventaId: Number(venta.pedido.replace('V-', '')),
+                                    pagoDeudaId: foto.pagoDeudaId,
+                                    ruta: foto.fotoRuta,
+                                    titulo: `${venta.pedido} · Abono ${formatearFechaHora(foto.fecha)}`,
+                                  })
+                                }
+                                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-linea text-bodega-oscuro"
+                              >
+                                <IconoImagen />
+                              </button>
+                            ))}
+                        </div>
                       </div>
                       <div className="mt-1.5 space-y-0.5 pl-2">
                         {venta.lineas.map((linea, i) => (
@@ -499,7 +553,10 @@ export default function PaginaReportes() {
                   {movimientosCajaFiltrados.map((mov) => (
                     <li key={mov.id} className="py-3">
                       <div className="flex items-center justify-between text-sm">
-                        <span className="text-tinta/80">{mov.concepto}</span>
+                        <span className="text-tinta/80">
+                          {mov.referencia}
+                          <span className="text-tinta/40"> — {mov.concepto}</span>
+                        </span>
                         <span
                           className={`font-semibold ${mov.tipo === 'ingreso' ? 'text-bodega-oscuro' : 'text-alerta'}`}
                         >
@@ -786,6 +843,7 @@ export default function PaginaReportes() {
           ruta={fotoAbierta.ruta}
           titulo={fotoAbierta.titulo}
           onCerrar={() => setFotoAbierta(null)}
+          onElegirDeGaleria={elegirFotoDeGaleria}
         />
       )}
     </div>

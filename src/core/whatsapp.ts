@@ -34,7 +34,15 @@ export function construirMensajeDeuda(
   const lineas = [`Hola ${cliente.nombre}, este es tu saldo pendiente en la tienda:`, ''];
 
   for (const deuda of deudas) {
-    lineas.push(`📅 ${formatearFecha(deuda.fecha)} — ${formatearMonto(deuda.saldoPendiente, simboloMoneda)}`);
+    const etiquetaVenta = deuda.ventaId ? ` — V-${deuda.ventaId}` : '';
+    lineas.push(
+      `📅 ${formatearFecha(deuda.fecha)}${etiquetaVenta} — ${formatearMonto(deuda.saldoPendiente, simboloMoneda)}`,
+    );
+    if (deuda.saldoPendiente < deuda.montoOriginal) {
+      lineas.push(
+        `   (de ${formatearMonto(deuda.montoOriginal, simboloMoneda)}, ya abonaste ${formatearMonto(deuda.montoOriginal - deuda.saldoPendiente, simboloMoneda)})`,
+      );
+    }
     for (const linea of deuda.lineas) {
       lineas.push(`   • ${linea.producto} x${linea.cantidad}`);
     }

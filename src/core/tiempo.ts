@@ -46,6 +46,16 @@ export function sumarDiasLocalSql(dias: number, desde: Date = new Date()): strin
   return hoyLocalSql(resultado);
 }
 
+/** '2026-09-28 21:16:05' -> '28/09/2026 9:16 p. m.' (la fecha ya viene en hora local). */
+export function formatearFechaHora(fechaHora: string): string {
+  const fecha = new Date(fechaHora.replace(' ', 'T'));
+  if (Number.isNaN(fecha.getTime())) return fechaHora;
+  return `${fecha.toLocaleDateString('es-PE')} ${fecha.toLocaleTimeString('es-PE', {
+    hour: 'numeric',
+    minute: '2-digit',
+  })}`;
+}
+
 /**
  * Diferencia en días de calendario entre dos fechas 'YYYY-MM-DD'
  * (hasta - desde). Se parsean como fecha local a mediodía para

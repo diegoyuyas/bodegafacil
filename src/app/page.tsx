@@ -18,6 +18,7 @@ import { imprimirComprobanteDeVenta } from '@/infraestructura/impresora-bluetoot
 import { CLAVE_IMPRESORA_ACTIVA, IMPRESION_BLUETOOTH_DISPONIBLE } from '@/core/impresora';
 import { guardarTicketComoImagen } from '@/infraestructura/comprobante-imagen/compartir-ticket';
 import { MenuImprimirTicket } from '@/components/menu-imprimir-ticket';
+import { formatearFechaHora, hoyLocalSql } from '@/core/tiempo';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 /**
@@ -50,13 +51,17 @@ export default function PaginaInicio() {
     setPrefijoPais(obtenerPrefijoPais(contenedor.configuracion.obtenerValor(CLAVE_PREFIJO_PAIS)));
   }, [contenedor]);
   const [resumen, setResumen] = useState<ResumenDia | null>(null);
-  const [ventasDeHoy, setVentasDeHoy] = useState<VentaListaItem[]>([]);
+  const [pedidosDelRango, setPedidosDelRango] = useState<VentaListaItem[]>([]);
   const [totalHistorico, setTotalHistorico] = useState(0);
   const [estadoPlan, setEstadoPlan] = useState<EstadoPlan | null>(null);
   const [ventaExpandida, setVentaExpandida] = useState<number | null>(null);
   const [lineasPorVenta, setLineasPorVenta] = useState<Record<number, LineaVentaResumen[]>>({});
   const [pedidosAbiertos, setPedidosAbiertos] = useState(false);
   const [busquedaPedidos, setBusquedaPedidos] = useState('');
+  // "Pedidos Generados": por defecto la fecha de hoy; si se cambia el
+  // rango, la etiqueta pasa de "Hoy" a "Total" (ver más abajo).
+  const [desdePedidos, setDesdePedidos] = useState(hoyLocalSql());
+  const [hastaPedidos, setHastaPedidos] = useState(hoyLocalSql());
   const [nombreTienda, setNombreTienda] = useState(obtenerNombreTienda(null));
 
   // Gesto secreto: tocar 5 veces el título entra al panel de administrador.
@@ -81,19 +86,19 @@ export default function PaginaInicio() {
     if (!contenedor) return;
     const resumenDelDia = contenedor.ventas.resumenDelDia();
     setResumen(resumenDelDia);
-    setVentasDeHoy(contenedor.ventas.listarDeHoyConDetalle());
+    setPedidosDelRango(contenedor.ventas.listarPorRangoConDetalle(desdePedidos, hastaPedidos));
     setTotalHistorico(contenedor.ventas.contarTotalHistorico());
     setEstadoPlan(contenedor.plan.obtenerEstado());
     setImpresoraActiva(contenedor.configuracion.obtenerValor(CLAVE_IMPRESORA_ACTIVA) === '1');
     setNombreTienda(obtenerNombreTienda(contenedor.configuracion.obtenerValor(CLAVE_NOMBRE_TIENDA)));
   }
 
-  useEffect(recargar, [contenedor]);
+  useEffect(recargar, [contenedor, desdePedidos, hastaPedidos]);
 
   useEffect(() => {
     if (!pedidosAbiertos || !contenedor) return;
     setLineasPorVenta((actual) => {
-      const faltantes = ventasDeHoy.filter((v) => !actual[v.id]);
+      const faltantes = pedidosDelRango.filter((v) => !actual[v.id]);
       if (faltantes.length === 0) return actual;
       const nuevas = { ...actual };
       for (const venta of faltantes) {
@@ -101,19 +106,29 @@ export default function PaginaInicio() {
       }
       return nuevas;
     });
-  }, [pedidosAbiertos, contenedor, ventasDeHoy]);
+  }, [pedidosAbiertos, contenedor, pedidosDelRango]);
 
   const pedidosFiltrados = useMemo(() => {
     const texto = busquedaPedidos.trim().toLowerCase();
-    if (!texto) return ventasDeHoy;
-    return ventasDeHoy.filter((venta) => {
+    if (!texto) return pedidosDelRango;
+    return pedidosDelRango.filter((venta) => {
       const nombreCliente = (venta.clienteNombre ?? 'Cliente eventual').toLowerCase();
       if (nombreCliente.includes(texto)) return true;
       if (venta.total.toFixed(2).includes(texto)) return true;
       const lineas = lineasPorVenta[venta.id] ?? [];
       return lineas.some((linea) => linea.producto.toLowerCase().includes(texto));
     });
-  }, [ventasDeHoy, busquedaPedidos, lineasPorVenta]);
+  }, [pedidosDelRango, busquedaPedidos, lineasPorVenta]);
+
+  // Cuántos pedidos mostrar en el título — sin contar los anulados — y
+  // si el rango elegido es "hoy" (etiqueta "Hoy") o cualquier otro
+  // rango (etiqueta "Total").
+  const pedidosNoAnulados = pedidosDelRango.filter((v) => !v.anulada).length;
+  const totalPedidosDelRango = pedidosDelRango
+    .filter((v) => !v.anulada)
+    .reduce((suma, v) => suma + v.total, 0);
+  const rangoEsHoy = desdePedidos === hoyLocalSql() && hastaPedidos === hoyLocalSql();
+  const rangoInvalido = desdePedidos > hastaPedidos;
 
   function alternarExpandida(venta: VentaListaItem) {
     if (ventaExpandida === venta.id) {
@@ -129,11 +144,36 @@ export default function PaginaInicio() {
 
   async function anularVenta(venta: VentaListaItem, evento: React.MouseEvent) {
     evento.stopPropagation();
-    const confirmar = window.confirm(`¿Eliminar el pedido V-${venta.id}?`);
-    if (!confirmar || !contenedor) return;
-    contenedor.ventas.anularVenta(venta.id);
-    await contenedor.persistir();
-    recargar();
+    if (!contenedor) return;
+
+    // Venta al fiado con abonos ya cobrados: se anula solo lo que falta por
+    // cobrar, y se pregunta qué pasó con el dinero que ya había entrado.
+    const cobrado =
+      venta.metodoPago === 'fiado' ? contenedor.ventas.obtenerCobradoDeVentaFiada(venta.id) : 0;
+    const montoCobrado = formatearMonto(cobrado, simboloMoneda);
+
+    const confirmar = window.confirm(
+      cobrado > 0
+        ? `El pedido V-${venta.id} es un fiado y ya tiene ${montoCobrado} cobrados.\n\nSe anulará el pedido y solo se cancelará lo que falta por cobrar. ¿Continuar?`
+        : `¿Eliminar el pedido V-${venta.id}?`,
+    );
+    if (!confirmar) return;
+
+    let devolverCobrado = false;
+    if (cobrado > 0) {
+      devolverCobrado = window.confirm(
+        `¿Le devolviste ${montoCobrado} al cliente?\n\nAceptar = Sí: se registra la devolución como egreso en Caja.\nCancelar = No: el dinero cobrado se queda en Caja.`,
+      );
+    }
+
+    setMensajeImpresion(null);
+    try {
+      contenedor.ventas.anularVenta(venta.id, undefined, { devolverCobrado });
+      await contenedor.persistir();
+      recargar();
+    } catch (e) {
+      setMensajeImpresion(e instanceof Error ? e.message : 'No se pudo anular el pedido.');
+    }
   }
 
   /**
@@ -342,40 +382,81 @@ export default function PaginaInicio() {
               )}
             </section>
 
-            {/* Pedidos de hoy: desplegable con buscador, preview y anular */}
-            {ventasDeHoy.length > 0 && (
-              <section aria-label="Pedidos de hoy" className="mt-8">
-                <button
-                  onClick={() => setPedidosAbiertos((v) => !v)}
-                  className="flex w-full items-center justify-between border-y border-linea py-3 text-sm font-semibold text-tinta"
-                >
-                  <span>Pedidos de hoy ({ventasDeHoy.length})</span>
-                  <span className={`text-tinta/50 transition-transform ${pedidosAbiertos ? 'rotate-180' : ''}`}>
-                    ⌄
-                  </span>
-                </button>
+            {/* Pedidos Generados: rango de fechas + desplegable con buscador, preview y anular */}
+            <section aria-label="Pedidos Generados" className="mt-8">
+              <div className="flex gap-2">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-tinta/50">Desde</label>
+                  <input
+                    type="date"
+                    value={desdePedidos}
+                    onChange={(e) => setDesdePedidos(e.target.value)}
+                    max={hastaPedidos}
+                    className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-tinta/50">Hasta</label>
+                  <input
+                    type="date"
+                    value={hastaPedidos}
+                    onChange={(e) => setHastaPedidos(e.target.value)}
+                    min={desdePedidos}
+                    className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
+                  />
+                </div>
+                {!rangoEsHoy && (
+                  <button
+                    onClick={() => {
+                      setDesdePedidos(hoyLocalSql());
+                      setHastaPedidos(hoyLocalSql());
+                    }}
+                    className="mt-6 h-11 shrink-0 rounded-lg border border-linea px-3 text-xs font-semibold text-tinta/60"
+                  >
+                    Hoy
+                  </button>
+                )}
+              </div>
+              {rangoInvalido && (
+                <p className="mt-2 text-xs text-alerta">La fecha "desde" no puede ser posterior a "hasta".</p>
+              )}
 
-                {pedidosAbiertos && (
-                  <div className="pt-3">
-                    <input
-                      value={busquedaPedidos}
-                      onChange={(e) => setBusquedaPedidos(e.target.value)}
-                      placeholder="Buscar por monto, cliente o producto…"
-                      className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
-                    />
+              <button
+                onClick={() => setPedidosAbiertos((v) => !v)}
+                className="mt-3 flex w-full items-center justify-between border-y border-linea py-3 text-sm font-semibold text-tinta"
+              >
+                <span>Pedidos Generados ({rangoEsHoy ? 'Hoy' : 'Total'}: {pedidosNoAnulados})</span>
+                <span className={`text-tinta/50 transition-transform ${pedidosAbiertos ? 'rotate-180' : ''}`}>
+                  ⌄
+                </span>
+              </button>
 
-                    {mensajeImpresion && <p className="mt-2 text-xs text-alerta">{mensajeImpresion}</p>}
+              {pedidosAbiertos && (
+                <div className="pt-3">
+                  <input
+                    value={busquedaPedidos}
+                    onChange={(e) => setBusquedaPedidos(e.target.value)}
+                    placeholder="Buscar por monto, cliente o producto…"
+                    className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+                  />
 
-                    {pedidosFiltrados.length === 0 ? (
-                      <p className="border-y border-linea py-6 text-center text-sm text-tinta/50 mt-3">
-                        Ningún pedido coincide con "{busquedaPedidos}".
-                      </p>
-                    ) : (
-                      <ul className="mt-3 divide-y divide-linea border-y border-linea">
-                        {pedidosFiltrados.map((venta) => (
+                  {mensajeImpresion && <p className="mt-2 text-xs text-alerta">{mensajeImpresion}</p>}
+
+                  {pedidosDelRango.length === 0 ? (
+                    <p className="border-y border-linea py-6 text-center text-sm text-tinta/50 mt-3">
+                      No hay pedidos generados en este rango de fechas.
+                    </p>
+                  ) : pedidosFiltrados.length === 0 ? (
+                    <p className="border-y border-linea py-6 text-center text-sm text-tinta/50 mt-3">
+                      Ningún pedido coincide con "{busquedaPedidos}".
+                    </p>
+                  ) : (
+                    <ul className="mt-3 divide-y divide-linea border-y border-linea">
+                      {pedidosFiltrados.map((venta) => (
                           <li key={venta.id}>
                             {/*
                               A propósito NO es un <button>: los íconos de WhatsApp,
+
                               impresora y anular van adentro, y cada uno YA es su propio
                               elemento interactivo (role="button"). Un <button> dentro de
                               otro <button> es HTML inválido — en el WebView de Android eso
@@ -397,7 +478,9 @@ export default function PaginaInicio() {
                               }`}
                             >
                               <div>
-                                <p className="text-xs text-tinta/40">V-{venta.id}</p>
+                                <p className="text-xs text-tinta/40">
+                                  V-{venta.id} · {formatearFechaHora(venta.fechaHora)}
+                                </p>
                                 <p className="text-sm text-tinta/80">
                                   {ETIQUETAS_METODO_PAGO[venta.metodoPago] ?? venta.metodoPago} —{' '}
                                   {venta.clienteNombre ?? 'Cliente eventual'}
@@ -456,10 +539,19 @@ export default function PaginaInicio() {
                         ))}
                       </ul>
                     )}
+                    {pedidosNoAnulados > 0 && (
+                      <div className="mt-3 flex items-center justify-between px-1">
+                        <span className="text-sm font-semibold text-tinta/70">
+                          Total {rangoEsHoy ? 'de hoy' : 'del rango'}
+                        </span>
+                        <span className="text-base font-extrabold text-tinta">
+                          {formatearMonto(totalPedidosDelRango, simboloMoneda)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
               </section>
-            )}
           </>
         )}
       </main>

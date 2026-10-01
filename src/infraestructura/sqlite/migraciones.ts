@@ -28,6 +28,36 @@ const MIGRACIONES: string[] = [
   // 0005: foto del comprobante de pago (Yape/Plin, Premium, opcional) — solo la
   // ruta del archivo; la foto en sí se guarda aparte, nunca dentro de esta base.
   `ALTER TABLE venta ADD COLUMN comprobante_pago_ruta TEXT;`,
+  // 0006: Más > Compras — listado con Modificar/Anular. Se guarda el método de
+  // pago en la propia compra (antes solo quedaba en el movimiento de caja, sin
+  // forma de recuperarlo para revertirlo al anular o modificar) y el motivo
+  // cuando se anula una compra, igual que ya existe para las ventas.
+  `ALTER TABLE compra ADD COLUMN metodo_pago TEXT;`,
+  `ALTER TABLE compra ADD COLUMN motivo_anulacion TEXT;`,
+  // 0007: Más > Caja / Reportes > Caja — mostrar a quién corresponde cada
+  // movimiento (cliente de la venta, proveedor de la compra, o "Ajuste
+  // Manual"). Antes solo se sabía por el texto libre del concepto.
+  `ALTER TABLE movimiento_caja ADD COLUMN compra_id INTEGER;`,
+  `ALTER TABLE movimiento_caja ADD COLUMN cliente_id INTEGER;`,
+  // 0008: foto del pago (Yape/Plin) al cobrar un abono de fiado — mismo
+  // criterio que la foto de venta.comprobante_pago_ruta.
+  `ALTER TABLE pago_deuda ADD COLUMN foto_ruta TEXT;`,
+  // 0009: bitácora de cambios manuales a un producto (nombre, precio de
+  // venta, costo, stock, stock mínimo) — ver el comentario en la tabla
+  // en esquema.sql. `CREATE TABLE IF NOT EXISTS` porque una migración no
+  // puede detectar "ya existe" igual que `ALTER TABLE ADD COLUMN` (que
+  // arriba se apoya en el error de columna duplicada).
+  `CREATE TABLE IF NOT EXISTS producto_historial (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      producto_id     INTEGER NOT NULL REFERENCES producto(id) ON DELETE CASCADE,
+      campo           TEXT NOT NULL
+                          CHECK (campo IN ('nombre','precio_venta','costo','stock','stock_minimo')),
+      valor_anterior  TEXT,
+      valor_nuevo     TEXT NOT NULL,
+      motivo          TEXT,
+      fecha           TEXT NOT NULL DEFAULT (datetime('now'))
+  );`,
+  `CREATE INDEX IF NOT EXISTS idx_producto_historial_producto ON producto_historial(producto_id, fecha DESC);`,
 ];
 
 export function aplicarMigraciones(bd: BaseDatosLocal): void {

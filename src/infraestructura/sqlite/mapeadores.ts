@@ -73,6 +73,7 @@ export interface FilaMovimientoCaja {
   venta_id: number | null;
   saldo_resultante: number;
   fecha_hora: string;
+  referencia: string;
 }
 
 export function mapearMovimientoCaja(fila: FilaMovimientoCaja): MovimientoCaja {
@@ -85,6 +86,7 @@ export function mapearMovimientoCaja(fila: FilaMovimientoCaja): MovimientoCaja {
     ventaId: fila.venta_id,
     saldoResultante: fila.saldo_resultante,
     fechaHora: fila.fecha_hora,
+    referencia: fila.referencia,
   };
 }
 export interface FilaVenta {
@@ -146,6 +148,8 @@ export interface FilaCompra {
   total: number;
   estado: Compra['estado'];
   nota: string | null;
+  metodo_pago: Compra['metodoPago'];
+  motivo_anulacion: string | null;
 }
 
 export function mapearCompra(fila: FilaCompra): Compra {
@@ -158,6 +162,8 @@ export function mapearCompra(fila: FilaCompra): Compra {
     total: fila.total,
     estado: fila.estado,
     nota: fila.nota,
+    metodoPago: fila.metodo_pago,
+    motivoAnulacion: fila.motivo_anulacion,
   };
 }
 

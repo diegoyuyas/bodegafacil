@@ -82,6 +82,12 @@ export default function PaginaNuevaVenta() {
   const [metodoPagoGuardado, setMetodoPagoGuardado] = useState<MetodoPago>('efectivo');
   const [capturandoFoto, setCapturandoFoto] = useState(false);
   const [fotoComprobanteGuardada, setFotoComprobanteGuardada] = useState(false);
+  // Cantidad escrita a mano en una línea del carrito. Mientras se escribe
+  // se muestra este texto (puede quedar vacío un momento); la cantidad real
+  // de la línea solo cambia cuando lo escrito es un número >= 1, así nunca
+  // llega a ser 0. Al salir del campo se vuelve a mostrar la cantidad real.
+  const [borradoCantidad, setBorradoCantidad] = useState<{ productoId: number; texto: string } | null>(null);
+  const [avisoCantidad, setAvisoCantidad] = useState<{ productoId: number; texto: string } | null>(null);
   const [mensajeFotoPago, setMensajeFotoPago] = useState<string | null>(null);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -184,6 +190,45 @@ export default function PaginaNuevaVenta() {
         })
         .filter((l) => l.cantidad > 0),
     );
+  }
+
+  /**
+   * Cantidad escrita por teclado en una línea del carrito. Solo acepta
+   * números enteros (cualquier otro carácter se descarta), nunca 0, y no
+   * pasa del stock disponible (si el producto lleva control de stock).
+   */
+  function escribirCantidad(linea: LineaCarrito, textoTipeado: string) {
+    const soloDigitos = textoTipeado.replace(/\D/g, '').slice(0, 6).replace(/^0+(?=\d)/, '');
+    const numero = Number(soloDigitos);
+    setAvisoCantidad(null);
+
+    if (soloDigitos === '') {
+      // Está borrando para escribir otra: se deja vacío un momento, sin tocar la venta.
+      setBorradoCantidad({ productoId: linea.productoId, texto: '' });
+      return;
+    }
+    if (numero === 0) {
+      setBorradoCantidad({ productoId: linea.productoId, texto: '' });
+      setAvisoCantidad({ productoId: linea.productoId, texto: 'La cantidad mínima es 1.' });
+      return;
+    }
+
+    const cantidad = Math.min(numero, linea.stockDisponible);
+    if (cantidad < numero) {
+      setAvisoCantidad({
+        productoId: linea.productoId,
+        texto: `Solo hay ${linea.stockDisponible} en stock.`,
+      });
+    }
+    setBorradoCantidad({ productoId: linea.productoId, texto: String(cantidad) });
+    setCarrito((actual) =>
+      actual.map((l) => (l.productoId === linea.productoId ? { ...l, cantidad } : l)),
+    );
+  }
+
+  function terminarEscrituraCantidad() {
+    setBorradoCantidad(null);
+    setAvisoCantidad(null);
   }
 
   /** Solo tiene efecto si el switch "Precio editable al vender" está activo. */
@@ -475,7 +520,10 @@ export default function PaginaNuevaVenta() {
             {guardando ? 'Guardando…' : 'Confirmar venta'}
           </button>
           <button
-            onClick={() => setEtapa('armando')}
+            onClick={() => {
+              setMensajeError(null);
+              setEtapa('armando');
+            }}
             className="h-12 text-sm font-semibold text-tinta/70"
           >
             Editar
@@ -561,6 +609,9 @@ export default function PaginaNuevaVenta() {
                   ) : (
                     <p className="text-xs text-tinta/50">{formatearMonto(linea.precioVenta, simboloMoneda)} c/u</p>
                   )}
+                  {avisoCantidad?.productoId === linea.productoId && (
+                    <p className="mt-1 text-xs text-alerta">{avisoCantidad.texto}</p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <button
@@ -570,7 +621,25 @@ export default function PaginaNuevaVenta() {
                   >
                     −
                   </button>
-                  <span className="w-5 text-center text-sm font-semibold">{linea.cantidad}</span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    enterKeyHint="done"
+                    value={
+                      borradoCantidad?.productoId === linea.productoId
+                        ? borradoCantidad.texto
+                        : String(linea.cantidad)
+                    }
+                    onChange={(e) => escribirCantidad(linea, e.target.value)}
+                    onFocus={(e) => e.target.select()}
+                    onBlur={terminarEscrituraCantidad}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur();
+                    }}
+                    aria-label={`Cantidad de ${linea.nombre}`}
+                    className="h-8 w-12 rounded-md border border-linea text-center text-sm font-semibold text-tinta outline-none focus:border-bodega"
+                  />
                   <button
                     onClick={() => cambiarCantidad(linea.productoId, 1)}
                     disabled={linea.cantidad >= linea.stockDisponible}
@@ -723,7 +792,10 @@ export default function PaginaNuevaVenta() {
       {calculoValido && (
         <div className="fixed inset-x-0 bottom-0 mx-auto max-w-app border-t border-linea bg-papel px-5 pt-4 pb-[calc(1rem+var(--area-segura-abajo))]">
           <button
-            onClick={() => setEtapa('revisando')}
+            onClick={() => {
+              setMensajeError(null);
+              setEtapa('revisando');
+            }}
             className="flex h-14 w-full items-center justify-center rounded-full bg-bodega text-base font-semibold text-white active:bg-bodega-oscuro"
           >
             Revisar y cobrar {formatearMonto(calculoValido.total, simboloMoneda)}

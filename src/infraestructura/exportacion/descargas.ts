@@ -43,9 +43,35 @@ export async function descargarImagen(nombreArchivo: string, datos: Uint8Array):
   await disparaDescarga(blob, nombreArchivo);
 }
 
+/**
+ * Límite de espera para escribir el archivo antes de avisar el error
+ * al usuario, en vez de dejar el botón "cargando" pegado para
+ * siempre si `Filesystem.writeFile` se cuelga en algún dispositivo.
+ */
+const LIMITE_ESPERA_ESCRITURA_MS = 15000;
+
+function conLimiteDeTiempo<T>(promesa: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const temporizador = setTimeout(
+      () => reject(new Error('La operación tardó demasiado. Intenta de nuevo.')),
+      ms,
+    );
+    promesa.then(
+      (valor) => {
+        clearTimeout(temporizador);
+        resolve(valor);
+      },
+      (error) => {
+        clearTimeout(temporizador);
+        reject(error);
+      },
+    );
+  });
+}
+
 async function disparaDescarga(blob: Blob, nombreArchivo: string): Promise<void> {
   if (Capacitor.isNativePlatform()) {
-    await descargarDentroDelApp(blob, nombreArchivo);
+    await conLimiteDeTiempo(descargarDentroDelApp(blob, nombreArchivo), LIMITE_ESPERA_ESCRITURA_MS);
     return;
   }
 
@@ -66,7 +92,20 @@ async function descargarDentroDelApp(blob: Blob, nombreArchivo: string): Promise
     data: base64,
     directory: Directory.Cache,
   });
-  await Share.share({ title: nombreArchivo, url: archivoEscrito.uri });
+  // OJO: no se espera (`await`) a que el usuario termine de elegir
+  // algo en la hoja "Compartir" — esa hoja la maneja el sistema
+  // operativo por su cuenta y puede tardar bastante (o el bodeguero
+  // puede minimizar la app un rato antes de elegir). Si se esperara
+  // aquí, el botón que llamó a esta función seguiría mostrándose
+  // "ocupado" todo ese tiempo — y si por lo que sea la hoja no llega
+  // a abrirse en el dispositivo, se quedaría así para siempre. Una
+  // vez que el archivo ya está escrito, la función se da por
+  // terminada: el share se dispara aparte, sin bloquear el botón.
+  Share.share({ title: nombreArchivo, url: archivoEscrito.uri }).catch(() => {
+    // Si el bodeguero cierra la hoja "Compartir" sin elegir nada,
+    // el plugin rechaza la promesa — no es un error real que haya
+    // que mostrar, el archivo ya se generó correctamente.
+  });
 }
 
 /** `Filesystem.writeFile` espera solo la parte de datos de un data URL, sin el prefijo "data:...;base64,". */

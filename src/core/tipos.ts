@@ -101,6 +101,17 @@ export interface PagoDeuda {
   fecha: string;
 }
 
+/**
+ * A qué venta/cliente/compra corresponde un movimiento de caja — solo
+ * para poder MOSTRAR a quién pertenece (ver MovimientoCaja.referencia);
+ * nunca afecta montos ni saldo.
+ */
+export interface ReferenciaCajaMovimiento {
+  ventaId?: number | null;
+  compraId?: number | null;
+  clienteId?: number | null;
+}
+
 export interface MovimientoCaja {
   id: number;
   tipo: TipoMovimientoCaja;
@@ -110,6 +121,8 @@ export interface MovimientoCaja {
   ventaId: number | null;
   saldoResultante: number;
   fechaHora: string;
+  /** Cliente de la venta/cobro, proveedor de la compra, o "Ajuste Manual" si no aplica ninguno. */
+  referencia: string;
 }
 
 export interface Proveedor {
@@ -131,6 +144,8 @@ export interface Compra {
   total: number;
   estado: EstadoCompra;
   nota: string | null;
+  metodoPago: MetodoPagoSinFiado | null;
+  motivoAnulacion: string | null;
 }
 
 export interface DetalleCompra {
@@ -258,9 +273,23 @@ export interface VentaReimpresionItem {
  * productos), para armar el mensaje de WhatsApp de cobranza.
  */
 export interface DeudaPendienteDetalle {
+  /** Venta al fiado que originó esta deuda (null solo en datos muy antiguos). */
+  ventaId: number | null;
   fecha: string;
+  /** Monto original de la venta al fiado. */
+  montoOriginal: number;
+  /** Lo que todavía falta cobrar de ESTA venta (ya descontados los abonos). */
   saldoPendiente: number;
   lineas: LineaVentaResumen[];
+}
+
+/** Una foto (Yape/Plin) de un abono de fiado, aplicada a una venta puntual. */
+export interface FotoPagoFiado {
+  /** Fila de pago_deuda — para poder reenlazarla si el archivo original ya no existe. */
+  pagoDeudaId: number;
+  ventaId: number;
+  fotoRuta: string;
+  fecha: string;
 }
 
 /** Una fila del reporte de compras por rango de fechas (con proveedor ya resuelto). */
@@ -271,6 +300,9 @@ export interface CompraListaItem {
   comprobante: string | null;
   total: number;
   estado: EstadoCompra;
+  metodoPago: MetodoPagoSinFiado | null;
+  /** Nombres de los productos de esta compra, separados por coma — solo para poder buscar por producto en el listado. */
+  productos: string;
 }
 
 /** Una fila del reporte "productos más vendidos" por rango de fechas. */
@@ -305,4 +337,22 @@ export interface MovimientoInventarioItem {
   motivo: string;
   /** Stock del producto justo después de este movimiento. */
   stockResultante: number;
+}
+
+/** Campo de producto que puede quedar registrado en su bitácora de cambios manuales. */
+export type CampoHistorialProducto = 'nombre' | 'precio_venta' | 'costo' | 'stock' | 'stock_minimo';
+
+/**
+ * Una fila de la bitácora de un producto — un cambio manual a la vez
+ * (Editar cambia nombre/precio/costo/stock mínimo; Ajustar cambia
+ * stock). `valorAnterior` es null en la fila que deja el valor inicial
+ * al crear el producto. `motivo` solo aplica a 'stock' (el motivo que
+ * se escribió al ajustar).
+ */
+export interface HistorialProductoItem {
+  campo: CampoHistorialProducto;
+  valorAnterior: string | null;
+  valorNuevo: string;
+  motivo: string | null;
+  fecha: string;
 }

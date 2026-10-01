@@ -7,6 +7,7 @@ import { restaurarRespaldo } from '@/infraestructura/sqlite/contenedor';
 import { descargarBinario, descargarTexto, leerArchivoComoBytes } from '@/infraestructura/exportacion/descargas';
 import { exportarFiadosACsv, exportarProductosACsv, exportarVentasACsv } from '@/core/exportacion';
 import { hoyLocalSql } from '@/core/tiempo';
+import { CLAVE_PLAN_FECHA_MAXIMA_VISTA, CLAVE_PLAN_VENCE_EN } from '@/core/plan';
 
 function fechaParaNombreArchivo(): string {
   return new Date().toISOString().slice(0, 10);
@@ -55,10 +56,10 @@ export default function PaginaRespaldo() {
 
   async function manejarArchivoSeleccionado(archivos: FileList | null) {
     const archivo = archivos?.[0];
-    if (!archivo) return;
+    if (!archivo || !contenedor) return;
 
     const confirmado = window.confirm(
-      'Esto reemplazará TODOS los datos actuales de la app con los del respaldo. ¿Continuar?',
+      'Esto reemplazará los datos actuales de la app con los del respaldo (tu Premium actual NO cambia). ¿Continuar?',
     );
     if (!confirmado) {
       if (inputArchivoRef.current) inputArchivoRef.current.value = '';
@@ -69,7 +70,14 @@ export default function PaginaRespaldo() {
     setRestaurando(true);
     try {
       const bytes = await leerArchivoComoBytes(archivo);
-      await restaurarRespaldo(bytes); // recarga la página si todo sale bien
+      // El Premium queda como lo tiene ESTE dispositivo ahora mismo,
+      // sin importar lo que traiga el respaldo — ver el comentario en
+      // restaurarRespaldo().
+      const premiumAConservar = {
+        venceEn: contenedor.configuracion.obtenerValor(CLAVE_PLAN_VENCE_EN),
+        fechaMaximaVista: contenedor.configuracion.obtenerValor(CLAVE_PLAN_FECHA_MAXIMA_VISTA),
+      };
+      await restaurarRespaldo(bytes, premiumAConservar); // recarga la página si todo sale bien
     } catch (e) {
       setMensajeError(e instanceof Error ? e.message : 'No se pudo restaurar el respaldo.');
       setRestaurando(false);

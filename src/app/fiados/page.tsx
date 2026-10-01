@@ -4,14 +4,15 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
-import type { Cliente, MetodoPagoSinFiado } from '@/core/tipos';
+import type { Cliente, DeudaPendienteDetalle, MetodoPagoSinFiado } from '@/core/tipos';
 import type { EstadoPlan } from '@/core/plan';
 import { construirMensajeDeuda } from '@/core/whatsapp';
 import { construirEnlaceWhatsApp } from '@/infraestructura/whatsapp/enlace';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { CLAVE_PREFIJO_PAIS, obtenerPrefijoPais } from '@/core/paises';
 import { limpiarNumeroEscrito } from '@/core/texto';
-import { hoyLocalSql } from '@/core/tiempo';
+import { formatearFechaHora, hoyLocalSql } from '@/core/tiempo';
+import { capturarFotoComprobantePago } from '@/infraestructura/comprobante-pago/capturar-foto';
 
 const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
   { valor: 'efectivo', etiqueta: 'Efectivo' },
@@ -30,11 +31,18 @@ export default function PaginaFiados() {
   const [monto, setMonto] = useState('');
   const [metodo, setMetodo] = useState<MetodoPagoSinFiado>('efectivo');
   const [mensajeError, setMensajeError] = useState<string | null>(null);
+  // TODAS las ventas al fiado del cliente que tiene abierto el detalle,
+  // pagadas o no (para el historial que se despliega al tocar su nombre).
+  const [historialCliente, setHistorialCliente] = useState<DeudaPendienteDetalle[]>([]);
+  // Foto (Yape/Plin) que se va a adjuntar al pago que se está registrando.
+  const [fotoPago, setFotoPago] = useState<string | null>(null);
+  const [adjuntandoFoto, setAdjuntandoFoto] = useState(false);
 
-  // Buscador (nombre, DNI o monto de deuda) + rango de fechas: para
-  // cobrar fiados de días anteriores, no solo los de hoy. Sin rango
-  // (desde/hasta vacíos), se comporta igual que antes — todos los
-  // clientes con deuda activa hoy, sin importar cuándo se originó.
+  // Buscador (nombre, DNI o monto de deuda) + rango de fechas: para ver
+  // fiados de días anteriores, no solo los de hoy. Por defecto el rango
+  // viene puesto en el día de hoy (con el que se está trabajando); se
+  // puede ampliar o quitar con el botón "Quitar" para ver todo el
+  // historial de fiados sin importar cuándo se originó.
   const [busqueda, setBusqueda] = useState('');
   const [desde, setDesde] = useState(hoyLocalSql());
   const [hasta, setHasta] = useState(hoyLocalSql());
@@ -42,7 +50,7 @@ export default function PaginaFiados() {
 
   function recargar() {
     if (!contenedor || rangoInvalido) return;
-    setClientes(contenedor.fiados.listarClientesConDeuda(desde || undefined, hasta || undefined));
+    setClientes(contenedor.fiados.listarClientesConHistorialFiado(desde || undefined, hasta || undefined));
   }
 
   useEffect(recargar, [contenedor, desde, hasta, rangoInvalido]);
@@ -66,19 +74,39 @@ const esPremium = estadoPlan?.tipo === 'premium';
     );
   }, [busqueda, clientes]);
 
-  function abrirPago(cliente: Cliente) {
+  function alternarCliente(cliente: Cliente) {
+    if (clienteAbierto === cliente.id) {
+      setClienteAbierto(null);
+      return;
+    }
     setClienteAbierto(cliente.id);
-    setMonto(cliente.saldoPendiente.toFixed(2));
+    setMonto(cliente.saldoPendiente > 0 ? cliente.saldoPendiente.toFixed(2) : '');
     setMensajeError(null);
+    setFotoPago(null);
+    setHistorialCliente(contenedor ? contenedor.fiados.listarHistorialFiado(cliente.id) : []);
+  }
+
+  async function adjuntarFotoPago() {
+    setMensajeError(null);
+    setAdjuntandoFoto(true);
+    try {
+      const ruta = await capturarFotoComprobantePago('galeria');
+      if (ruta) setFotoPago(ruta);
+    } catch (e) {
+      setMensajeError(e instanceof Error ? e.message : 'No se pudo adjuntar la foto.');
+    } finally {
+      setAdjuntandoFoto(false);
+    }
   }
 
   async function confirmarPago(clienteId: number) {
     if (!contenedor) return;
     setMensajeError(null);
     try {
-      contenedor.fiados.registrarPago(clienteId, Number(monto), metodo);
+      contenedor.fiados.registrarPago(clienteId, Number(monto), metodo, fotoPago);
       await contenedor.persistir();
       setClienteAbierto(null);
+      setFotoPago(null);
       recargar();
     } catch (e) {
       setMensajeError(e instanceof ErrorDeNegocio ? e.message : 'No se pudo registrar el pago.');
@@ -104,7 +132,7 @@ const esPremium = estadoPlan?.tipo === 'premium';
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Fiados</h1>
       </header>
 
-      {clientes.length > 0 && (
+      {totalPorCobrar > 0 && (
         <p className="mt-4 text-sm text-tinta/60">
           Total por cobrar:{' '}
           <span className="font-semibold text-tinta">{formatearMonto(totalPorCobrar, simboloMoneda)}</span>
@@ -113,7 +141,7 @@ const esPremium = estadoPlan?.tipo === 'premium';
 
       <div className="mt-4">
         <p className="text-xs font-semibold text-tinta/70">Rango de fechas (opcional)</p>
-        <p className="mt-0.5 text-xs text-tinta/50">Filtra por cuándo se originó el fiado, para cobrar deudas de días anteriores.</p>
+        <p className="mt-0.5 text-xs text-tinta/50">Filtra por cuándo se originó el fiado — incluye a quienes ya lo pagaron todo.</p>
         <div className="mt-2 flex gap-2">
           <div className="flex-1">
             <label className="mb-1 block text-xs text-tinta/50">Desde</label>
@@ -165,7 +193,7 @@ const esPremium = estadoPlan?.tipo === 'premium';
 
         {!cargando && clientes.length === 0 && (
           <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
-            Nadie te debe por ahora.
+            Todavía no tienes ventas al fiado en este rango.
           </p>
         )}
 
@@ -176,75 +204,156 @@ const esPremium = estadoPlan?.tipo === 'premium';
         )}
 
         <ul className="divide-y divide-linea border-y border-linea">
-          {clientesFiltrados.map((cliente) => (
-            <li key={cliente.id} className="py-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-tinta">{cliente.nombre}</span>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-semibold text-alerta">
-                    {formatearMonto(cliente.saldoPendiente, simboloMoneda)}
-                  </span>
+          {clientesFiltrados.map((cliente) => {
+            const debe = cliente.saldoPendiente > 0;
+            return (
+              <li key={cliente.id} className="py-3">
+                <div className="flex items-center justify-between gap-2">
                   <button
-                    onClick={() => enviarRecordatorioWhatsApp(cliente)}
-                    disabled={!cliente.telefono || !esPremium}
-                    title={
-                      !cliente.telefono
-                        ? 'Este cliente no tiene teléfono registrado'
-                        : !esPremium
-                          ? 'Función Premium'
-                          : undefined
-                    }
-                    className="text-xs font-semibold text-bodega-oscuro disabled:text-tinta/30"
+                    type="button"
+                    onClick={() => alternarCliente(cliente)}
+                    className="min-w-0 flex-1 truncate text-left text-sm text-tinta"
                   >
-                    WhatsApp
+                    {cliente.nombre}
                   </button>
-                  <button
-                    onClick={() =>
-                      clienteAbierto === cliente.id ? setClienteAbierto(null) : abrirPago(cliente)
-                    }
-                    className="text-xs font-semibold text-bodega-oscuro"
-                  >
-                    {clienteAbierto === cliente.id ? 'Cerrar' : 'Registrar pago'}
-                  </button>
-                </div>
-              </div>
-
-              {clienteAbierto === cliente.id && (
-                <div className="mt-3 space-y-3 rounded-xl border border-linea p-3">
-                  <input
-                    value={monto}
-                    onChange={(e) => setMonto(limpiarNumeroEscrito(e.target.value))}
-                    inputMode="decimal"
-                    placeholder="Monto"
-                    className="h-10 w-full rounded-lg border border-linea px-3 text-sm"
-                  />
-                  <div className="flex flex-wrap gap-2">
-                    {METODOS.map((m) => (
+                  <div className="flex shrink-0 items-center gap-3">
+                    <span className={`text-sm font-semibold ${debe ? 'text-alerta' : 'text-tinta/40'}`}>
+                      {debe ? formatearMonto(cliente.saldoPendiente, simboloMoneda) : 'Pagado'}
+                    </span>
+                    {debe && (
                       <button
-                        key={m.valor}
-                        onClick={() => setMetodo(m.valor)}
-                        className={`h-8 rounded-full border px-3 text-xs font-medium ${
-                          metodo === m.valor
-                            ? 'border-bodega bg-bodega text-white'
-                            : 'border-linea text-tinta/70'
-                        }`}
+                        onClick={() => enviarRecordatorioWhatsApp(cliente)}
+                        disabled={!cliente.telefono || !esPremium}
+                        title={
+                          !cliente.telefono
+                            ? 'Este cliente no tiene teléfono registrado'
+                            : !esPremium
+                              ? 'Función Premium'
+                              : undefined
+                        }
+                        className="text-xs font-semibold text-bodega-oscuro disabled:text-tinta/30"
                       >
-                        {m.etiqueta}
+                        WhatsApp
                       </button>
-                    ))}
+                    )}
+                    <button
+                      onClick={() => alternarCliente(cliente)}
+                      className="text-xs font-semibold text-bodega-oscuro"
+                    >
+                      {clienteAbierto === cliente.id ? 'Cerrar' : 'Detalle'}
+                    </button>
                   </div>
-                  {mensajeError && <p className="text-xs text-alerta">{mensajeError}</p>}
-                  <button
-                    onClick={() => confirmarPago(cliente.id)}
-                    disabled={!monto || Number(monto) <= 0}
-                    className="h-10 w-full rounded-lg bg-bodega text-sm font-semibold text-white disabled:opacity-40"
-                  >
-                    Confirmar pago
-                  </button>
                 </div>
-              )}
-            </li>
-          ))}
+
+                {clienteAbierto === cliente.id && (
+                  <div className="mt-3 space-y-3 rounded-xl border border-linea p-3">
+                    <div>
+                      <p className="text-xs font-semibold text-tinta/70">Historial de fiados</p>
+                      {historialCliente.length === 0 ? (
+                        <p className="mt-1 text-xs text-tinta/50">Sin ventas al fiado registradas.</p>
+                      ) : (
+                        <ul className="mt-1 space-y-1.5">
+                          {historialCliente.map((venta, indice) => {
+                            const pagada = venta.saldoPendiente <= 0;
+                            return (
+                              <li key={venta.ventaId ?? `d${indice}`} className="text-xs text-tinta/80">
+                                <div className="flex items-center justify-between">
+                                  <span>
+                                    {venta.ventaId ? `V-${venta.ventaId}` : 'Deuda'} ·{' '}
+                                    {formatearFechaHora(venta.fecha)}
+                                  </span>
+                                  <span className={`font-semibold ${pagada ? 'text-bodega-oscuro' : 'text-alerta'}`}>
+                                    {pagada ? 'Pagado' : `Debe ${formatearMonto(venta.saldoPendiente, simboloMoneda)}`}
+                                  </span>
+                                </div>
+                                {!pagada && venta.saldoPendiente < venta.montoOriginal && (
+                                  <p className="text-tinta/50">
+                                    De {formatearMonto(venta.montoOriginal, simboloMoneda)}, ya abonó{' '}
+                                    {formatearMonto(venta.montoOriginal - venta.saldoPendiente, simboloMoneda)}
+                                  </p>
+                                )}
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
+
+                    {debe && (
+                      <div className="space-y-3 border-t border-linea pt-3">
+                        <p className="text-xs font-semibold text-tinta/70">Registrar pago</p>
+                        <input
+                          value={monto}
+                          onChange={(e) => setMonto(limpiarNumeroEscrito(e.target.value))}
+                          inputMode="decimal"
+                          placeholder="Monto"
+                          className="h-10 w-full rounded-lg border border-linea px-3 text-sm"
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          {METODOS.map((m) => (
+                            <button
+                              key={m.valor}
+                              onClick={() => {
+                                setMetodo(m.valor);
+                                if (m.valor !== 'yape' && m.valor !== 'plin') setFotoPago(null);
+                              }}
+                              className={`h-8 rounded-full border px-3 text-xs font-medium ${
+                                metodo === m.valor
+                                  ? 'border-bodega bg-bodega text-white'
+                                  : 'border-linea text-tinta/70'
+                              }`}
+                            >
+                              {m.etiqueta}
+                            </button>
+                          ))}
+                        </div>
+
+                        {(metodo === 'yape' || metodo === 'plin') && (
+                          <div>
+                            {!esPremium ? (
+                              <p className="text-xs text-tinta/40">
+                                Adjuntar foto del pago{' '}
+                                <span className="font-semibold text-acento-oscuro">Premium</span>
+                              </p>
+                            ) : fotoPago ? (
+                              <div className="flex items-center justify-between rounded-lg border border-linea px-3 py-2 text-xs">
+                                <span className="text-tinta/70">Foto del pago adjuntada</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setFotoPago(null)}
+                                  className="font-semibold text-alerta"
+                                >
+                                  Quitar
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={adjuntarFotoPago}
+                                disabled={adjuntandoFoto}
+                                className="h-9 w-full rounded-lg border border-linea text-xs font-semibold text-bodega-oscuro disabled:opacity-50"
+                              >
+                                {adjuntandoFoto ? 'Abriendo galería…' : 'Adjuntar foto del pago (opcional)'}
+                              </button>
+                            )}
+                          </div>
+                        )}
+
+                        {mensajeError && <p className="text-xs text-alerta">{mensajeError}</p>}
+                        <button
+                          onClick={() => confirmarPago(cliente.id)}
+                          disabled={!monto || Number(monto) <= 0}
+                          className="h-10 w-full rounded-lg bg-bodega text-sm font-semibold text-white disabled:opacity-40"
+                        >
+                          Confirmar pago
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </main>
     </div>

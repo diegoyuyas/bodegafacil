@@ -10,6 +10,7 @@ import { calcularEstadoPlan, CLAVE_PLAN_VENCE_EN, LIMITE_VENTAS_PLAN_GRATIS } fr
 import type {
   LineaVentaMensaje,
   LineaVentaResumen,
+  MetodoPagoSinFiado,
   ProductoMasVendidoItem,
   RegistrarVentaInput,
   ResumenDia,
@@ -101,7 +102,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
       if (input.metodoPago === 'fiado') {
         this.registrarFiado(input.clienteId as number, calculada.total, ventaId);
       } else {
-        this.caja.registrarIngreso(calculada.total, `Venta V-${ventaId}`, input.metodoPago, ventaId);
+        this.caja.registrarIngreso(calculada.total, `Venta V-${ventaId}`, input.metodoPago, { ventaId });
       }
 
       return this.obtenerPorId(ventaId);
@@ -144,6 +145,34 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
          WHERE substr(v.fecha_hora, 1, 10) = ?
          ORDER BY v.id DESC`,
         [hoyLocalSql()],
+      )
+      .map((fila) => ({
+        id: fila.id,
+        fechaHora: fila.fecha_hora,
+        metodoPago: fila.metodo_pago,
+        total: fila.total,
+        clienteNombre: fila.cliente,
+        anulada: fila.anulada === 1,
+      }));
+  }
+
+  listarPorRangoConDetalle(desde: string, hasta: string): VentaListaItem[] {
+    return this.bd
+      .consultar<{
+        id: number;
+        fecha_hora: string;
+        metodo_pago: Venta['metodoPago'];
+        total: number;
+        cliente: string | null;
+        anulada: number;
+      }>(
+        `SELECT v.id AS id, v.fecha_hora AS fecha_hora, v.metodo_pago AS metodo_pago,
+                v.total AS total, c.nombre AS cliente, v.anulada AS anulada
+         FROM venta v
+         LEFT JOIN cliente c ON c.id = v.cliente_id
+         WHERE substr(v.fecha_hora, 1, 10) >= ? AND substr(v.fecha_hora, 1, 10) <= ?
+         ORDER BY v.id DESC`,
+        [desde, hasta],
       )
       .map((fila) => ({
         id: fila.id,
@@ -238,8 +267,13 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
    * caja (si se pagó al contado) o reduce la deuda del cliente (si
    * fue al fiado), y marca la venta como anulada. No se borra nada —
    * queda trazabilidad completa, tal como una venta anulada real.
+   *
+   * Venta al fiado con abonos: solo se cancela el saldo que faltaba
+   * por cobrar de ESA venta; lo ya cobrado sigue en Caja, salvo que
+   * `devolverCobrado` sea true (se le devolvió el dinero al cliente),
+   * en cuyo caso se registra el egreso correspondiente.
    */
-  anularVenta(id: number, motivo?: string): void {
+  anularVenta(id: number, motivo?: string, opciones?: { devolverCobrado?: boolean }): void {
     this.bd.transaccion(() => {
       const venta = this.obtenerPorId(id);
       if (venta.anulada) {
@@ -264,8 +298,48 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         );
       }
 
+      let notaCobrado = '';
       if (venta.metodoPago === 'fiado') {
-        if (venta.clienteId) {
+        const deuda = this.bd.consultar<{ id: number; monto: number; saldo_pendiente: number }>(
+          'SELECT id, monto, saldo_pendiente FROM deuda_cliente WHERE venta_id = ?',
+          [id],
+        )[0];
+
+        if (deuda) {
+          // Cada venta fiada lleva su propio saldo (los abonos se reparten por
+          // deuda): al anular solo se cancela lo que FALTABA cobrar de esta
+          // venta. Lo ya cobrado no se toca en Caja salvo que el bodeguero
+          // diga que se lo devolvió al cliente.
+          if (venta.clienteId) {
+            const filaCliente = this.bd.consultar<{ saldo_pendiente: number }>(
+              'SELECT saldo_pendiente FROM cliente WHERE id = ?',
+              [venta.clienteId],
+            )[0];
+            if (filaCliente) {
+              const saldoNuevo = Math.max(0, redondear(filaCliente.saldo_pendiente - deuda.saldo_pendiente));
+              this.bd.ejecutar('UPDATE cliente SET saldo_pendiente = ? WHERE id = ?', [
+                saldoNuevo,
+                venta.clienteId,
+              ]);
+            }
+          }
+          // Se deja en 0 y "pagada" (el estado no admite "anulada" sin
+          // reconstruir la tabla); la venta queda marcada como anulada.
+          this.bd.ejecutar(`UPDATE deuda_cliente SET saldo_pendiente = 0, estado = 'pagada' WHERE id = ?`, [
+            deuda.id,
+          ]);
+
+          const cobrado = redondear(deuda.monto - deuda.saldo_pendiente);
+          if (cobrado > 0) {
+            if (opciones?.devolverCobrado) {
+              this.devolverCobradoDeDeuda(deuda.id, cobrado, id);
+              notaCobrado = ` (se devolvió ${cobrado.toFixed(2)} ya cobrado)`;
+            } else {
+              notaCobrado = ` (se conservó ${cobrado.toFixed(2)} ya cobrado)`;
+            }
+          }
+        } else if (venta.clienteId) {
+          // Datos muy antiguos, sin deuda asociada: se descuenta el total, como antes.
           const filaCliente = this.bd.consultar<{ saldo_pendiente: number }>(
             'SELECT saldo_pendiente FROM cliente WHERE id = ?',
             [venta.clienteId],
@@ -279,14 +353,47 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
           }
         }
       } else {
-        this.caja.registrarEgreso(venta.total, `Anulación de V-${id}`, venta.metodoPago);
+        this.caja.registrarEgreso(venta.total, `Anulación de V-${id}`, venta.metodoPago, { ventaId: id });
       }
 
       this.bd.ejecutar('UPDATE venta SET anulada = 1, motivo_anulacion = ? WHERE id = ?', [
-        motivo ?? 'Anulada desde Inicio',
+        (motivo ?? 'Anulada desde Inicio') + notaCobrado,
         id,
       ]);
     });
+  }
+
+  obtenerCobradoDeVentaFiada(ventaId: number): number {
+    const fila = this.bd.consultar<{ monto: number; saldo_pendiente: number }>(
+      'SELECT monto, saldo_pendiente FROM deuda_cliente WHERE venta_id = ?',
+      [ventaId],
+    )[0];
+    return fila ? Math.max(0, redondear(fila.monto - fila.saldo_pendiente)) : 0;
+  }
+
+  /**
+   * Registra el egreso de caja por el dinero que ya se había cobrado de una
+   * venta fiada que se anula y que el bodeguero le devolvió al cliente: uno
+   * por cada forma de pago con la que se cobró (efectivo, Yape…). Si parte
+   * de lo cobrado no tiene forma de pago registrada (datos antiguos), se
+   * asume efectivo.
+   */
+  private devolverCobradoDeDeuda(deudaId: number, cobrado: number, ventaId: number): void {
+    const porMetodo = this.bd.consultar<{ metodo_pago: MetodoPagoSinFiado; total: number }>(
+      `SELECT metodo_pago, SUM(monto) AS total FROM pago_deuda WHERE deuda_id = ? GROUP BY metodo_pago`,
+      [deudaId],
+    );
+    const concepto = `Devolución por anulación de V-${ventaId}`;
+    let sinMetodo = cobrado;
+    for (const { metodo_pago, total } of porMetodo) {
+      const monto = redondear(total);
+      if (monto <= 0) continue;
+      this.caja.registrarEgreso(monto, concepto, metodo_pago, { ventaId });
+      sinMetodo = redondear(sinMetodo - monto);
+    }
+    if (sinMetodo > 0) {
+      this.caja.registrarEgreso(sinMetodo, concepto, 'efectivo', { ventaId });
+    }
   }
 
   actualizarTelefonoWhatsapp(id: number, telefono: string): void {
@@ -457,9 +564,9 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
     const deudaNueva = calcularDeudaNueva(deudaAnterior, monto, 0);
 
     this.bd.ejecutar(
-      `INSERT INTO deuda_cliente (cliente_id, venta_id, monto, saldo_pendiente, estado)
-       VALUES (?, ?, ?, ?, 'pendiente')`,
-      [clienteId, ventaId, monto, monto],
+      `INSERT INTO deuda_cliente (cliente_id, venta_id, monto, saldo_pendiente, estado, fecha)
+       VALUES (?, ?, ?, ?, 'pendiente', ?)`,
+      [clienteId, ventaId, monto, monto, ahoraLocalSql()],
     );
     this.bd.ejecutar(`UPDATE cliente SET saldo_pendiente = ? WHERE id = ?`, [deudaNueva, clienteId]);
   }

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { limpiarNumeroEscrito } from '@/core/texto';
+import { formatearFechaHora, hoyLocalSql } from '@/core/tiempo';
 import type { MetodoPagoSinFiado, MovimientoCaja } from '@/core/tipos';
 
 const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
@@ -37,14 +38,21 @@ export default function PaginaCaja() {
   const [monto, setMonto] = useState('');
   const [concepto, setConcepto] = useState('');
   const [metodo, setMetodo] = useState<MetodoPagoSinFiado>('efectivo');
+  // Rango de fechas para VER movimientos — por defecto hoy. Registrar
+  // un ingreso/egreso nuevo (más abajo) siempre usa la fecha/hora
+  // actual sin importar este filtro; eso no cambia.
+  const [desde, setDesde] = useState(hoyLocalSql());
+  const [hasta, setHasta] = useState(hoyLocalSql());
+  const rangoEsHoy = desde === hoyLocalSql() && hasta === hoyLocalSql();
+  const rangoInvalido = desde > hasta;
 
   function recargar() {
-    if (!contenedor) return;
+    if (!contenedor || rangoInvalido) return;
     setSaldo(contenedor.caja.obtenerSaldoActual());
-    setMovimientos(contenedor.caja.listarMovimientosDeHoy());
+    setMovimientos(contenedor.caja.listarMovimientosPorRango(desde, hasta));
   }
 
-  useEffect(recargar, [contenedor]);
+  useEffect(recargar, [contenedor, desde, hasta, rangoInvalido]);
 
   const movimientosVisibles = useMemo(
     () => (vista === 'todo' ? movimientos : movimientos.filter((m) => m.tipo === vista)),
@@ -67,7 +75,13 @@ export default function PaginaCaja() {
   }, [movimientosVisibles, vista]);
 
   const etiquetaTotal =
-    vista === 'ingreso' ? 'Total de ingresos' : vista === 'egreso' ? 'Total de egresos' : 'Neto de hoy';
+    vista === 'ingreso'
+      ? 'Total de ingresos'
+      : vista === 'egreso'
+        ? 'Total de egresos'
+        : rangoEsHoy
+          ? 'Neto de hoy'
+          : 'Neto del rango';
 
   async function confirmarMovimiento() {
     if (!contenedor || !mostrarFormulario || !monto || !concepto.trim()) return;
@@ -159,8 +173,48 @@ export default function PaginaCaja() {
         </section>
       )}
 
-      {/* 3 vistas: Ingresos / Egresos / Ver todo, cada una con su propio total */}
+      {/* Rango de fechas para VER movimientos (no afecta el saldo actual,
+          que siempre es el total acumulado, ni el registro de nuevos
+          ingresos/egresos, que siempre usa la fecha de hoy). */}
       <div className="mt-6 flex gap-2">
+        <div className="flex-1">
+          <label className="mb-1 block text-xs text-tinta/50">Desde</label>
+          <input
+            type="date"
+            value={desde}
+            onChange={(e) => setDesde(e.target.value)}
+            max={hasta}
+            className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
+          />
+        </div>
+        <div className="flex-1">
+          <label className="mb-1 block text-xs text-tinta/50">Hasta</label>
+          <input
+            type="date"
+            value={hasta}
+            onChange={(e) => setHasta(e.target.value)}
+            min={desde}
+            className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
+          />
+        </div>
+        {!rangoEsHoy && (
+          <button
+            onClick={() => {
+              setDesde(hoyLocalSql());
+              setHasta(hoyLocalSql());
+            }}
+            className="mt-6 h-11 shrink-0 rounded-lg border border-linea px-3 text-xs font-semibold text-tinta/60"
+          >
+            Hoy
+          </button>
+        )}
+      </div>
+      {rangoInvalido && (
+        <p className="mt-2 text-xs text-alerta">La fecha "desde" no puede ser posterior a "hasta".</p>
+      )}
+
+      {/* 3 vistas: Ingresos / Egresos / Ver todo, cada una con su propio total */}
+      <div className="mt-3 flex gap-2">
         {VISTAS.map((v) => (
           <button
             key={v.valor}
@@ -183,14 +237,22 @@ export default function PaginaCaja() {
         {movimientosVisibles.length === 0 ? (
           <p className="mt-3 border-y border-linea py-6 text-center text-sm text-tinta/50">
             No hay movimientos {vista !== 'todo' ? `de ${vista === 'ingreso' ? 'ingresos' : 'egresos'} ` : ''}
-            hoy.
+            {rangoEsHoy ? 'hoy' : 'en este rango de fechas'}.
           </p>
         ) : (
           <ul className="mt-3 divide-y divide-linea border-y border-linea">
             {movimientosVisibles.map((mov) => (
-              <li key={mov.id} className="flex items-center justify-between py-3 text-sm">
-                <span className="text-tinta/80">{mov.concepto}</span>
-                <span className={`font-semibold ${mov.tipo === 'ingreso' ? 'text-bodega-oscuro' : 'text-alerta'}`}>
+              <li key={mov.id} className="flex items-center justify-between gap-3 py-3 text-sm">
+                <div className="min-w-0">
+                  <p className="text-tinta/80">
+                    {mov.referencia}
+                    <span className="text-tinta/40"> — {mov.concepto}</span>
+                  </p>
+                  <p className="mt-0.5 text-xs text-tinta/40">{formatearFechaHora(mov.fechaHora)}</p>
+                </div>
+                <span
+                  className={`shrink-0 font-semibold ${mov.tipo === 'ingreso' ? 'text-bodega-oscuro' : 'text-alerta'}`}
+                >
                   {mov.tipo === 'ingreso' ? '+' : '−'} {formatearMonto(mov.monto, simboloMoneda)}
                 </span>
               </li>

@@ -14,7 +14,9 @@ import type {
   CompraListaItem,
   DeudaPendienteDetalle,
   EstadoRespaldo,
+  FotoPagoFiado,
   HistorialCostoItem,
+  HistorialProductoItem,
   LineaVentaMensaje,
   LineaVentaResumen,
   MetadatoRespaldo,
@@ -25,6 +27,7 @@ import type {
   ProductoMasVendidoItem,
   Proveedor,
   RegistrarVentaInput,
+  ReferenciaCajaMovimiento,
   ResumenDia,
   TipoRespaldo,
   Venta,
@@ -54,6 +57,13 @@ export interface ProductoRepositorio {
   ajustarStock(id: number, delta: number, motivo: string): Producto;
   /** Kardex: movimientos de stock de un producto en un rango de fechas ('YYYY-MM-DD'), de más antiguo a más reciente. */
   listarMovimientosInventario(productoId: number, desde: string, hasta: string): MovimientoInventarioItem[];
+  /**
+   * Bitácora de cambios manuales al producto (nombre, precio de venta,
+   * costo, stock, stock mínimo), de más reciente a más antiguo — para
+   * distinguir un cambio hecho a mano de un efecto normal de vender o
+   * comprar. Incluye el valor con el que se creó el producto.
+   */
+  listarHistorial(productoId: number): HistorialProductoItem[];
 }
 
 export interface DatosNuevoProducto {
@@ -104,14 +114,24 @@ export interface VentaRepositorio {
   listarDeHoy(): Venta[];
   /** Para Inicio: ventas de hoy con nombre de cliente ya resuelto. */
   listarDeHoyConDetalle(): VentaListaItem[];
+  /** Para Inicio (Pedidos Generados): igual que listarDeHoyConDetalle pero con un rango de fechas 'YYYY-MM-DD' inclusive. */
+  listarPorRangoConDetalle(desde: string, hasta: string): VentaListaItem[];
   /** Para el preview al expandir una venta en la lista. */
   obtenerLineas(ventaId: number): LineaVentaResumen[];
   /** Líneas con precio unitario y subtotal, para armar el mensaje de WhatsApp de una venta. */
   obtenerLineasParaMensaje(ventaId: number): LineaVentaMensaje[];
   /** Foto del comprobante de pago (Yape/Plin, Premium) — guarda solo la ruta del archivo. */
   guardarComprobantePago(ventaId: number, ruta: string): void;
-  /** Repone stock, revierte caja/deuda, y marca la venta como anulada. */
-  anularVenta(id: number, motivo?: string): void;
+  /**
+   * Repone stock, revierte caja/deuda, y marca la venta como anulada.
+   * Si es una venta al fiado que ya tiene cobros (abonos), solo se
+   * cancela lo que faltaba por cobrar; lo ya cobrado se queda en Caja
+   * salvo que `devolverCobrado` sea true (el bodeguero le devolvió el
+   * dinero al cliente): ahí se registra un egreso por ese monto.
+   */
+  anularVenta(id: number, motivo?: string, opciones?: { devolverCobrado?: boolean }): void;
+  /** Cuánto ya se cobró de una venta al fiado (0 si no es fiado o no tiene abonos). Para avisar antes de anular. */
+  obtenerCobradoDeVentaFiada(ventaId: number): number;
   /**
    * Guarda (o reemplaza) el teléfono de WhatsApp asociado a una venta ya
    * registrada — para cuando se completa recién al reenviar desde Inicio,
@@ -149,13 +169,24 @@ export interface VentaRepositorio {
  */
 export interface CajaRepositorio {
   obtenerSaldoActual(): number;
+  /**
+   * `referencia` es solo para poder MOSTRAR a quién corresponde el
+   * movimiento en Más > Caja / Reportes (cliente de la venta, cliente
+   * directo cuando es un cobro de fiado, o proveedor de la compra) —
+   * nunca afecta montos ni saldo. Sin nada, se muestra "Ajuste Manual".
+   */
   registrarIngreso(
     monto: number,
     concepto: string,
     metodoPago: MetodoPagoSinFiado,
-    ventaId?: number | null,
+    referencia?: ReferenciaCajaMovimiento,
   ): void;
-  registrarEgreso(monto: number, concepto: string, metodoPago: MetodoPagoSinFiado): void;
+  registrarEgreso(
+    monto: number,
+    concepto: string,
+    metodoPago: MetodoPagoSinFiado,
+    referencia?: ReferenciaCajaMovimiento,
+  ): void;
   listarMovimientosDeHoy(): MovimientoCaja[];
   /** Movimientos dentro de un rango de fechas 'YYYY-MM-DD' inclusive, para el reporte de caja (Premium). */
   listarMovimientosPorRango(desde: string, hasta: string): MovimientoCaja[];
@@ -169,13 +200,51 @@ export interface FiadoRepositorio {
    * exportar), aunque el saldo mostrado siempre es el saldo actual.
    */
   listarClientesConDeuda(desde?: string, hasta?: string): Cliente[];
-  registrarPago(clienteId: number, monto: number, metodoPago: MetodoPagoSinFiado): void;
+  /**
+   * Todos los clientes que alguna vez tuvieron una venta al fiado,
+   * TENGAN o no deuda pendiente ahora mismo (a diferencia de
+   * `listarClientesConDeuda`, que solo trae a los que deben). Es para
+   * poder ver el historial completo de fiados de un cliente aunque ya
+   * los haya pagado todos. Ordenados con los que deben primero.
+   */
+  listarClientesConHistorialFiado(desde?: string, hasta?: string): Cliente[];
+  /**
+   * Registra un abono y lo reparte entre las deudas del cliente, de la
+   * más antigua a la más reciente (FIFO): cada venta al fiado lleva su
+   * propio saldo, así se sabe exactamente cuánto falta de cada una.
+   * `fotoRuta` (Yape/Plin, opcional) queda guardada en cada deuda a la
+   * que se aplicó este abono, para poder verla luego desde cualquiera
+   * de esas ventas en Más > Reportes > Ventas.
+   */
+  registrarPago(
+    clienteId: number,
+    monto: number,
+    metodoPago: MetodoPagoSinFiado,
+    fotoRuta?: string | null,
+  ): void;
   /**
    * Deudas pendientes de un cliente (una por cada venta al fiado no
    * pagada del todo), con sus productos y fecha — para armar el
    * mensaje de cobranza por WhatsApp.
    */
   listarDeudasPendientesDetalladas(clienteId: number): DeudaPendienteDetalle[];
+  /**
+   * TODAS las ventas al fiado de un cliente, pagadas o no (a diferencia
+   * de `listarDeudasPendientesDetalladas`, que solo trae las que aún
+   * deben) — para el detalle que se despliega al presionar su nombre
+   * en Fiados. `saldoPendiente = 0` significa que esa venta ya está
+   * pagada por completo.
+   */
+  listarHistorialFiado(clienteId: number): DeudaPendienteDetalle[];
+  /**
+   * Fotos de pagos (Yape/Plin) de fiados aplicados a ventas, dentro de
+   * un rango de fechas 'YYYY-MM-DD' inclusive — para mostrarlas junto a
+   * cada venta en Más > Reportes > Ventas. Una venta puede tener varias
+   * si se le hicieron varios abonos con foto.
+   */
+  listarFotosPagosFiado(desde: string, hasta: string): FotoPagoFiado[];
+  /** Cambia a mano la foto de un abono ya registrado (ver `pagoDeudaId` en `FotoPagoFiado`), eligiendo otra de la galería — para reenlazarla si el archivo original ya no existe. */
+  actualizarFotoPago(pagoDeudaId: number, fotoRuta: string): void;
 }
 
 export interface ProveedorRepositorio {
@@ -221,8 +290,8 @@ export interface CompraRepositorio {
    */
   registrarCompra(input: RegistrarCompraInput): Compra;
   listarRecientes(limite?: number): Compra[];
-  /** Compras dentro de un rango de fechas 'YYYY-MM-DD' inclusive, con proveedor resuelto, para el reporte (Premium). */
-  listarPorRango(desde: string, hasta: string): CompraListaItem[];
+  /** Compras dentro de un rango de fechas 'YYYY-MM-DD' inclusive, con proveedor resuelto, para el listado de Más > Compras y el reporte (Premium). Sin rango, trae todo el historial. */
+  listarPorRango(desde?: string, hasta?: string): CompraListaItem[];
   /**
    * Filas planas (compra + producto) listas para exportar a Excel, con
    * el total de la compra repetido en cada línea. Sin `desde`/`hasta`,
@@ -236,6 +305,23 @@ export interface CompraRepositorio {
    * ellos, devuelve todo el historial del producto.
    */
   listarHistorialCostos(productoId: number, desde?: string, hasta?: string): HistorialCostoItem[];
+  /** Compra completa + sus líneas de detalle (con el nombre del producto), para precargar el formulario de Modificar. */
+  obtenerParaEditar(id: number): { compra: Compra; lineas: (LineaCompraEntrada & { nombreProducto: string })[] };
+  /**
+   * Reemplaza proveedor, comprobante y líneas de una compra ya
+   * registrada: repone/retira stock según la diferencia con lo
+   * anterior, actualiza el costo del producto, y ajusta caja por la
+   * diferencia de total (o revierte + vuelve a aplicar si cambió el
+   * método de pago). No se puede modificar una compra anulada.
+   */
+  modificarCompra(id: number, input: RegistrarCompraInput): Compra;
+  /**
+   * Anula una compra: retira de stock lo que había entrado (falla con
+   * un mensaje claro si ya no hay stock suficiente porque se vendió),
+   * revierte el egreso de caja, y la marca como anulada. No se borra
+   * nada — misma idea que `anularVenta`.
+   */
+  anularCompra(id: number, motivo?: string): void;
 }
 
 /** Acceso crudo clave-valor a la tabla configuracion_app. */

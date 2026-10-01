@@ -57,10 +57,27 @@ export async function generarImagenComprobante(datos: DatosComprobante): Promise
     y += ALTO_LINEA;
   }
 
-  return new Promise((resolve, reject) => {
-    lienzo.toBlob((blob) => {
-      if (blob) resolve(blob);
-      else reject(new Error('No se pudo generar la imagen del comprobante.'));
-    }, 'image/png');
-  });
+  return canvasABlobSincrono(lienzo);
+}
+
+/**
+ * Convierte el <canvas> a PNG de forma SÍNCRONA con `toDataURL()`, en
+ * vez de `canvas.toBlob()`. Se probó que `toBlob()` puede demorar
+ * varios segundos (hasta ~15) en disparar su callback la primera vez
+ * que se genera un ticket después de estar un rato sin tocar la
+ * pantalla — Chrome/el WebView de Android agenda ese callback junto
+ * al siguiente dibujo de pantalla, y sin ningún toque reciente ese
+ * dibujo se retrasa. `toDataURL()` no tiene ese problema: se resuelve
+ * en el mismo hilo, al instante, sin depender de que llegue un nuevo
+ * frame.
+ */
+function canvasABlobSincrono(lienzo: HTMLCanvasElement): Blob {
+  const dataUrl = lienzo.toDataURL('image/png');
+  const base64 = dataUrl.slice(dataUrl.indexOf(',') + 1);
+  const binario = atob(base64);
+  const bytes = new Uint8Array(binario.length);
+  for (let i = 0; i < binario.length; i++) {
+    bytes[i] = binario.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: 'image/png' });
 }

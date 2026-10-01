@@ -1,7 +1,12 @@
 import type { DatosActualizarProducto, DatosNuevoProducto, ProductoRepositorio } from '@/core/repositorios';
 import { ErrorDeNegocio, calcularStockNuevo } from '@/core/reglas-negocio';
 import { aMayusculas } from '@/core/texto';
-import type { MovimientoInventarioItem, Producto } from '@/core/tipos';
+import type {
+  CampoHistorialProducto,
+  HistorialProductoItem,
+  MovimientoInventarioItem,
+  Producto,
+} from '@/core/tipos';
 import { ahoraLocalSql } from '@/core/tiempo';
 import type { BaseDatosLocal } from './base-datos';
 import { mapearMovimientoInventario, mapearProducto, type FilaMovimientoInventario, type FilaProducto } from './mapeadores';
@@ -47,23 +52,38 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
       throw new ErrorDeNegocio(`Ya existe un producto llamado "${nombreNormalizado}".`);
     }
 
-    this.bd.ejecutar(
-      `INSERT INTO producto
-         (nombre, categoria_id, codigo, precio_venta, costo, stock_actual, stock_minimo, controla_stock, unidad_medida)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        nombreNormalizado,
-        datos.categoriaId ?? null,
-        datos.codigo ?? null,
-        datos.precioVenta,
-        datos.costo,
-        datos.controlaStock ? datos.stockActual : 0,
-        datos.controlaStock ? datos.stockMinimo : 0,
-        datos.controlaStock ? 1 : 0,
-        datos.unidadMedida,
-      ],
-    );
-    return this.obtenerPorId(this.bd.ultimoIdInsertado());
+    return this.bd.transaccion(() => {
+      const stockInicial = datos.controlaStock ? datos.stockActual : 0;
+      const stockMinimoInicial = datos.controlaStock ? datos.stockMinimo : 0;
+
+      this.bd.ejecutar(
+        `INSERT INTO producto
+           (nombre, categoria_id, codigo, precio_venta, costo, stock_actual, stock_minimo, controla_stock, unidad_medida)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          nombreNormalizado,
+          datos.categoriaId ?? null,
+          datos.codigo ?? null,
+          datos.precioVenta,
+          datos.costo,
+          stockInicial,
+          stockMinimoInicial,
+          datos.controlaStock ? 1 : 0,
+          datos.unidadMedida,
+        ],
+      );
+      const id = this.bd.ultimoIdInsertado();
+
+      // Deja en la bitácora con qué valores se registró, para tener un
+      // punto de partida con el que comparar cambios futuros.
+      this.registrarHistorial(id, 'nombre', null, nombreNormalizado);
+      this.registrarHistorial(id, 'precio_venta', null, String(datos.precioVenta));
+      this.registrarHistorial(id, 'costo', null, String(datos.costo));
+      this.registrarHistorial(id, 'stock', null, String(stockInicial));
+      this.registrarHistorial(id, 'stock_minimo', null, String(stockMinimoInicial));
+
+      return this.obtenerPorId(id);
+    });
   }
 
   actualizarStock(id: number, nuevoStock: number): void {
@@ -74,7 +94,7 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
   }
 
   actualizar(id: number, datos: DatosActualizarProducto): Producto {
-    this.obtenerPorId(id); // valida que exista
+    const actual = this.obtenerPorId(id); // valida que exista
     if (!datos.nombre.trim()) {
       throw new ErrorDeNegocio('El nombre del producto es obligatorio.');
     }
@@ -86,30 +106,53 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
       throw new ErrorDeNegocio(`Ya existe un producto llamado "${nombreNormalizado}".`);
     }
 
-    this.bd.ejecutar(
-      `UPDATE producto
-         SET nombre = ?, categoria_id = ?, codigo = ?, precio_venta = ?, costo = ?,
-             stock_minimo = ?, controla_stock = ?, unidad_medida = ?, activo = ?, actualizado_en = datetime('now')
-       WHERE id = ?`,
-      [
-        nombreNormalizado,
-        datos.categoriaId ?? null,
-        datos.codigo ?? null,
-        datos.precioVenta,
-        datos.costo,
-        datos.controlaStock ? datos.stockMinimo : 0,
-        datos.controlaStock ? 1 : 0,
-        datos.unidadMedida,
-        datos.activo ? 1 : 0,
-        id,
-      ],
-    );
-    // Si se desactivó el control de stock, el stock actual también vuelve a 0
-    // (no tiene sentido dejar un número "colgado" que ya no se usa para nada).
-    if (!datos.controlaStock) {
-      this.actualizarStock(id, 0);
-    }
-    return this.obtenerPorId(id);
+    return this.bd.transaccion(() => {
+      const stockMinimoNuevo = datos.controlaStock ? datos.stockMinimo : 0;
+
+      this.bd.ejecutar(
+        `UPDATE producto
+           SET nombre = ?, categoria_id = ?, codigo = ?, precio_venta = ?, costo = ?,
+               stock_minimo = ?, controla_stock = ?, unidad_medida = ?, activo = ?, actualizado_en = datetime('now')
+         WHERE id = ?`,
+        [
+          nombreNormalizado,
+          datos.categoriaId ?? null,
+          datos.codigo ?? null,
+          datos.precioVenta,
+          datos.costo,
+          stockMinimoNuevo,
+          datos.controlaStock ? 1 : 0,
+          datos.unidadMedida,
+          datos.activo ? 1 : 0,
+          id,
+        ],
+      );
+      // Si se desactivó el control de stock, el stock actual también vuelve a 0
+      // (no tiene sentido dejar un número "colgado" que ya no se usa para nada).
+      const stockNuevo = datos.controlaStock ? actual.stockActual : 0;
+      if (!datos.controlaStock) {
+        this.actualizarStock(id, 0);
+      }
+
+      // Bitácora: solo se deja constancia de lo que REALMENTE cambió.
+      if (actual.nombre !== nombreNormalizado) {
+        this.registrarHistorial(id, 'nombre', actual.nombre, nombreNormalizado);
+      }
+      if (actual.precioVenta !== datos.precioVenta) {
+        this.registrarHistorial(id, 'precio_venta', String(actual.precioVenta), String(datos.precioVenta));
+      }
+      if (actual.costo !== datos.costo) {
+        this.registrarHistorial(id, 'costo', String(actual.costo), String(datos.costo));
+      }
+      if (actual.stockMinimo !== stockMinimoNuevo) {
+        this.registrarHistorial(id, 'stock_minimo', String(actual.stockMinimo), String(stockMinimoNuevo));
+      }
+      if (actual.stockActual !== stockNuevo) {
+        this.registrarHistorial(id, 'stock', String(actual.stockActual), String(stockNuevo));
+      }
+
+      return this.obtenerPorId(id);
+    });
   }
 
   ajustarStock(id: number, delta: number, motivo: string): Producto {
@@ -134,8 +177,46 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
          VALUES (?, 'ajuste', ?, ?, ?, ?)`,
         [id, delta, motivo.trim(), stockNuevo, ahoraLocalSql()],
       );
+      this.registrarHistorial(id, 'stock', String(producto.stockActual), String(stockNuevo), motivo.trim());
       return this.obtenerPorId(id);
     });
+  }
+
+  listarHistorial(productoId: number): HistorialProductoItem[] {
+    return this.bd
+      .consultar<{
+        campo: CampoHistorialProducto;
+        valor_anterior: string | null;
+        valor_nuevo: string;
+        motivo: string | null;
+        fecha: string;
+      }>(
+        `SELECT campo, valor_anterior, valor_nuevo, motivo, fecha FROM producto_historial
+         WHERE producto_id = ?
+         ORDER BY fecha DESC, id DESC`,
+        [productoId],
+      )
+      .map((f) => ({
+        campo: f.campo,
+        valorAnterior: f.valor_anterior,
+        valorNuevo: f.valor_nuevo,
+        motivo: f.motivo,
+        fecha: f.fecha,
+      }));
+  }
+
+  private registrarHistorial(
+    productoId: number,
+    campo: CampoHistorialProducto,
+    valorAnterior: string | null,
+    valorNuevo: string,
+    motivo?: string,
+  ): void {
+    this.bd.ejecutar(
+      `INSERT INTO producto_historial (producto_id, campo, valor_anterior, valor_nuevo, motivo, fecha)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [productoId, campo, valorAnterior, valorNuevo, motivo ?? null, ahoraLocalSql()],
+    );
   }
 
   /**

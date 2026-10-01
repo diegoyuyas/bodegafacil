@@ -1,10 +1,13 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+
 /**
  * Vende Fácil — Menú flotante "Imprimir en ticketera / Guardar como..."
  * ------------------------------------------------------------
  * Se abre desde el botón 🖨️ de un pedido ya confirmado (hoy: Inicio >
- * Pedidos de hoy) para elegir cómo reconstruir su ticket:
+ * Pedidos Generados) para elegir cómo reconstruir su ticket:
  * - Imprimir en ticketera: manda el texto a la impresora Bluetooth ya
  *   configurada (mismo camino que usaba el botón 🖨️ antes de este
  *   menú). Sale deshabilitada si la impresora no está lista.
@@ -27,7 +30,17 @@ export function MenuImprimirTicket({
   onCerrar: () => void;
   ocupado: boolean;
 }) {
-  return (
+  // Portal a <body>: este menú se abre desde dentro de la lista larga de
+  // Pedidos Generados, y position:fixed anidado ahí puede quedar "atado"
+  // a ese contenedor scrolleable en vez de a toda la pantalla (mismo
+  // problema que tenía el visor de fotos) — createPortal lo evita del
+  // todo. document no existe en el render del servidor, así que recién
+  // se monta tras el primer render en el navegador.
+  const [montado, setMontado] = useState(false);
+  useEffect(() => setMontado(true), []);
+  if (!montado) return null;
+
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -76,6 +89,7 @@ export function MenuImprimirTicket({
           Cancelar
         </button>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

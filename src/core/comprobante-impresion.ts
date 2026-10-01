@@ -195,7 +195,7 @@ export function construirLineasComprobante(datos: DatosComprobante, ancho: numbe
 
   c('');
   c('Gracias por su compra!', { negrita: true });
-  if (datos.tienda.contacto) c(`Contactanos: ${datos.tienda.contacto}`);
+  if (datos.tienda.contacto) c(`Contáctanos: ${datos.tienda.contacto}`);
   if (datos.tienda.leyenda) c(datos.tienda.leyenda);
 
   return lineas;

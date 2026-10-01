@@ -18,8 +18,8 @@ export const CLAVE_TIENDA_VENDEDOR_DOCUMENTO = 'tienda_vendedor_documento';
 
 /** No obligatorio; cuando se llena, hasta 50 caracteres. */
 export const LONGITUD_MAXIMA_UBICACION = 50;
-/** No obligatorio; cuando se llena, hasta 15 caracteres. */
-export const LONGITUD_MAXIMA_CONTACTO = 15;
+/** No obligatorio; cuando se llena, hasta 50 caracteres (alcanza para más de un celular). */
+export const LONGITUD_MAXIMA_CONTACTO = 50;
 /** No obligatoria; mensaje libre debajo del comprobante impreso. */
 export const LONGITUD_MAXIMA_LEYENDA = 150;
 /** No obligatorio; cuando se llena, hasta 50 caracteres. */

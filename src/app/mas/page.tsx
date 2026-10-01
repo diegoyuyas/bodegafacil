@@ -7,7 +7,7 @@ import { CLAVE_IMPRESORA_ACTIVA, IMPRESION_BLUETOOTH_DISPONIBLE } from '@/core/i
 
 const OPCIONES = [
   { href: '/caja', etiqueta: 'Caja', descripcion: 'Saldo, ingresos y egresos' },
-  { href: '/compras', etiqueta: 'Compras', descripcion: 'Reponer stock desde un proveedor' },
+  { href: '/compras', etiqueta: 'Compras', descripcion: 'Registrar, modificar o anular compras a proveedor' },
   {
     href: '/mas/reportes',
     etiqueta: 'Reportes',

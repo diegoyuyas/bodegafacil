@@ -4,10 +4,19 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
-import type { Producto } from '@/core/tipos';
+import type { HistorialProductoItem, Producto } from '@/core/tipos';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
 import { limpiarNumeroEscrito, mayusculasAlEscribir } from '@/core/texto';
+import { formatearFechaHora } from '@/core/tiempo';
 import { SelectorEstado, filtrarPorEstado, type FiltroEstado } from '@/components/selector-estado';
+
+const ETIQUETAS_CAMPO_HISTORIAL: Record<HistorialProductoItem['campo'], string> = {
+  nombre: 'Nombre',
+  precio_venta: 'Precio de venta',
+  costo: 'Costo',
+  stock: 'Stock',
+  stock_minimo: 'Stock mínimo',
+};
 
 export default function PaginaProductos() {
   const { contenedor, cargando, error } = usarContenedor();
@@ -47,6 +56,11 @@ export default function PaginaProductos() {
   const [motivoAjuste, setMotivoAjuste] = useState('');
   const [mensajeErrorAjuste, setMensajeErrorAjuste] = useState<string | null>(null);
 
+  // Bitácora de cambios manuales (ver producto.repositorio.ts): se pide
+  // bajo demanda, solo para el producto que se tiene abierto.
+  const [bitacoraId, setBitacoraId] = useState<number | null>(null);
+  const [historial, setHistorial] = useState<HistorialProductoItem[]>([]);
+
   function recargar() {
     if (contenedor) setProductos(contenedor.productos.listarTodos());
   }
@@ -56,6 +70,17 @@ export default function PaginaProductos() {
   async function guardarProducto() {
     if (!contenedor) return;
     setMensajeError(null);
+    const precioNum = Number(precioVenta);
+    const costoNum = Number(costo);
+    // Costo en 0 no se avisa (puede ser un producto sin costo registrado
+    // a propósito); solo se pregunta cuando el costo queda MÁS ALTO que
+    // el precio de venta, porque eso casi siempre es un error de tipeo.
+    if (costoNum > 0 && costoNum > precioNum) {
+      const confirmar = window.confirm(
+        `¿Está seguro de registrar este costo: ${formatearMonto(costoNum, simboloMoneda)} mayor al precio de venta ${formatearMonto(precioNum, simboloMoneda)}?`,
+      );
+      if (!confirmar) return;
+    }
     try {
       contenedor.productos.crear({
         nombre: nombre.trim(),
@@ -82,6 +107,8 @@ export default function PaginaProductos() {
 
   function abrirEdicion(producto: Producto) {
     setMostrarFormulario(false);
+    setAjustandoId(null);
+    setBitacoraId(null);
     setEditandoId(producto.id);
     setNombreEdit(producto.nombre);
     setPrecioVentaEdit(String(producto.precioVenta));
@@ -100,6 +127,7 @@ export default function PaginaProductos() {
   function abrirAjuste(producto: Producto) {
     setMostrarFormulario(false);
     setEditandoId(null);
+    setBitacoraId(null);
     setAjustandoId(producto.id);
     setTipoAjuste('sumar');
     setCantidadAjuste('');
@@ -110,6 +138,24 @@ export default function PaginaProductos() {
   function cancelarAjuste() {
     setAjustandoId(null);
     setMensajeErrorAjuste(null);
+  }
+
+  function alternarBitacora(producto: Producto) {
+    if (bitacoraId === producto.id) {
+      setBitacoraId(null);
+      return;
+    }
+    setMostrarFormulario(false);
+    setEditandoId(null);
+    setAjustandoId(null);
+    setBitacoraId(producto.id);
+    setHistorial(contenedor ? contenedor.productos.listarHistorial(producto.id) : []);
+  }
+
+  function formatearValorCampo(campo: HistorialProductoItem['campo'], valor: string | null): string {
+    if (valor === null) return '—';
+    if (campo === 'precio_venta' || campo === 'costo') return formatearMonto(Number(valor), simboloMoneda);
+    return valor;
   }
 
   const formularioAjusteValido = Number(cantidadAjuste) > 0 && motivoAjuste.trim().length > 0;
@@ -149,6 +195,14 @@ export default function PaginaProductos() {
   async function guardarEdicion() {
     if (!contenedor || editandoId === null) return;
     setMensajeErrorEdit(null);
+    const precioNum = Number(precioVentaEdit);
+    const costoNum = Number(costoEdit);
+    if (costoNum > 0 && costoNum > precioNum) {
+      const confirmar = window.confirm(
+        `¿Está seguro de registrar este costo: ${formatearMonto(costoNum, simboloMoneda)} mayor al precio de venta ${formatearMonto(precioNum, simboloMoneda)}?`,
+      );
+      if (!confirmar) return;
+    }
     try {
       const producto = contenedor.productos.obtenerPorId(editandoId);
       contenedor.productos.actualizar(editandoId, {
@@ -333,8 +387,50 @@ export default function PaginaProductos() {
                     >
                       {editandoId === producto.id ? 'Cancelar' : 'Editar'}
                     </button>
+                    <button
+                      onClick={() => alternarBitacora(producto)}
+                      className="text-sm font-semibold text-tinta/70"
+                    >
+                      {bitacoraId === producto.id ? 'Cerrar' : 'Bitácora'}
+                    </button>
                   </div>
                 </div>
+
+                {bitacoraId === producto.id && (
+                  <div className="mt-3 space-y-2 rounded-xl border border-linea p-4">
+                    <p className="text-xs text-tinta/50">
+                      Cambios manuales a este producto (nombre, precio, costo, stock y stock
+                      mínimo) — no incluye los movimientos normales de una venta o una compra.
+                    </p>
+                    {historial.length === 0 ? (
+                      <p className="text-sm text-tinta/50">Sin cambios registrados todavía.</p>
+                    ) : (
+                      <ul className="divide-y divide-linea">
+                        {historial.map((item, indice) => (
+                          <li key={indice} className="py-2 text-sm">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="font-semibold text-tinta">
+                                {ETIQUETAS_CAMPO_HISTORIAL[item.campo]}
+                              </span>
+                              <span className="text-xs text-tinta/40">{formatearFechaHora(item.fecha)}</span>
+                            </div>
+                            <p className="text-tinta/70">
+                              {item.valorAnterior === null ? (
+                                <>Se registró en {formatearValorCampo(item.campo, item.valorNuevo)}</>
+                              ) : (
+                                <>
+                                  Cambió de {formatearValorCampo(item.campo, item.valorAnterior)} a{' '}
+                                  {formatearValorCampo(item.campo, item.valorNuevo)}
+                                </>
+                              )}
+                            </p>
+                            {item.motivo && <p className="text-xs text-tinta/50">Motivo: {item.motivo}</p>}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
 
                 {ajustandoId === producto.id && (
                   <div className="mt-3 space-y-3 rounded-xl border border-linea p-4">

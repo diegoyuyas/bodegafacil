@@ -114,10 +114,19 @@ export interface HojaExcel {
 export function construirHojaCaja(movimientos: MovimientoCaja[]): HojaExcel {
   return {
     nombre: 'Caja',
-    encabezados: ['Fecha y hora', 'Tipo', 'Concepto', 'Método de pago', 'Monto', 'Saldo resultante'],
+    encabezados: [
+      'Fecha y hora',
+      'Tipo',
+      'Cliente/Proveedor',
+      'Concepto',
+      'Método de pago',
+      'Monto',
+      'Saldo resultante',
+    ],
     filas: movimientos.map((m) => [
       m.fechaHora,
       m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso',
+      m.referencia,
       m.concepto,
       m.metodoPago,
       m.monto,

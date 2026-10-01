@@ -11,10 +11,13 @@ import { PlanRepositorioSqlite } from './plan.repositorio';
 import { BloqueoPinRepositorioSqlite } from './bloqueo-pin.repositorio';
 import { RespaldoRepositorioSqlite } from './respaldo.repositorio';
 import { cargarBinario, guardarBinario } from '../persistencia/almacen-indexeddb';
+import { CLAVE_PLAN_FECHA_MAXIMA_VISTA, CLAVE_PLAN_VENCE_EN } from '@/core/plan';
 
 const CLAVE_PERSISTENCIA = 'vende-facil-db';
 /** Marca de que ya se retiraron los productos de ejemplo de versiones anteriores (se hace una sola vez). */
 const CLAVE_EJEMPLOS_ANTIGUOS_RETIRADOS = 'ejemplos_antiguos_retirados';
+/** Bandera: ya se repartieron los abonos antiguos entre las deudas de cada cliente (ver reconciliarFiadosPorDeuda). */
+const CLAVE_FIADOS_POR_DEUDA = 'fiados_por_deuda_v1';
 
 export interface ContenedorRepositorios {
   productos: ProductoRepositorioSqlite;
@@ -87,10 +90,12 @@ async function inicializar(): Promise<ContenedorRepositorios> {
     // producto que el bodeguero cree después con un nombre parecido nunca
     // se confunda con un ejemplo antiguo.
     configuracion.establecerValor(CLAVE_EJEMPLOS_ANTIGUOS_RETIRADOS, '1');
+    configuracion.establecerValor(CLAVE_FIADOS_POR_DEUDA, '1'); // base nueva: nada antiguo que repartir
     await persistir(); // deja guardados el esquema + los datos de ejemplo
   } else {
     let huboCambios = retirarEjemplosAntiguos(bd, configuracion, productos, proveedores);
     huboCambios = corregirNombreEjemploInkaCola(bd) || huboCambios;
+    huboCambios = reconciliarFiadosPorDeuda(bd, configuracion) || huboCambios;
     if (huboCambios) await persistir();
   }
 
@@ -119,8 +124,21 @@ async function inicializar(): Promise<ContenedorRepositorios> {
  * cualquiera). Se recarga en vez de reasignar en caliente porque todos
  * los repositorios ya instanciados quedarían apuntando a la base
  * vieja; un reload es más simple y a prueba de errores.
+ *
+ * El respaldo solo debe traer de vuelta la información del negocio
+ * (ventas, productos, caja, fiados, compras…) — NUNCA el estado de
+ * Premium. Si no fuera así, un respaldo viejo (de cuando quedaban más
+ * días) serviría para "revivir" un Premium ya vencido sin pasar por
+ * el dueño de la app. Por eso, antes de guardar el archivo restaurado,
+ * se pisan esas dos claves con las que ya tenía ESTE dispositivo
+ * (`premiumAConservar`), sea cual sea el Premium que traiga el
+ * respaldo. Si el bodeguero necesita Premium después de restaurar,
+ * tiene que pedir un código de activación nuevo.
  */
-export async function restaurarRespaldo(datos: Uint8Array): Promise<void> {
+export async function restaurarRespaldo(
+  datos: Uint8Array,
+  premiumAConservar: { venceEn: string | null; fechaMaximaVista: string | null },
+): Promise<void> {
   let bdDePrueba: BaseDatosLocal;
   try {
     bdDePrueba = await BaseDatosLocal.crear({
@@ -132,7 +150,21 @@ export async function restaurarRespaldo(datos: Uint8Array): Promise<void> {
     throw new Error('El archivo no es un respaldo válido de Vende Fácil.');
   }
 
-  await guardarBinario(CLAVE_PERSISTENCIA, datos);
+  const conservarClave = (clave: string, valor: string | null) => {
+    if (valor) {
+      bdDePrueba.ejecutar(
+        `INSERT INTO configuracion_app (clave, valor) VALUES (?, ?)
+         ON CONFLICT(clave) DO UPDATE SET valor = excluded.valor`,
+        [clave, valor],
+      );
+    } else {
+      bdDePrueba.ejecutar('DELETE FROM configuracion_app WHERE clave = ?', [clave]);
+    }
+  };
+  conservarClave(CLAVE_PLAN_VENCE_EN, premiumAConservar.venceEn);
+  conservarClave(CLAVE_PLAN_FECHA_MAXIMA_VISTA, premiumAConservar.fechaMaximaVista);
+
+  await guardarBinario(CLAVE_PERSISTENCIA, bdDePrueba.exportar());
   window.location.reload();
 }
 
@@ -222,5 +254,61 @@ function retirarEjemplosAntiguos(
 
   if (antiguos.length > 0) sembrarDatosDeEjemplo(productos, proveedores);
   configuracion.establecerValor(CLAVE_EJEMPLOS_ANTIGUOS_RETIRADOS, '1');
+  return true;
+}
+
+/**
+ * Antes cada abono solo bajaba el saldo TOTAL del cliente: las deudas de cada
+ * venta al fiado (`deuda_cliente`) nunca se descontaban, así que no se sabía
+ * cuánto se había pagado de cada una. Ahora cada deuda lleva su propio saldo.
+ * Para las bases que ya tienen fiados, esto reparte UNA sola vez lo que cada
+ * cliente ya pagó entre sus deudas, de la más antigua a la más reciente
+ * (FIFO), de modo que la suma de los saldos por venta coincida con el saldo
+ * total que el cliente ya tiene hoy (ese número NO cambia). También deja en 0
+ * las deudas de ventas que ya estaban anuladas (antes seguían "pendientes" y
+ * aparecían en el mensaje de cobranza por WhatsApp).
+ * Los abonos históricos de `pago_deuda` no se pueden atribuir a una venta
+ * concreta, así que quedan como están. Devuelve true si tocó la base.
+ */
+function reconciliarFiadosPorDeuda(
+  bd: BaseDatosLocal,
+  configuracion: ConfiguracionRepositorioSqlite,
+): boolean {
+  if (configuracion.obtenerValor(CLAVE_FIADOS_POR_DEUDA) === '1') return false;
+
+  bd.ejecutar(
+    `UPDATE deuda_cliente SET saldo_pendiente = 0, estado = 'pagada'
+     WHERE venta_id IN (SELECT id FROM venta WHERE anulada = 1)`,
+  );
+
+  const clientes = bd.consultar<{ id: number; saldo_pendiente: number }>(
+    `SELECT DISTINCT c.id AS id, c.saldo_pendiente AS saldo_pendiente
+       FROM cliente c JOIN deuda_cliente d ON d.cliente_id = c.id`,
+  );
+
+  for (const cliente of clientes) {
+    const deudas = bd.consultar<{ id: number; monto: number }>(
+      `SELECT id, monto FROM deuda_cliente
+       WHERE cliente_id = ? AND saldo_pendiente > 0
+       ORDER BY fecha ASC, id ASC`,
+      [cliente.id],
+    );
+    const totalDeudas = deudas.reduce((suma, d) => suma + d.monto, 0);
+    let porRepartir = Math.max(0, Math.round((totalDeudas - cliente.saldo_pendiente) * 100) / 100);
+
+    for (const deuda of deudas) {
+      if (porRepartir <= 0) break;
+      const aplicado = Math.min(porRepartir, deuda.monto);
+      const saldo = Math.round((deuda.monto - aplicado) * 100) / 100;
+      bd.ejecutar('UPDATE deuda_cliente SET saldo_pendiente = ?, estado = ? WHERE id = ?', [
+        saldo,
+        saldo <= 0 ? 'pagada' : 'pagada_parcial',
+        deuda.id,
+      ]);
+      porRepartir = Math.round((porRepartir - aplicado) * 100) / 100;
+    }
+  }
+
+  configuracion.establecerValor(CLAVE_FIADOS_POR_DEUDA, '1');
   return true;
 }

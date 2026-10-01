@@ -40,6 +40,27 @@ CREATE INDEX idx_producto_categoria ON producto(categoria_id);
 CREATE INDEX idx_producto_codigo    ON producto(codigo);
 CREATE INDEX idx_producto_activo    ON producto(activo);
 
+-- Bitácora de cambios manuales a un producto: nombre, precio de venta,
+-- costo, stock mínimo (todos vía Editar) y stock (vía Ajustar). A
+-- propósito NO registra los cambios de stock automáticos por una venta
+-- o una compra — esos ya tienen su propio rastro completo en
+-- movimiento_inventario/venta/compra; esta bitácora es específicamente
+-- para poder distinguir "esto lo cambió el bodeguero a mano" de "esto
+-- lo cambió la app sola", por ejemplo si alguien ajusta un precio o un
+-- costo después de la venta para que ya no se vea un margen negativo.
+CREATE TABLE producto_historial (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    producto_id     INTEGER NOT NULL REFERENCES producto(id) ON DELETE CASCADE,
+    campo           TEXT NOT NULL
+                        CHECK (campo IN ('nombre','precio_venta','costo','stock','stock_minimo')),
+    valor_anterior  TEXT,      -- NULL en la fila que registra el valor inicial (al crear el producto)
+    valor_nuevo     TEXT NOT NULL,
+    motivo          TEXT,      -- solo para 'stock': el motivo que se escribió al ajustar
+    fecha           TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX idx_producto_historial_producto ON producto_historial(producto_id, fecha DESC);
+
 -- ------------------------------------------------------------
 -- 2. Clientes y fiados
 -- ------------------------------------------------------------
@@ -118,6 +139,12 @@ CREATE TABLE pago_deuda (
     monto               REAL NOT NULL CHECK (monto > 0),
     metodo_pago         TEXT NOT NULL CHECK (metodo_pago IN ('efectivo','yape','plin','tarjeta')),
     nota                TEXT,
+    -- Foto del pago (Yape/Plin), opcional -- mismo criterio que
+    -- venta.comprobante_pago_ruta: solo la ruta del archivo, nunca el
+    -- binario. Si un abono se reparte entre varias deudas (FIFO), la
+    -- MISMA foto queda en cada fila de pago_deuda que genero ese abono,
+    -- para poder verla desde cualquiera de las ventas fiadas afectadas.
+    foto_ruta           TEXT,
     fecha               TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -164,7 +191,9 @@ CREATE TABLE compra (
     total                       REAL NOT NULL CHECK (total >= 0),
     estado                      TEXT NOT NULL DEFAULT 'recibida'
                                     CHECK (estado IN ('pendiente','recibida','anulada')),
-    nota                        TEXT
+    nota                        TEXT,
+    metodo_pago                 TEXT CHECK (metodo_pago IN ('efectivo','yape','plin','tarjeta')),
+    motivo_anulacion            TEXT
 );
 
 CREATE INDEX idx_compra_proveedor ON compra(proveedor_id);
