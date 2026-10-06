@@ -14,7 +14,20 @@ const SELECT_CON_REFERENCIA = `
   SELECT
     mc.id AS id, mc.tipo AS tipo, mc.monto AS monto, mc.concepto AS concepto,
     mc.metodo_pago AS metodo_pago, mc.venta_id AS venta_id,
-    mc.saldo_resultante AS saldo_resultante, mc.fecha_hora AS fecha_hora,
+    mc.saldo_resultante AS saldo_resultante, mc.fecha_hora AS fecha_hora, mc.clase AS clase,
+    COALESCE((
+      SELECT SUM(pd.monto)
+      FROM pago_deuda pd
+      JOIN deuda_cliente dc ON dc.id = pd.deuda_id
+      JOIN venta vv ON vv.id = dc.venta_id
+      WHERE mc.abono_id IS NOT NULL AND mc.tipo = 'ingreso'
+        AND pd.abono_id = mc.abono_id AND pd.anulado = 0 AND vv.anulada = 1
+        AND EXISTS (
+          SELECT 1 FROM movimiento_caja d
+          WHERE d.venta_id = vv.id AND d.clase = 'anulacion' AND d.concepto LIKE 'Devolución por anulación%'
+        )
+    ), 0) AS monto_anulado,
+    CASE WHEN mc.clase != 'anulacion' AND (v.anulada = 1 OR co.estado = 'anulada' OR mc.pago_anulado = 1) THEN 1 ELSE 0 END AS anulado,
     CASE
       WHEN mc.venta_id IS NOT NULL THEN COALESCE(cli_v.nombre, 'Cliente eventual')
       WHEN mc.cliente_id IS NOT NULL THEN COALESCE(cli_d.nombre, 'Cliente eventual')
@@ -48,8 +61,8 @@ export class CajaRepositorioSqlite implements CajaRepositorio {
     const saldoNuevo = calcularSaldoCaja(this.obtenerSaldoActual(), monto, 0);
     this.bd.ejecutar(
       `INSERT INTO movimiento_caja
-         (tipo, monto, concepto, metodo_pago, venta_id, compra_id, cliente_id, saldo_resultante, fecha_hora)
-       VALUES ('ingreso', ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (tipo, monto, concepto, metodo_pago, venta_id, compra_id, cliente_id, saldo_resultante, fecha_hora, clase, abono_id)
+       VALUES ('ingreso', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         monto,
         concepto,
@@ -59,6 +72,8 @@ export class CajaRepositorioSqlite implements CajaRepositorio {
         referencia?.clienteId ?? null,
         saldoNuevo,
         ahoraLocalSql(),
+        referencia?.clase ?? 'normal',
+        referencia?.abonoId ?? null,
       ],
     );
   }
@@ -72,8 +87,8 @@ export class CajaRepositorioSqlite implements CajaRepositorio {
     const saldoNuevo = calcularSaldoCaja(this.obtenerSaldoActual(), 0, monto);
     this.bd.ejecutar(
       `INSERT INTO movimiento_caja
-         (tipo, monto, concepto, metodo_pago, venta_id, compra_id, cliente_id, saldo_resultante, fecha_hora)
-       VALUES ('egreso', ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (tipo, monto, concepto, metodo_pago, venta_id, compra_id, cliente_id, saldo_resultante, fecha_hora, clase, abono_id)
+       VALUES ('egreso', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         monto,
         concepto,
@@ -83,6 +98,8 @@ export class CajaRepositorioSqlite implements CajaRepositorio {
         referencia?.clienteId ?? null,
         saldoNuevo,
         ahoraLocalSql(),
+        referencia?.clase ?? 'normal',
+        referencia?.abonoId ?? null,
       ],
     );
   }

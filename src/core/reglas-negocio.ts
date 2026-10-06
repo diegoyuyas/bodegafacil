@@ -277,3 +277,58 @@ export function validarComprobante(comprobante: string): void {
 export function redondear(valor: number): number {
   return Math.round((valor + Number.EPSILON) * 100) / 100;
 }
+
+type MovimientoParaTotales = {
+  tipo: 'ingreso' | 'egreso';
+  monto: number;
+  clase?: 'normal' | 'anulacion' | 'ajuste';
+  anulado?: boolean;
+  montoAnulado?: number;
+};
+
+/**
+ * Totales de Caja.
+ *  - Ingresos/Egresos: solo plata real. Lo anulado (la venta/compra original y sus ajustes)
+ *    y las reversas por anulación NO cuentan, así una venta o compra anulada queda en 0.
+ *  - Un cobro de fiado cuenta solo por la parte vigente (sin lo de ventas anuladas y devueltas).
+ *  - Los ajustes por modificar una compra corrigen su monto en Egresos (si bajó, restan).
+ *  - Neto: cuánto cambió realmente la caja (suma con signo de TODO); coincide con el saldo.
+ */
+export function calcularTotalesCaja(movimientos: MovimientoParaTotales[]): {
+  ingresos: number;
+  egresos: number;
+  neto: number;
+} {
+  let ingresos = 0;
+  let egresos = 0;
+  let neto = 0;
+  for (const m of movimientos) {
+    neto += m.tipo === 'ingreso' ? m.monto : -m.monto;
+    if (m.anulado || m.clase === 'anulacion') continue;
+    if (m.clase === 'ajuste') {
+      egresos += m.tipo === 'egreso' ? m.monto : -m.monto; // los ajustes solo existen en compras
+    } else if (m.tipo === 'ingreso') {
+      ingresos += m.monto - (m.montoAnulado ?? 0);
+    } else {
+      egresos += m.monto;
+    }
+  }
+  return { ingresos: redondear(ingresos), egresos: redondear(egresos), neto: redondear(neto) };
+}
+
+/** Etiqueta gris que acompaña a un movimiento que no es plata "activa" (o null si es normal). */
+export function etiquetaDeMovimientoCaja(m: {
+  clase?: 'normal' | 'anulacion' | 'ajuste';
+  anulado?: boolean;
+}): 'Anulado' | 'Anulación' | 'Ajuste' | null {
+  if (m.anulado) return 'Anulado';
+  if (m.clase === 'anulacion') return 'Anulación';
+  if (m.clase === 'ajuste') return 'Ajuste';
+  return null;
+}
+
+/** Monto que realmente cuenta de un movimiento (un cobro de fiado descuenta lo de ventas anuladas). */
+export function montoVigenteDeMovimientoCaja(m: { monto: number; anulado?: boolean; montoAnulado?: number }): number {
+  if (m.anulado) return m.monto;
+  return redondear(m.monto - (m.montoAnulado ?? 0));
+}

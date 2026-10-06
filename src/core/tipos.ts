@@ -106,7 +106,17 @@ export interface PagoDeuda {
  * para poder MOSTRAR a quién pertenece (ver MovimientoCaja.referencia);
  * nunca afecta montos ni saldo.
  */
+/**
+ * 'normal': plata que realmente entró o salió (venta, compra, cobro, ingreso/egreso manual).
+ * 'anulacion' / 'ajuste': reversas por anular o modificar algo; no son ingresos ni egresos
+ * reales, así que los totales las muestran aparte.
+ */
+export type ClaseMovimientoCaja = 'normal' | 'anulacion' | 'ajuste';
+
 export interface ReferenciaCajaMovimiento {
+  clase?: ClaseMovimientoCaja;
+  /** Abono de fiado que originó el movimiento (cobro), para poder marcarlo si luego se anula el pago. */
+  abonoId?: number | null;
   ventaId?: number | null;
   compraId?: number | null;
   clienteId?: number | null;
@@ -121,6 +131,14 @@ export interface MovimientoCaja {
   ventaId: number | null;
   saldoResultante: number;
   fechaHora: string;
+  clase: ClaseMovimientoCaja;
+  /** La venta o compra a la que pertenece este movimiento fue anulada: se muestra en gris y no cuenta en los totales. */
+  anulado: boolean;
+  /**
+   * Parte de un cobro de fiado que corresponde a ventas que luego se anularon y cuyo dinero
+   * se devolvió al cliente. Ese pedazo ya no es plata real: no cuenta en los totales.
+   */
+  montoAnulado: number;
   /** Cliente de la venta/cobro, proveedor de la compra, o "Ajuste Manual" si no aplica ninguno. */
   referencia: string;
 }
@@ -281,6 +299,38 @@ export interface DeudaPendienteDetalle {
   /** Lo que todavía falta cobrar de ESTA venta (ya descontados los abonos). */
   saldoPendiente: number;
   lineas: LineaVentaResumen[];
+}
+
+/**
+ * Un pago (abono) de fiado ya registrado, con todas sus porciones juntas
+ * (un abono puede repartirse entre varias ventas al fiado).
+ */
+export interface PagoFiado {
+  /** Identifica el abono completo; es lo que se pasa a `anularPago`. */
+  clave: string;
+  clienteId: number;
+  fecha: string;
+  monto: number;
+  metodoPago: MetodoPagoSinFiado;
+  fotoRuta: string | null;
+  /** Ventas al fiado a las que se aplicó este pago. */
+  ventas: number[];
+  anulado: boolean;
+  motivoAnulacion: string | null;
+  fechaAnulacion: string | null;
+}
+
+/** Una fila de la bitácora de pagos de fiado anulados. */
+export interface RegistroBitacoraAnulacionPago {
+  id: number;
+  clienteId: number | null;
+  clienteNombre: string;
+  monto: number;
+  metodoPago: string;
+  fechaPago: string;
+  motivo: string;
+  detalle: string;
+  fechaAnulacion: string;
 }
 
 /** Una foto (Yape/Plin) de un abono de fiado, aplicada a una venta puntual. */

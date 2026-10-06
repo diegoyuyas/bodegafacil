@@ -5,6 +5,26 @@ import { useEffect, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import type { EstadoPlan } from '@/core/plan';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
+import type { DestinoPin } from '@/core/bloqueo-pin';
+
+const OPCIONES_PIN: { destino: DestinoPin; titulo: string; descripcion: string }[] = [
+  {
+    destino: 'ingresar',
+    titulo: 'Ingresar al app',
+    descripcion: 'Pide el PIN cada vez que abres Vende Fácil.',
+  },
+  {
+    destino: 'anular',
+    titulo: 'Anular transacciones',
+    descripcion: 'Anular ventas, compras, fiados y pagos de fiados.',
+  },
+  {
+    destino: 'modificar',
+    titulo: 'Modificar o ajustar información',
+    descripcion:
+      'Editar productos, ajustar stock, editar clientes y proveedores, modificar compras, cobrar fiados y registrar ingresos/egresos de caja.',
+  },
+];
 
 type Modo = 'inactivo' | 'activo' | 'creando' | 'desactivando' | 'cambiando';
 
@@ -47,12 +67,60 @@ export default function PaginaConfigurarPin() {
   const [mensaje, setMensaje] = useState<string | null>(null);
   const [mensajeEsError, setMensajeEsError] = useState(false);
 
+  const [destinos, setDestinos] = useState<Record<DestinoPin, boolean>>({
+    ingresar: false,
+    anular: false,
+    modificar: false,
+  });
+  // Apagar un interruptor exige el PIN actual (si no, cualquiera podría quitar la protección).
+  const [apagando, setApagando] = useState<DestinoPin | null>(null);
+  const [pinApagar, setPinApagar] = useState('');
+  const [errorApagar, setErrorApagar] = useState<string | null>(null);
+
+  function leerDestinos() {
+    if (!contenedor) return;
+    setDestinos({
+      ingresar: contenedor.bloqueoPin.requiereParaDestino('ingresar'),
+      anular: contenedor.bloqueoPin.requiereParaDestino('anular'),
+      modificar: contenedor.bloqueoPin.requiereParaDestino('modificar'),
+    });
+  }
+
+  async function alternarDestino(destino: DestinoPin) {
+    if (!contenedor) return;
+    if (!destinos[destino]) {
+      contenedor.bloqueoPin.encenderDestino(destino);
+      await contenedor.persistir();
+      leerDestinos();
+      return;
+    }
+    setPinApagar('');
+    setErrorApagar(null);
+    setApagando(destino);
+  }
+
+  async function confirmarApagar() {
+    if (!contenedor || !apagando) return;
+    const ok = await contenedor.bloqueoPin.apagarDestino(apagando, pinApagar);
+    if (!ok) {
+      setErrorApagar('PIN incorrecto.');
+      setPinApagar('');
+      return;
+    }
+    await contenedor.persistir();
+    setApagando(null);
+    setPinApagar('');
+    leerDestinos();
+  }
+
   useEffect(() => {
     if (!contenedor) return;
     setEstadoPlan(contenedor.plan.obtenerEstado());
     const activo = contenedor.bloqueoPin.estaActivo();
     setPinActivo(activo);
     setModo(activo ? 'activo' : 'inactivo');
+    leerDestinos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contenedor]);
 
   const esPremium = estadoPlan?.tipo === 'premium';
@@ -84,6 +152,7 @@ export default function PaginaConfigurarPin() {
       await contenedor.persistir();
       setPinActivo(true);
       setModo('activo');
+      leerDestinos();
       limpiarCampos();
     } catch (e) {
       setMensajeEsError(true);
@@ -152,7 +221,7 @@ export default function PaginaConfigurarPin() {
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       <p className="mt-4 text-sm text-tinta/70">
-        Si lo activas, Vende Fácil te pedirá este PIN cada vez que abras la app.
+        Con un PIN configurado eliges, con los interruptores, en qué momentos Vende Fácil te lo pide.
       </p>
 
       {estadoPlan && !esPremium && (
@@ -167,7 +236,7 @@ export default function PaginaConfigurarPin() {
           <div className="mt-6 rounded-xl border border-alerta/40 bg-alerta/10 p-3">
             <p className="text-xs font-semibold text-alerta">⚠️ Si olvidas tu PIN…</p>
             <p className="mt-1 text-xs text-tinta/70">
-              …no podrás volver a entrar a Vende Fácil hasta borrar los datos de la aplicación desde los
+              …y tienes encendido "Ingresar al app", no podrás volver a entrar a Vende Fácil hasta borrar los datos de la aplicación desde los
               ajustes del teléfono — y eso borra también tus ventas, productos y todo lo demás. Anótalo en
               un lugar seguro.
             </p>
@@ -189,8 +258,61 @@ export default function PaginaConfigurarPin() {
             <div className="mt-6 flex flex-col gap-3">
               <div className="flex items-center justify-between rounded-xl border border-linea p-4">
                 <p className="text-sm font-semibold text-tinta">PIN activado</p>
-                <span className="text-xs font-semibold text-bodega-oscuro">✓ Protegiendo la app</span>
+                <span className="text-xs font-semibold text-bodega-oscuro">✓ Configurado</span>
               </div>
+
+              <p className="mt-2 text-xs font-semibold text-tinta/70">Pedir el PIN para:</p>
+              {OPCIONES_PIN.map((opcion) => {
+                const encendido = destinos[opcion.destino];
+                return (
+                  <div key={opcion.destino} className="rounded-xl border border-linea p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-tinta">{opcion.titulo}</p>
+                        <p className="mt-0.5 text-xs text-tinta/60">{opcion.descripcion}</p>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={encendido}
+                        aria-label={opcion.titulo}
+                        onClick={() => alternarDestino(opcion.destino)}
+                        className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
+                          encendido ? 'bg-bodega' : 'bg-tinta/20'
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-all ${
+                            encendido ? 'left-[22px]' : 'left-0.5'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {apagando === opcion.destino && (
+                      <div className="mt-3 flex flex-col gap-2 border-t border-linea pt-3">
+                        <CampoPin etiqueta="Ingresa tu PIN para apagarlo" valor={pinApagar} onChange={setPinApagar} />
+                        {errorApagar && <p className="text-xs text-alerta">{errorApagar}</p>}
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => setApagando(null)}
+                            className="h-10 flex-1 rounded-lg border border-linea text-xs font-semibold text-tinta/70"
+                          >
+                            Cancelar
+                          </button>
+                          <button
+                            onClick={confirmarApagar}
+                            disabled={pinApagar.length !== 4}
+                            className="h-10 flex-1 rounded-lg bg-bodega text-xs font-semibold text-white disabled:opacity-40"
+                          >
+                            Apagar
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               <button
                 onClick={() => {
                   limpiarCampos();

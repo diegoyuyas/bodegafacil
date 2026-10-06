@@ -145,10 +145,33 @@ CREATE TABLE pago_deuda (
     -- MISMA foto queda en cada fila de pago_deuda que genero ese abono,
     -- para poder verla desde cualquiera de las ventas fiadas afectadas.
     foto_ruta           TEXT,
+    -- Agrupa las filas que salieron de UN mismo abono (se reparte entre
+    -- varias deudas). Anular un pago siempre anula el abono completo.
+    abono_id            INTEGER,
+    -- Trazabilidad: un pago anulado no se borra, se marca.
+    anulado             INTEGER NOT NULL DEFAULT 0,
+    motivo_anulacion    TEXT,
+    fecha_anulacion     TEXT,
     fecha               TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE INDEX idx_pago_deuda_cliente ON pago_deuda(cliente_id);
+
+-- Bitacora de pagos de fiado anulados: quien, cuanto, cuando y por que.
+-- La fecha/hora se guarda siempre con la hora del celular (ahoraLocalSql).
+CREATE TABLE bitacora_anulacion_pago (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    cliente_id          INTEGER REFERENCES cliente(id) ON DELETE SET NULL,
+    cliente_nombre      TEXT NOT NULL,
+    monto               REAL NOT NULL,
+    metodo_pago         TEXT NOT NULL,
+    fecha_pago          TEXT NOT NULL,   -- cuando se habia registrado el pago original
+    motivo              TEXT NOT NULL,
+    detalle             TEXT NOT NULL,   -- deudas que se reabrieron y por cuanto
+    fecha_anulacion     TEXT NOT NULL
+);
+
+CREATE INDEX idx_bitacora_anulacion_pago_fecha ON bitacora_anulacion_pago(fecha_anulacion);
 
 -- ------------------------------------------------------------
 -- 4. Caja
@@ -161,6 +184,11 @@ CREATE TABLE movimiento_caja (
     concepto            TEXT NOT NULL,                 -- ej: "Venta #123", "Retiro", "Pago a proveedor"
     metodo_pago         TEXT CHECK (metodo_pago IN ('efectivo','yape','plin','tarjeta')),
     venta_id            INTEGER REFERENCES venta(id) ON DELETE SET NULL,
+    abono_id            INTEGER,                       -- abono de fiado que originó este cobro (para marcarlo si el pago se anula)
+    pago_anulado        INTEGER NOT NULL DEFAULT 0,    -- 1 si el pago de fiado que originó este cobro fue anulado
+    clase               TEXT NOT NULL DEFAULT 'normal', -- 'normal' | 'anulacion' | 'ajuste' (reversas: no cuentan como ingreso/egreso real en los totales)
+    compra_id           INTEGER,                       -- a qué compra corresponde (si aplica)
+    cliente_id          INTEGER,                       -- a qué cliente corresponde (cobro de fiado)
     saldo_resultante    REAL NOT NULL,                 -- saldo de caja después de este movimiento
     fecha_hora          TEXT NOT NULL DEFAULT (datetime('now'))
 );

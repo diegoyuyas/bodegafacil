@@ -15,6 +15,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
+import { usarSolicitudPin } from '@/hooks/usar-solicitud-pin';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
 import { mayusculasAlEscribir } from '@/core/texto';
@@ -50,6 +51,7 @@ function ContenidoEditarCompra() {
   const compraId = Number(parametros.get('id'));
 
   const { contenedor, cargando, error } = usarContenedor();
+  const { pedirPin, modalPin } = usarSolicitudPin(contenedor);
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
   const [cargandoCompra, setCargandoCompra] = useState(true);
 
@@ -156,6 +158,7 @@ function ContenidoEditarCompra() {
   async function guardarCambios() {
     if (!contenedor || carrito.length === 0 || !compraId) return;
     setMensajeError(null);
+    if (!(await pedirPin('modificar', 'guardar los cambios de la compra'))) return;
     setGuardando(true);
     try {
       contenedor.compras.modificarCompra(compraId, {
@@ -192,6 +195,7 @@ function ContenidoEditarCompra() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-[calc(7rem+var(--area-segura-abajo))] pt-6">
+      {modalPin}
       <header className="flex items-center gap-3">
         <Link href="/compras" className="text-xl text-tinta/60" aria-label="Volver">
           ←

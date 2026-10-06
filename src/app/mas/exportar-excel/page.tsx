@@ -17,7 +17,7 @@ import { generarLibroExcel } from '@/infraestructura/exportacion/excel';
 import { descargarExcel } from '@/infraestructura/exportacion/descargas';
 
 function fechaParaNombreArchivo(): string {
-  return new Date().toISOString().slice(0, 10);
+  return hoyLocalSql();
 }
 
 export default function PaginaExportarExcel() {

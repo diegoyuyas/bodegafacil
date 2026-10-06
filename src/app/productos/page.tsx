@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
+import { usarSolicitudPin } from '@/hooks/usar-solicitud-pin';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import type { HistorialProductoItem, Producto } from '@/core/tipos';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
@@ -20,6 +21,7 @@ const ETIQUETAS_CAMPO_HISTORIAL: Record<HistorialProductoItem['campo'], string> 
 
 export default function PaginaProductos() {
   const { contenedor, cargando, error } = usarContenedor();
+  const { pedirPin, modalPin } = usarSolicitudPin(contenedor);
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
 
   useEffect(() => {
@@ -163,6 +165,7 @@ export default function PaginaProductos() {
   async function confirmarAjuste() {
     if (!contenedor || ajustandoId === null) return;
     setMensajeErrorAjuste(null);
+    if (!(await pedirPin('modificar', 'ajustar el stock'))) return;
     try {
       const delta = tipoAjuste === 'sumar' ? Number(cantidadAjuste) : -Number(cantidadAjuste);
       contenedor.productos.ajustarStock(ajustandoId, delta, motivoAjuste.trim());
@@ -203,6 +206,7 @@ export default function PaginaProductos() {
       );
       if (!confirmar) return;
     }
+    if (!(await pedirPin('modificar', 'guardar los cambios del producto'))) return;
     try {
       const producto = contenedor.productos.obtenerPorId(editandoId);
       contenedor.productos.actualizar(editandoId, {
@@ -226,6 +230,7 @@ export default function PaginaProductos() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
+      {modalPin}
       <header className="flex items-center gap-3">
         <Link href="/" className="text-xl text-tinta/60" aria-label="Volver a inicio">
           ←

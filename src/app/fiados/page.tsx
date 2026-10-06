@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
+import { usarSolicitudPin } from '@/hooks/usar-solicitud-pin';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
-import type { Cliente, DeudaPendienteDetalle, MetodoPagoSinFiado } from '@/core/tipos';
+import type { Cliente, DeudaPendienteDetalle, MetodoPagoSinFiado, PagoFiado } from '@/core/tipos';
 import type { EstadoPlan } from '@/core/plan';
 import { construirMensajeDeuda } from '@/core/whatsapp';
 import { construirEnlaceWhatsApp } from '@/infraestructura/whatsapp/enlace';
@@ -23,6 +24,7 @@ const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
 
 export default function PaginaFiados() {
   const { contenedor, cargando, error } = usarContenedor();
+  const { pedirPin, modalPin } = usarSolicitudPin(contenedor);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [estadoPlan, setEstadoPlan] = useState<EstadoPlan | null>(null);
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
@@ -34,6 +36,11 @@ export default function PaginaFiados() {
   // TODAS las ventas al fiado del cliente que tiene abierto el detalle,
   // pagadas o no (para el historial que se despliega al tocar su nombre).
   const [historialCliente, setHistorialCliente] = useState<DeudaPendienteDetalle[]>([]);
+  // Pagos (abonos) del cliente abierto, para poder anularlos.
+  const [pagosCliente, setPagosCliente] = useState<PagoFiado[]>([]);
+  const [anulandoClave, setAnulandoClave] = useState<string | null>(null);
+  const [motivoAnulacion, setMotivoAnulacion] = useState('');
+  const [errorAnulacion, setErrorAnulacion] = useState<string | null>(null);
   // Foto (Yape/Plin) que se va a adjuntar al pago que se está registrando.
   const [fotoPago, setFotoPago] = useState<string | null>(null);
   const [adjuntandoFoto, setAdjuntandoFoto] = useState(false);
@@ -84,6 +91,35 @@ const esPremium = estadoPlan?.tipo === 'premium';
     setMensajeError(null);
     setFotoPago(null);
     setHistorialCliente(contenedor ? contenedor.fiados.listarHistorialFiado(cliente.id) : []);
+    setPagosCliente(contenedor ? contenedor.fiados.listarPagosDeCliente(cliente.id) : []);
+    setAnulandoClave(null);
+    setMotivoAnulacion('');
+    setErrorAnulacion(null);
+  }
+
+  async function confirmarAnulacionPago(cliente: Cliente, pago: PagoFiado) {
+    if (!contenedor) return;
+    setErrorAnulacion(null);
+    if (motivoAnulacion.trim().length === 0) {
+      setErrorAnulacion('Escribe el motivo de la anulación.');
+      return;
+    }
+    if (!(await pedirPin('anular', 'anular este pago de fiado'))) return;
+    try {
+      contenedor.fiados.anularPago(cliente.id, pago.clave, motivoAnulacion);
+      await contenedor.persistir();
+      setAnulandoClave(null);
+      setMotivoAnulacion('');
+      recargar();
+      setHistorialCliente(contenedor.fiados.listarHistorialFiado(cliente.id));
+      setPagosCliente(contenedor.fiados.listarPagosDeCliente(cliente.id));
+      const actualizado = contenedor.fiados
+        .listarClientesConHistorialFiado(desde || undefined, hasta || undefined)
+        .find((c) => c.id === cliente.id);
+      if (actualizado) setMonto(actualizado.saldoPendiente > 0 ? actualizado.saldoPendiente.toFixed(2) : '');
+    } catch (e) {
+      setErrorAnulacion(e instanceof ErrorDeNegocio ? e.message : 'No se pudo anular el pago.');
+    }
   }
 
   async function adjuntarFotoPago() {
@@ -102,11 +138,13 @@ const esPremium = estadoPlan?.tipo === 'premium';
   async function confirmarPago(clienteId: number) {
     if (!contenedor) return;
     setMensajeError(null);
+    if (!(await pedirPin('modificar', 'registrar el pago del fiado'))) return;
     try {
       contenedor.fiados.registrarPago(clienteId, Number(monto), metodo, fotoPago);
       await contenedor.persistir();
       setClienteAbierto(null);
       setFotoPago(null);
+      setPagosCliente([]);
       recargar();
     } catch (e) {
       setMensajeError(e instanceof ErrorDeNegocio ? e.message : 'No se pudo registrar el pago.');
@@ -125,6 +163,7 @@ const esPremium = estadoPlan?.tipo === 'premium';
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
+      {modalPin}
       <header className="flex items-center gap-3">
         <Link href="/" className="text-xl text-tinta/60" aria-label="Volver a inicio">
           ←
@@ -275,6 +314,87 @@ const esPremium = estadoPlan?.tipo === 'premium';
                               </li>
                             );
                           })}
+                        </ul>
+                      )}
+                    </div>
+
+                    <div className="border-t border-linea pt-3">
+                      <p className="text-xs font-semibold text-tinta/70">Pagos realizados</p>
+                      {pagosCliente.length === 0 ? (
+                        <p className="mt-1 text-xs text-tinta/50">Sin pagos registrados.</p>
+                      ) : (
+                        <ul className="mt-1 space-y-2">
+                          {pagosCliente.map((pago) => (
+                            <li key={pago.clave} className="text-xs text-tinta/80">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className={pago.anulado ? 'line-through text-tinta/40' : ''}>
+                                  {formatearFechaHora(pago.fecha)} · {pago.metodoPago}
+                                  {pago.ventas.length > 0 && ` · ${pago.ventas.map((id) => `V-${id}`).join(', ')}`}
+                                </span>
+                                <span
+                                  className={`font-semibold ${
+                                    pago.anulado ? 'line-through text-tinta/40' : 'text-bodega-oscuro'
+                                  }`}
+                                >
+                                  {formatearMonto(pago.monto, simboloMoneda)}
+                                </span>
+                              </div>
+
+                              {pago.anulado ? (
+                                <p className="text-alerta">
+                                  Anulado{pago.fechaAnulacion ? ` el ${formatearFechaHora(pago.fechaAnulacion)}` : ''}
+                                  {pago.motivoAnulacion ? ` — ${pago.motivoAnulacion}` : ''}
+                                </p>
+                              ) : anulandoClave === pago.clave ? (
+                                <div className="mt-1.5 space-y-2 rounded-lg border border-alerta/40 p-2">
+                                  <p className="text-tinta/70">
+                                    Se reabrirá la deuda por {formatearMonto(pago.monto, simboloMoneda)} y se
+                                    registrará un egreso en Caja.
+                                  </p>
+                                  <input
+                                    value={motivoAnulacion}
+                                    onChange={(e) => {
+                                      setMotivoAnulacion(e.target.value);
+                                      setErrorAnulacion(null);
+                                    }}
+                                    placeholder="Motivo de la anulación (obligatorio)"
+                                    className="h-9 w-full rounded-lg border border-linea px-3 text-xs"
+                                  />
+                                  {errorAnulacion && <p className="text-alerta">{errorAnulacion}</p>}
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => {
+                                        setAnulandoClave(null);
+                                        setMotivoAnulacion('');
+                                        setErrorAnulacion(null);
+                                      }}
+                                      className="h-9 flex-1 rounded-lg border border-linea text-xs font-semibold text-tinta/70"
+                                    >
+                                      Cancelar
+                                    </button>
+                                    <button
+                                      onClick={() => confirmarAnulacionPago(cliente, pago)}
+                                      disabled={motivoAnulacion.trim().length === 0}
+                                      className="h-9 flex-1 rounded-lg border border-alerta text-xs font-semibold text-alerta disabled:opacity-40"
+                                    >
+                                      Anular pago
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    setAnulandoClave(pago.clave);
+                                    setMotivoAnulacion('');
+                                    setErrorAnulacion(null);
+                                  }}
+                                  className="mt-0.5 font-semibold text-alerta"
+                                >
+                                  Anular
+                                </button>
+                              )}
+                            </li>
+                          ))}
                         </ul>
                       )}
                     </div>

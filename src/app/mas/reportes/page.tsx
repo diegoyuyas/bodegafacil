@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import type { EstadoPlan } from '@/core/plan';
-import type { FotoPagoFiado } from '@/core/tipos';
+import type { FotoPagoFiado, RegistroBitacoraAnulacionPago } from '@/core/tipos';
 import type {
   HistorialCostoItem,
   MetodoPagoSinFiado,
@@ -15,6 +15,7 @@ import type {
   ProductoMasVendidoItem,
 } from '@/core/tipos';
 import { formatearFechaHora, hoyLocalSql } from '@/core/tiempo';
+import { calcularTotalesCaja, etiquetaDeMovimientoCaja, montoVigenteDeMovimientoCaja } from '@/core/reglas-negocio';
 import type { FilaCompraDetallada, FilaVentaDetallada } from '@/core/exportacion';
 import {
   construirHojaCaja,
@@ -37,6 +38,7 @@ const PESTANAS = [
   { valor: 'productos', etiqueta: 'Más vendidos' },
   { valor: 'costos', etiqueta: 'Costos' },
   { valor: 'kardex', etiqueta: 'Kardex' },
+  { valor: 'anulaciones', etiqueta: 'Anulaciones' },
 ] as const;
 
 const ETIQUETAS_METODO_PAGO_REPORTE: Record<string, string> = {
@@ -107,6 +109,9 @@ export default function PaginaReportes() {
   const [fotosPagosFiado, setFotosPagosFiado] = useState<FotoPagoFiado[]>([]);
   const [filtroMetodoCaja, setFiltroMetodoCaja] = useState<'todos' | MetodoPagoSinFiado>('todos');
   const [busquedaCompras, setBusquedaCompras] = useState('');
+  // Bitácora de pagos de fiado anulados (solo lectura).
+  const [bitacoraAnulaciones, setBitacoraAnulaciones] = useState<RegistroBitacoraAnulacionPago[]>([]);
+  const [busquedaAnulaciones, setBusquedaAnulaciones] = useState('');
   const [busquedaMasVendidos, setBusquedaMasVendidos] = useState('');
 
   // Historial de costos (Premium): elige un producto y ve lo que costó
@@ -139,6 +144,7 @@ export default function PaginaReportes() {
     setDetalleCompras(contenedor.compras.listarDetalleParaExportar(desde, hasta));
     setMasVendidos(contenedor.ventas.listarProductosMasVendidos(desde, hasta));
     setFotosPagosFiado(contenedor.fiados.listarFotosPagosFiado(desde, hasta));
+    setBitacoraAnulaciones(contenedor.fiados.listarBitacoraAnulaciones(desde, hasta));
   }
 
   useEffect(consultar, [contenedor, desde, hasta, rangoInvalido]);
@@ -274,7 +280,8 @@ export default function PaginaReportes() {
   }, [busquedaCompras, comprasAgrupadas]);
 
   const totalCompras = useMemo(
-    () => comprasFiltradas.reduce((suma, c) => suma + c.total, 0),
+    // Las compras anuladas se muestran pero no suman.
+    () => comprasFiltradas.reduce((suma, c) => suma + (c.estado === 'anulada' ? 0 : c.total), 0),
     [comprasFiltradas],
   );
 
@@ -289,8 +296,21 @@ export default function PaginaReportes() {
     return masVendidos.filter((p) => p.nombre.toLowerCase().includes(texto));
   }, [busquedaMasVendidos, masVendidos]);
 
+  const anulacionesFiltradas = useMemo(() => {
+    const texto = busquedaAnulaciones.trim().toLowerCase();
+    if (!texto) return bitacoraAnulaciones;
+    return bitacoraAnulaciones.filter(
+      (a) =>
+        a.clienteNombre.toLowerCase().includes(texto) ||
+        a.motivo.toLowerCase().includes(texto) ||
+        a.detalle.toLowerCase().includes(texto) ||
+        a.monto.toFixed(2).includes(texto),
+    );
+  }, [busquedaAnulaciones, bitacoraAnulaciones]);
+
   async function descargarExcelDelReporte() {
     if (!esPremium || !contenedor) return;
+    if (pestana === 'anulaciones') return; // la bitácora es solo de consulta
     if (pestana === 'ventas') {
       const libro = generarLibroExcel([construirHojaVentas(ventasFiltradas.flatMap((v) => v.lineas))]);
       await descargarExcel(`reporte-ventas-${desde}-a-${hasta}.xlsx`, libro);
@@ -321,19 +341,12 @@ export default function PaginaReportes() {
     await descargarExcel(`reporte-${pestana}-${desde}-a-${hasta}.xlsx`, libro);
   }
 
-  const totalesCaja = useMemo(() => {
-    const ingresos = movimientosCajaFiltrados
-      .filter((m) => m.tipo === 'ingreso')
-      .reduce((suma, m) => suma + m.monto, 0);
-    const egresos = movimientosCajaFiltrados
-      .filter((m) => m.tipo === 'egreso')
-      .reduce((suma, m) => suma + m.monto, 0);
-    return { ingresos, egresos, neto: ingresos - egresos };
-  }, [movimientosCajaFiltrados]);
+  const totalesCaja = useMemo(() => calcularTotalesCaja(movimientosCajaFiltrados), [movimientosCajaFiltrados]);
 
   const botonExcelDeshabilitado =
     !esPremium ||
     rangoInvalido ||
+    pestana === 'anulaciones' ||
     (pestana === 'costos' && (!productoElegido || historialCostos.length === 0)) ||
     (pestana === 'kardex' && (!productoElegidoKardex || movimientosKardex.length === 0)) ||
     (pestana === 'ventas' && ventasFiltradas.length === 0) ||
@@ -550,24 +563,42 @@ export default function PaginaReportes() {
                 </p>
               ) : (
                 <ul className="mt-4 divide-y divide-linea border-y border-linea">
-                  {movimientosCajaFiltrados.map((mov) => (
-                    <li key={mov.id} className="py-3">
+                  {movimientosCajaFiltrados.map((mov) => {
+                    const etiqueta = etiquetaDeMovimientoCaja(mov);
+                    // En gris solo lo anulado y las reversas; un ajuste de compra se ve normal.
+                    const apagado = etiqueta === 'Anulado' || etiqueta === 'Anulación';
+                    return (
+                    <li key={mov.id} className={`py-3 ${apagado ? 'opacity-60' : ''}`}>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-tinta/80">
+                          {etiqueta && (
+                            <span className="mr-1.5 rounded bg-tinta/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-tinta/60">
+                              {etiqueta}
+                            </span>
+                          )}
                           {mov.referencia}
                           <span className="text-tinta/40"> — {mov.concepto}</span>
                         </span>
                         <span
-                          className={`font-semibold ${mov.tipo === 'ingreso' ? 'text-bodega-oscuro' : 'text-alerta'}`}
+                          className={`font-semibold ${
+                            apagado ? 'text-tinta/60' : mov.tipo === 'ingreso' ? 'text-bodega-oscuro' : 'text-alerta'
+                          }`}
                         >
-                          {mov.tipo === 'ingreso' ? '+' : '−'} {formatearMonto(mov.monto, simboloMoneda)}
+                          {mov.tipo === 'ingreso' ? '+' : '−'} {formatearMonto(montoVigenteDeMovimientoCaja(mov), simboloMoneda)}
                         </span>
                       </div>
                       <p className="mt-0.5 text-xs text-tinta/40">
                         {new Date(mov.fechaHora).toLocaleString('es-PE')}
                       </p>
+                      {!etiqueta && mov.montoAnulado > 0 && (
+                        <p className="mt-0.5 text-xs text-tinta/50">
+                          Pago de {formatearMonto(mov.monto, simboloMoneda)}; {formatearMonto(mov.montoAnulado, simboloMoneda)}{' '}
+                          corresponden a ventas anuladas
+                        </p>
+                      )}
                     </li>
-                  ))}
+                    );
+                  })}
                 </ul>
               )}
             </section>
@@ -596,10 +627,16 @@ export default function PaginaReportes() {
               ) : (
                 <ul className="mt-4 divide-y divide-linea border-y border-linea">
                   {comprasFiltradas.map((compra) => (
-                    <li key={compra.compra} className="py-3">
+                    <li key={compra.compra} className={`py-3 ${compra.estado === 'anulada' ? 'opacity-60' : ''}`}>
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-tinta/80">{compra.proveedor}</span>
-                        <span className="font-semibold text-tinta">{formatearMonto(compra.total, simboloMoneda)}</span>
+                        <span
+                          className={`font-semibold ${
+                            compra.estado === 'anulada' ? 'text-tinta/60 line-through' : 'text-tinta'
+                          }`}
+                        >
+                          {formatearMonto(compra.total, simboloMoneda)}
+                        </span>
                       </div>
                       <p className="mt-0.5 text-xs text-tinta/40">
                         {new Date(compra.fecha).toLocaleDateString('es-PE')}
@@ -613,6 +650,43 @@ export default function PaginaReportes() {
                           </p>
                         ))}
                       </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+
+          {pestana === 'anulaciones' && (
+            <section className="mt-4">
+              <p className="text-xs text-tinta/60">Bitácora de pagos de fiado anulados.</p>
+              <input
+                value={busquedaAnulaciones}
+                onChange={(e) => setBusquedaAnulaciones(e.target.value)}
+                placeholder="Buscar por cliente, motivo o monto…"
+                className="mt-2 h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+              />
+
+              {anulacionesFiltradas.length === 0 ? (
+                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                  {busquedaAnulaciones
+                    ? `Ninguna anulación coincide con "${busquedaAnulaciones}".`
+                    : 'No hay pagos anulados en este rango.'}
+                </p>
+              ) : (
+                <ul className="mt-4 divide-y divide-linea border-y border-linea">
+                  {anulacionesFiltradas.map((a) => (
+                    <li key={a.id} className="py-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-tinta/80">{a.clienteNombre}</span>
+                        <span className="font-semibold text-alerta">{formatearMonto(a.monto, simboloMoneda)}</span>
+                      </div>
+                      <p className="mt-0.5 text-xs text-tinta/50">
+                        Anulado el {formatearFechaHora(a.fechaAnulacion)} · pago del {formatearFechaHora(a.fechaPago)} ·{' '}
+                        {a.metodoPago}
+                      </p>
+                      <p className="mt-0.5 text-xs text-tinta/70">Motivo: {a.motivo}</p>
+                      <p className="mt-0.5 text-xs text-tinta/40">Reabrió: {a.detalle}</p>
                     </li>
                   ))}
                 </ul>

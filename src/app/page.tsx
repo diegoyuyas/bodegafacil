@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { usarContenedor } from '@/hooks/usar-contenedor';
+import { usarSolicitudPin } from '@/hooks/usar-solicitud-pin';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import type { LineaVentaResumen, ResumenDia, VentaListaItem } from '@/core/tipos';
 import { LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
@@ -38,6 +39,7 @@ const ETIQUETAS_METODO_PAGO: Record<string, string> = {
 export default function PaginaInicio() {
   const router = useRouter();
   const { contenedor, error, cargando } = usarContenedor();
+  const { pedirPin, modalPin } = usarSolicitudPin(contenedor);
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
   const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
   const [imprimiendoVentaId, setImprimiendoVentaId] = useState<number | null>(null);
@@ -158,6 +160,7 @@ export default function PaginaInicio() {
         : `¿Eliminar el pedido V-${venta.id}?`,
     );
     if (!confirmar) return;
+    if (!(await pedirPin('anular', `anular el pedido V-${venta.id}`))) return;
 
     let devolverCobrado = false;
     if (cobrado > 0) {
@@ -259,6 +262,7 @@ export default function PaginaInicio() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col">
+      {modalPin}
       <header className="flex items-baseline justify-between px-5 pt-6">
         <h1
           onClick={tocarTitulo}

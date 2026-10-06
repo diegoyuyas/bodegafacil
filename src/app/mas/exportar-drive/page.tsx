@@ -20,7 +20,7 @@ import { subirArchivoADrive, type ArchivoSubido } from '@/infraestructura/google
 type Estado = 'inactivo' | 'conectando' | 'generando' | 'subiendo' | 'listo' | 'error';
 
 function fechaParaNombreArchivo(): string {
-  return new Date().toISOString().slice(0, 10);
+  return hoyLocalSql();
 }
 
 export default function PaginaExportarDrive() {

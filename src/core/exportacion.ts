@@ -7,6 +7,7 @@
  * el formato del CSV sin un navegador real.
  */
 
+import { etiquetaDeMovimientoCaja } from './reglas-negocio';
 import type {
   Cliente,
   CompraListaItem,
@@ -117,6 +118,7 @@ export function construirHojaCaja(movimientos: MovimientoCaja[]): HojaExcel {
     encabezados: [
       'Fecha y hora',
       'Tipo',
+      'Clase',
       'Cliente/Proveedor',
       'Concepto',
       'Método de pago',
@@ -126,6 +128,7 @@ export function construirHojaCaja(movimientos: MovimientoCaja[]): HojaExcel {
     filas: movimientos.map((m) => [
       m.fechaHora,
       m.tipo === 'ingreso' ? 'Ingreso' : 'Egreso',
+      etiquetaDeMovimientoCaja(m) ?? 'Normal',
       m.referencia,
       m.concepto,
       m.metodoPago,

@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
+import { usarSolicitudPin } from '@/hooks/usar-solicitud-pin';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
 import { mayusculasAlEscribir } from '@/core/texto';
 import type { Proveedor } from '@/core/tipos';
@@ -13,6 +14,7 @@ import { construirEnlaceChatWhatsApp } from '@/infraestructura/whatsapp/enlace';
 
 export default function PaginaProveedores() {
   const { contenedor, cargando, error } = usarContenedor();
+  const { pedirPin, modalPin } = usarSolicitudPin(contenedor);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
   const [estadoPlan, setEstadoPlan] = useState<EstadoPlan | null>(null);
@@ -101,6 +103,7 @@ export default function PaginaProveedores() {
   async function guardarEdicion() {
     if (!contenedor || editandoId === null) return;
     setMensajeErrorEdit(null);
+    if (!(await pedirPin('modificar', 'guardar los cambios del proveedor'))) return;
     try {
       contenedor.proveedores.actualizar(editandoId, {
         nombre: nombreEdit.trim(),
@@ -118,6 +121,7 @@ export default function PaginaProveedores() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
+      {modalPin}
       <header className="flex items-center gap-3">
         <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver">
           ←

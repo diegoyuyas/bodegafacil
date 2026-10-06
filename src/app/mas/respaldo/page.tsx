@@ -10,7 +10,7 @@ import { hoyLocalSql } from '@/core/tiempo';
 import { CLAVE_PLAN_FECHA_MAXIMA_VISTA, CLAVE_PLAN_VENCE_EN } from '@/core/plan';
 
 function fechaParaNombreArchivo(): string {
-  return new Date().toISOString().slice(0, 10);
+  return hoyLocalSql();
 }
 
 export default function PaginaRespaldo() {

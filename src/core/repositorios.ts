@@ -13,6 +13,8 @@ import type {
   Compra,
   CompraListaItem,
   DeudaPendienteDetalle,
+  PagoFiado,
+  RegistroBitacoraAnulacionPago,
   EstadoRespaldo,
   FotoPagoFiado,
   HistorialCostoItem,
@@ -36,6 +38,7 @@ import type {
 } from './tipos';
 import type { FilaVentaDetallada, FilaCompraDetallada } from './exportacion';
 import type { EstadoPlan } from './plan';
+import type { DestinoPin } from './bloqueo-pin';
 
 export interface ProductoRepositorio {
   listarActivos(): Producto[];
@@ -228,6 +231,17 @@ export interface FiadoRepositorio {
    * mensaje de cobranza por WhatsApp.
    */
   listarDeudasPendientesDetalladas(clienteId: number): DeudaPendienteDetalle[];
+  /** Pagos (abonos) del cliente, vigentes y anulados, del más reciente al más antiguo. */
+  listarPagosDeCliente(clienteId: number): PagoFiado[];
+  /**
+   * Anula un abono COMPLETO: reabre las deudas que había pagado, sube el saldo
+   * del cliente, registra un egreso en Caja por el mismo monto/método y deja
+   * constancia en la bitácora. `motivo` es obligatorio. Todo con la fecha/hora
+   * del celular. Lanza ErrorDeNegocio si no se puede (ya anulado, venta anulada…).
+   */
+  anularPago(clienteId: number, clave: string, motivo: string): void;
+  /** Bitácora de pagos anulados cuya anulación cae dentro del rango 'YYYY-MM-DD' inclusive. */
+  listarBitacoraAnulaciones(desde: string, hasta: string): RegistroBitacoraAnulacionPago[];
   /**
    * TODAS las ventas al fiado de un cliente, pagadas o no (a diferencia
    * de `listarDeudasPendientesDetalladas`, que solo trae las que aún
@@ -365,6 +379,11 @@ export interface PlanRepositorio {
  */
 export interface BloqueoPinRepositorio {
   estaActivo(): boolean;
+  /** ¿Hay que pedir el PIN para este destino (ingresar / anular / modificar)? */
+  requiereParaDestino(destino: DestinoPin): boolean;
+  encenderDestino(destino: DestinoPin): void;
+  /** Apaga un interruptor solo si `pinActual` es correcto; devuelve false (sin cambiar nada) si no lo es. */
+  apagarDestino(destino: DestinoPin, pinActual: string): Promise<boolean>;
   /** Guarda el hash del PIN nuevo y activa el bloqueo. Lanza ErrorDeNegocio si el PIN no son 4 dígitos numéricos. */
   activar(pinNuevo: string): Promise<void>;
   /** Desactiva el bloqueo, solo si `pinActual` es correcto. Devuelve false (sin cambiar nada) si no lo es. */

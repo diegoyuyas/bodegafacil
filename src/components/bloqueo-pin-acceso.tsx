@@ -7,7 +7,7 @@ import { usarContenedor } from '@/hooks/usar-contenedor';
 
 /**
  * Gate de acceso: si Más > Configuración > Configurar PIN está
- * activo, no deja ver nada de la app hasta que se ingrese el PIN
+ * activo y su interruptor "Ingresar al app" está encendido, no deja ver nada de la app hasta que se ingrese el PIN
  * correcto. Vive en `layout.tsx`, envolviendo `{children}` por dentro
  * de `PantallaSplash` (así el splash sigue cubriendo la carga inicial
  * de la base de datos, y el PIN se pide justo después).
@@ -30,7 +30,7 @@ export function BloqueoPinAcceso({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!contenedor) return;
-    setRequierePin(contenedor.bloqueoPin.estaActivo());
+    setRequierePin(contenedor.bloqueoPin.requiereParaDestino('ingresar'));
   }, [contenedor]);
 
   useEffect(() => {

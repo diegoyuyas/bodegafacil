@@ -92,9 +92,9 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
 
           this.bd.ejecutar(
             `INSERT INTO movimiento_inventario
-               (producto_id, tipo, cantidad, motivo, venta_id, stock_resultante)
-             VALUES (?, 'salida', ?, 'venta', ?, ?)`,
-            [detalle.productoId, detalle.cantidad, ventaId, stockNuevo],
+               (producto_id, tipo, cantidad, motivo, venta_id, stock_resultante, fecha_hora)
+             VALUES (?, 'salida', ?, 'venta', ?, ?, ?)`,
+            [detalle.productoId, detalle.cantidad, ventaId, stockNuevo, ahoraLocalSql()],
           );
         }
       }
@@ -292,9 +292,9 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         this.productos.actualizarStock(producto.id, stockNuevo);
         this.bd.ejecutar(
           `INSERT INTO movimiento_inventario
-             (producto_id, tipo, cantidad, motivo, venta_id, stock_resultante)
-           VALUES (?, 'entrada', ?, 'anulacion', ?, ?)`,
-          [linea.producto_id, linea.cantidad, id, stockNuevo],
+             (producto_id, tipo, cantidad, motivo, venta_id, stock_resultante, fecha_hora)
+           VALUES (?, 'entrada', ?, 'anulacion', ?, ?, ?)`,
+          [linea.producto_id, linea.cantidad, id, stockNuevo, ahoraLocalSql()],
         );
       }
 
@@ -353,7 +353,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
           }
         }
       } else {
-        this.caja.registrarEgreso(venta.total, `Anulación de V-${id}`, venta.metodoPago, { ventaId: id });
+        this.caja.registrarEgreso(venta.total, `Anulación de V-${id}`, venta.metodoPago, { ventaId: id, clase: 'anulacion' });
       }
 
       this.bd.ejecutar('UPDATE venta SET anulada = 1, motivo_anulacion = ? WHERE id = ?', [
@@ -380,7 +380,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
    */
   private devolverCobradoDeDeuda(deudaId: number, cobrado: number, ventaId: number): void {
     const porMetodo = this.bd.consultar<{ metodo_pago: MetodoPagoSinFiado; total: number }>(
-      `SELECT metodo_pago, SUM(monto) AS total FROM pago_deuda WHERE deuda_id = ? GROUP BY metodo_pago`,
+      `SELECT metodo_pago, SUM(monto) AS total FROM pago_deuda WHERE deuda_id = ? AND anulado = 0 GROUP BY metodo_pago`,
       [deudaId],
     );
     const concepto = `Devolución por anulación de V-${ventaId}`;
@@ -388,11 +388,11 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
     for (const { metodo_pago, total } of porMetodo) {
       const monto = redondear(total);
       if (monto <= 0) continue;
-      this.caja.registrarEgreso(monto, concepto, metodo_pago, { ventaId });
+      this.caja.registrarEgreso(monto, concepto, metodo_pago, { ventaId, clase: 'anulacion' });
       sinMetodo = redondear(sinMetodo - monto);
     }
     if (sinMetodo > 0) {
-      this.caja.registrarEgreso(sinMetodo, concepto, 'efectivo', { ventaId });
+      this.caja.registrarEgreso(sinMetodo, concepto, 'efectivo', { ventaId, clase: 'anulacion' });
     }
   }
 

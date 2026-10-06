@@ -3,8 +3,10 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
+import { usarSolicitudPin } from '@/hooks/usar-solicitud-pin';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { limpiarNumeroEscrito } from '@/core/texto';
+import { calcularTotalesCaja, etiquetaDeMovimientoCaja, montoVigenteDeMovimientoCaja } from '@/core/reglas-negocio';
 import { formatearFechaHora, hoyLocalSql } from '@/core/tiempo';
 import type { MetodoPagoSinFiado, MovimientoCaja } from '@/core/tipos';
 
@@ -25,6 +27,7 @@ type Vista = (typeof VISTAS)[number]['valor'];
 
 export default function PaginaCaja() {
   const { contenedor, cargando, error } = usarContenedor();
+  const { pedirPin, modalPin } = usarSolicitudPin(contenedor);
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
 
   useEffect(() => {
@@ -55,24 +58,26 @@ export default function PaginaCaja() {
   useEffect(recargar, [contenedor, desde, hasta, rangoInvalido]);
 
   const movimientosVisibles = useMemo(
-    () => (vista === 'todo' ? movimientos : movimientos.filter((m) => m.tipo === vista)),
+    () => {
+      if (vista === 'todo') return movimientos;
+      // Ingresos/Egresos: lo real (lo anulado se ve en gris). Los ajustes de compras
+      // (que corrigen el monto de una compra) se ven en Egresos para que el total cuadre.
+      return movimientos.filter((m) =>
+        vista === 'egreso' ? m.clase === 'normal' ? m.tipo === 'egreso' : m.clase === 'ajuste' : m.clase === 'normal' && m.tipo === 'ingreso',
+      );
+    },
     [movimientos, vista],
   );
 
-  const totalVisible = useMemo(() => {
-    if (vista === 'ingreso') {
-      return movimientosVisibles.reduce((suma, m) => suma + m.monto, 0);
-    }
-    if (vista === 'egreso') {
-      return movimientosVisibles.reduce((suma, m) => suma + m.monto, 0);
-    }
-    // "Ver todo": el neto de hoy (ingresos - egresos), que es cuánto
-    // cambió la caja en el día.
-    return movimientosVisibles.reduce(
-      (suma, m) => suma + (m.tipo === 'ingreso' ? m.monto : -m.monto),
-      0,
-    );
-  }, [movimientosVisibles, vista]);
+  const totales = useMemo(() => calcularTotalesCaja(movimientos), [movimientos]);
+
+  const totalVisible =
+    vista === 'ingreso'
+      ? totales.ingresos
+      : vista === 'egreso'
+        ? totales.egresos
+        : // "Ver todo": cuánto cambió la caja en el rango (incluye anulaciones y ajustes).
+          totales.neto;
 
   const etiquetaTotal =
     vista === 'ingreso'
@@ -85,6 +90,7 @@ export default function PaginaCaja() {
 
   async function confirmarMovimiento() {
     if (!contenedor || !mostrarFormulario || !monto || !concepto.trim()) return;
+    if (!(await pedirPin('modificar', mostrarFormulario === 'ingreso' ? 'registrar el ingreso' : 'registrar el egreso'))) return;
     if (mostrarFormulario === 'ingreso') {
       contenedor.caja.registrarIngreso(Number(monto), concepto.trim(), metodo);
     } else {
@@ -99,6 +105,7 @@ export default function PaginaCaja() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
+      {modalPin}
       <header className="flex items-center gap-3">
         <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver">
           ←
@@ -241,22 +248,43 @@ export default function PaginaCaja() {
           </p>
         ) : (
           <ul className="mt-3 divide-y divide-linea border-y border-linea">
-            {movimientosVisibles.map((mov) => (
-              <li key={mov.id} className="flex items-center justify-between gap-3 py-3 text-sm">
+            {movimientosVisibles.map((mov) => {
+              const etiqueta = etiquetaDeMovimientoCaja(mov);
+              // En gris solo lo anulado y las reversas; un ajuste de compra se ve normal.
+              const apagado = etiqueta === 'Anulado' || etiqueta === 'Anulación';
+              return (
+              <li
+                key={mov.id}
+                className={`flex items-center justify-between gap-3 py-3 text-sm ${apagado ? 'opacity-60' : ''}`}
+              >
                 <div className="min-w-0">
                   <p className="text-tinta/80">
+                    {etiqueta && (
+                      <span className="mr-1.5 rounded bg-tinta/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-tinta/60">
+                        {etiqueta}
+                      </span>
+                    )}
                     {mov.referencia}
                     <span className="text-tinta/40"> — {mov.concepto}</span>
                   </p>
                   <p className="mt-0.5 text-xs text-tinta/40">{formatearFechaHora(mov.fechaHora)}</p>
+                  {!etiqueta && mov.montoAnulado > 0 && (
+                    <p className="mt-0.5 text-xs text-tinta/50">
+                      Pago de {formatearMonto(mov.monto, simboloMoneda)}; {formatearMonto(mov.montoAnulado, simboloMoneda)}{' '}
+                      corresponden a ventas anuladas
+                    </p>
+                  )}
                 </div>
                 <span
-                  className={`shrink-0 font-semibold ${mov.tipo === 'ingreso' ? 'text-bodega-oscuro' : 'text-alerta'}`}
+                  className={`shrink-0 font-semibold ${
+                    apagado ? 'text-tinta/60' : mov.tipo === 'ingreso' ? 'text-bodega-oscuro' : 'text-alerta'
+                  }`}
                 >
-                  {mov.tipo === 'ingreso' ? '+' : '−'} {formatearMonto(mov.monto, simboloMoneda)}
+                  {mov.tipo === 'ingreso' ? '+' : '−'} {formatearMonto(montoVigenteDeMovimientoCaja(mov), simboloMoneda)}
                 </span>
               </li>
-            ))}
+              );
+            })}
           </ul>
         )}
       </section>

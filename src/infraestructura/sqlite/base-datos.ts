@@ -26,6 +26,9 @@ export class BaseDatosLocal {
 
     if (!opciones.datosPrevios) {
       instancia.ejecutar(ESQUEMA_SQL);
+      // Red de seguridad: si el esquema base quedara por detrás de las migraciones,
+      // una instalación nueva igual termina con todas las columnas (duplicadas se ignoran).
+      aplicarMigraciones(instancia);
     } else {
       aplicarMigraciones(instancia);
     }

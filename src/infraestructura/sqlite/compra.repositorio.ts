@@ -284,20 +284,41 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
         'SELECT producto_id, cantidad FROM detalle_compra WHERE compra_id = ?',
         [id],
       );
-      for (const linea of lineasAnteriores) {
-        this.revertirLineaDeCompra(id, linea.producto_id, linea.cantidad, 'modificacion');
-      }
-      this.bd.ejecutar('DELETE FROM detalle_compra WHERE compra_id = ?', [id]);
 
-      // El total original ya no toca caja; el método usado antes puede
-      // no estar disponible en compras muy antiguas (antes de esta
-      // función) — se asume "efectivo" solo en ese caso puntual.
-      this.caja.registrarIngreso(
-        actual.total,
-        `Ajuste por modificación de compra C-${id}`,
-        actual.metodoPago ?? 'efectivo',
-        { compraId: id },
-      );
+      // Se valida el stock FINAL de cada producto (stock actual − lo que esta compra
+      // había metido + lo que meterá ahora), no el paso intermedio de "retirar todo
+      // y volver a meter": si ya se vendió parte, retirar todo da negativo aunque el
+      // resultado final sea correcto (ej. compra 500, vendí 2 → modificar a 450 es válido).
+      const anteriorPorProducto = new Map<number, number>();
+      for (const l of lineasAnteriores) {
+        anteriorPorProducto.set(l.producto_id, redondear((anteriorPorProducto.get(l.producto_id) ?? 0) + l.cantidad));
+      }
+      const nuevoPorProducto = new Map<number, number>();
+      for (const l of input.lineas) {
+        nuevoPorProducto.set(l.productoId, redondear((nuevoPorProducto.get(l.productoId) ?? 0) + l.cantidad));
+      }
+      const idsProductos = new Set<number>([
+        ...Array.from(anteriorPorProducto.keys()),
+        ...Array.from(nuevoPorProducto.keys()),
+      ]);
+      Array.from(idsProductos).forEach((productoId) => {
+        const producto = this.productos.obtenerPorId(productoId);
+        const anterior = anteriorPorProducto.get(productoId) ?? 0;
+        const nuevo = nuevoPorProducto.get(productoId) ?? 0;
+        const stockFinal = redondear(producto.stockActual - anterior + nuevo);
+        if (stockFinal < 0) {
+          const minimo = redondear(anterior - producto.stockActual);
+          throw new ErrorDeNegocio(
+            `No se puede modificar: de "${producto.nombre}" ya salieron ${minimo} unidades de las que entraron en esta compra. La cantidad mínima es ${minimo}.`,
+          );
+        }
+      });
+
+      // Orden: primero entran las líneas nuevas y después salen las anteriores, así el
+      // stock nunca pasa por un valor negativo intermedio (ni en el Kardex).
+      const idsDetalleAnterior = this.bd
+        .consultar<{ id: number }>('SELECT id FROM detalle_compra WHERE compra_id = ?', [id])
+        .map((f) => f.id);
 
       const total = redondear(
         input.lineas.reduce((suma, l) => suma + l.cantidad * l.costoUnitario, 0),
@@ -305,7 +326,29 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
       for (const linea of input.lineas) {
         this.aplicarLineaDeCompra(id, linea, 'modificacion');
       }
-      this.caja.registrarEgreso(total, `Compra C-${id} (modificada)`, input.metodoPago, { compraId: id });
+      for (const linea of lineasAnteriores) {
+        this.revertirLineaDeCompra(id, linea.producto_id, linea.cantidad, 'modificacion');
+      }
+      for (const detalleId of idsDetalleAnterior) {
+        this.bd.ejecutar('DELETE FROM detalle_compra WHERE id = ?', [detalleId]);
+      }
+
+      // Caja: UN solo movimiento por la diferencia (en vez de devolver todo y volver a
+      // cobrar). Si cambió la forma de pago, se pasa el total de una a la otra.
+      // El método antiguo puede faltar en compras muy viejas: se asume efectivo.
+      const metodoAnterior = actual.metodoPago ?? 'efectivo';
+      const etiqueta = `Ajuste de compra C-${id}`;
+      const referencia = { compraId: id, clase: 'ajuste' as const };
+      if (metodoAnterior === input.metodoPago) {
+        const diferencia = redondear(total - actual.total);
+        const detalle = `${etiqueta}: de ${actual.total.toFixed(2)} a ${total.toFixed(2)}`;
+        if (diferencia > 0) this.caja.registrarEgreso(diferencia, detalle, input.metodoPago, referencia);
+        else if (diferencia < 0) this.caja.registrarIngreso(-diferencia, detalle, input.metodoPago, referencia);
+      } else {
+        const detalle = `${etiqueta}: cambio de forma de pago`;
+        this.caja.registrarIngreso(actual.total, detalle, metodoAnterior, referencia);
+        this.caja.registrarEgreso(total, detalle, input.metodoPago, referencia);
+      }
 
       this.bd.ejecutar(
         `UPDATE compra
@@ -350,7 +393,7 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
       compra.total,
       `Anulación de compra C-${id}`,
       compra.metodoPago ?? 'efectivo',
-      { compraId: id },
+      { compraId: id, clase: 'anulacion' },
     );
 
       this.bd.ejecutar('UPDATE compra SET estado = ?, motivo_anulacion = ? WHERE id = ?', [
@@ -380,9 +423,9 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
 
     this.bd.ejecutar(
       `INSERT INTO movimiento_inventario
-         (producto_id, tipo, cantidad, motivo, compra_id, stock_resultante)
-       VALUES (?, 'entrada', ?, ?, ?, ?)`,
-      [linea.productoId, linea.cantidad, motivo, compraId, stockNuevo],
+         (producto_id, tipo, cantidad, motivo, compra_id, stock_resultante, fecha_hora)
+       VALUES (?, 'entrada', ?, ?, ?, ?, ?)`,
+      [linea.productoId, linea.cantidad, motivo, compraId, stockNuevo, ahoraLocalSql()],
     );
   }
 
@@ -398,9 +441,9 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
     this.productos.actualizarStock(producto.id, stockNuevo);
     this.bd.ejecutar(
       `INSERT INTO movimiento_inventario
-         (producto_id, tipo, cantidad, motivo, compra_id, stock_resultante)
-       VALUES (?, 'salida', ?, ?, ?, ?)`,
-      [productoId, cantidad, motivo, compraId, stockNuevo],
+         (producto_id, tipo, cantidad, motivo, compra_id, stock_resultante, fecha_hora)
+       VALUES (?, 'salida', ?, ?, ?, ?, ?)`,
+      [productoId, cantidad, motivo, compraId, stockNuevo, ahoraLocalSql()],
     );
   }
 

@@ -12,6 +12,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
+import { usarSolicitudPin } from '@/hooks/usar-solicitud-pin';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { hoyLocalSql } from '@/core/tiempo';
@@ -19,6 +20,7 @@ import type { CompraListaItem } from '@/core/tipos';
 
 export default function PaginaListadoCompras() {
   const { contenedor, cargando, error } = usarContenedor();
+  const { pedirPin, modalPin } = usarSolicitudPin(contenedor);
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
   const [compras, setCompras] = useState<CompraListaItem[]>([]);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
@@ -55,16 +57,17 @@ export default function PaginaListadoCompras() {
     );
   }, [busqueda, compras]);
 
-  function anular(compra: CompraListaItem) {
+  async function anular(compra: CompraListaItem) {
     if (!contenedor) return;
     const confirmar = window.confirm(
       `¿Anular la compra C-${compra.id}? Se retira del stock lo que había entrado y se revierte el gasto de caja.`,
     );
     if (!confirmar) return;
+    if (!(await pedirPin('anular', `anular la compra C-${compra.id}`))) return;
     setMensajeError(null);
     try {
       contenedor.compras.anularCompra(compra.id);
-      contenedor.persistir();
+      await contenedor.persistir();
       recargar();
     } catch (e) {
       setMensajeError(e instanceof ErrorDeNegocio ? e.message : 'No se pudo anular la compra.');
@@ -73,6 +76,7 @@ export default function PaginaListadoCompras() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
+      {modalPin}
       <header className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver a Más">
