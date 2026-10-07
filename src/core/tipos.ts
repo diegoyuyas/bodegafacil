@@ -79,6 +79,7 @@ export interface DetalleVenta {
   costoUnitario: number;
   subtotal: number;
   gananciaLinea: number;
+  descripcion?: string | null;
 }
 
 export interface DeudaCliente {
@@ -129,6 +130,8 @@ export interface MovimientoCaja {
   concepto: string;
   metodoPago: MetodoPagoSinFiado | null;
   ventaId: number | null;
+  /** Compra a la que pertenece el movimiento (la compra y sus ajustes), si aplica. */
+  compraId: number | null;
   saldoResultante: number;
   fechaHora: string;
   clase: ClaseMovimientoCaja;
@@ -173,6 +176,7 @@ export interface DetalleCompra {
   cantidad: number;
   costoUnitario: number;
   subtotal: number;
+  descripcion?: string | null;
 }
 
 export interface MovimientoInventario {
@@ -215,6 +219,8 @@ export interface LineaVentaEntrada {
    * Configuración). Si se omite, se usa el precioVenta del producto.
    */
   precioUnitario?: number;
+  /** Nota corta de la línea (hasta 100 caracteres), solo si está activo "Añadir descripción en Venta/Compra". */
+  descripcion?: string | null;
 }
 
 /**
@@ -265,6 +271,9 @@ export interface VentaListaItem {
 export interface LineaVentaResumen {
   producto: string;
   cantidad: number;
+  /** Precio unitario cobrado (el preview de Inicio lo muestra). */
+  precioUnitario?: number;
+  descripcion?: string | null;
 }
 
 /** Una línea de producto con precio, para armar el mensaje de WhatsApp de una venta (Ventas → Nueva venta / reenvío). */
@@ -273,6 +282,7 @@ export interface LineaVentaMensaje {
   cantidad: number;
   precioUnitario: number;
   subtotal: number;
+  descripcion?: string | null;
 }
 
 /** Una fila de resultado en Más > Reimprimir documentos. */

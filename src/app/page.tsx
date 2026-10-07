@@ -533,9 +533,16 @@ export default function PaginaInicio() {
                             {ventaExpandida === venta.id && (
                               <div className="-mt-1 mb-3 rounded-lg bg-bodega-claro/40 px-3 py-2 text-xs text-tinta/70">
                                 {(lineasPorVenta[venta.id] ?? []).map((linea, i) => (
-                                  <p key={i}>
-                                    {linea.cantidad} × {linea.producto}
-                                  </p>
+                                  <div key={i} className={i > 0 ? 'mt-1' : ''}>
+                                    <p>
+                                      {linea.cantidad} × {linea.producto}
+                                      {linea.precioUnitario !== undefined &&
+                                        ` — ${formatearMonto(linea.precioUnitario, simboloMoneda)} c/u`}
+                                    </p>
+                                    {linea.descripcion && (
+                                      <p className="break-words text-tinta/50">{linea.descripcion}</p>
+                                    )}
+                                  </div>
                                 ))}
                               </div>
                             )}

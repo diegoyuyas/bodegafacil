@@ -112,7 +112,8 @@ CREATE TABLE detalle_venta (
     precio_unitario     REAL NOT NULL CHECK (precio_unitario >= 0),  -- precio al momento de la venta
     costo_unitario      REAL NOT NULL CHECK (costo_unitario >= 0),   -- costo al momento de la venta
     subtotal            REAL NOT NULL,                               -- precio_unitario * cantidad
-    ganancia_linea      REAL NOT NULL                                -- (precio_unitario - costo_unitario) * cantidad
+    ganancia_linea      REAL NOT NULL,                               -- (precio_unitario - costo_unitario) * cantidad
+    descripcion         TEXT                                         -- nota corta de la línea (hasta 100 caracteres, opcional)
 );
 
 CREATE INDEX idx_detalle_venta_venta     ON detalle_venta(venta_id);
@@ -232,7 +233,8 @@ CREATE TABLE detalle_compra (
     producto_id         INTEGER NOT NULL REFERENCES producto(id) ON DELETE RESTRICT,
     cantidad            REAL NOT NULL CHECK (cantidad > 0),
     costo_unitario      REAL NOT NULL CHECK (costo_unitario >= 0),
-    subtotal            REAL NOT NULL
+    subtotal            REAL NOT NULL,
+    descripcion         TEXT                                         -- nota corta de la línea (hasta 100 caracteres, opcional)
 );
 
 CREATE INDEX idx_detalle_compra_compra ON detalle_compra(compra_id);

@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import {
+  CLAVE_DESCRIPCION_LINEAS,
   CLAVE_NOTIFICAR_STOCK_BAJO,
   CLAVE_PRECIO_EDITABLE_VENTA,
   estaActivado,
@@ -58,6 +59,7 @@ export default function PaginaConfiguracion() {
   const [notificarStockBajo, setNotificarStockBajo] = useState(false);
   const [mensajePermiso, setMensajePermiso] = useState<string | null>(null);
 
+  const [descripcionLineas, setDescripcionLineas] = useState(false);
   const [codigoMoneda, setCodigoMoneda] = useState(obtenerMoneda(null).codigo);
   const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
 
@@ -75,6 +77,7 @@ export default function PaginaConfiguracion() {
     setNotificarStockBajo(
       estaActivado(contenedor.configuracion.obtenerValor(CLAVE_NOTIFICAR_STOCK_BAJO)),
     );
+    setDescripcionLineas(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_DESCRIPCION_LINEAS)));
     setCodigoMoneda(obtenerMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)).codigo);
     setPrefijoPais(obtenerPrefijoPais(contenedor.configuracion.obtenerValor(CLAVE_PREFIJO_PAIS)));
 
@@ -118,6 +121,14 @@ export default function PaginaConfiguracion() {
 
     setNotificarStockBajo(nuevoValor);
     contenedor.configuracion.establecerValor(CLAVE_NOTIFICAR_STOCK_BAJO, valorParaGuardar(nuevoValor));
+    await contenedor.persistir();
+  }
+
+  async function alternarDescripcionLineas() {
+    if (!contenedor) return;
+    const nuevoValor = !descripcionLineas;
+    setDescripcionLineas(nuevoValor);
+    contenedor.configuracion.establecerValor(CLAVE_DESCRIPCION_LINEAS, valorParaGuardar(nuevoValor));
     await contenedor.persistir();
   }
 
@@ -194,6 +205,17 @@ export default function PaginaConfiguracion() {
             />
           </div>
           {mensajePermiso && <p className="mt-2 text-xs text-alerta">{mensajePermiso}</p>}
+        </li>
+
+        <li className="flex items-center justify-between gap-4 py-4">
+          <div>
+            <p className="text-sm font-semibold text-tinta">Añadir descripción en Venta/Compra</p>
+            <p className="mt-0.5 text-xs text-tinta/50">
+              Permite escribir una nota corta (hasta 100 caracteres) debajo de cada producto. Sale en la nota de venta,
+              los pedidos y los reportes.
+            </p>
+          </div>
+          <Interruptor activado={descripcionLineas} onChange={alternarDescripcionLineas} disabled={!contenedor} />
         </li>
 
         <li>

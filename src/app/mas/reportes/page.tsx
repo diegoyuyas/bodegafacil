@@ -505,10 +505,15 @@ export default function PaginaReportes() {
                       </div>
                       <div className="mt-1.5 space-y-0.5 pl-2">
                         {venta.lineas.map((linea, i) => (
-                          <p key={i} className="text-xs text-tinta/60">
-                            {linea.cantidad} × {linea.producto} —{' '}
-                            {formatearMonto(linea.subtotal, simboloMoneda)}
-                          </p>
+                          <div key={i}>
+                            <p className="text-xs text-tinta/60">
+                              {linea.cantidad} × {linea.producto} —{' '}
+                              {formatearMonto(linea.subtotal, simboloMoneda)}
+                            </p>
+                            {linea.descripcion && (
+                              <p className="break-words pl-3 text-xs text-tinta/40">{linea.descripcion}</p>
+                            )}
+                          </div>
                         ))}
                       </div>
                     </li>
@@ -645,9 +650,14 @@ export default function PaginaReportes() {
                       </p>
                       <div className="mt-1.5 space-y-0.5 pl-2">
                         {compra.lineas.map((linea, i) => (
-                          <p key={i} className="text-xs text-tinta/60">
-                            {linea.cantidad} × {linea.producto} — {formatearMonto(linea.subtotal, simboloMoneda)}
-                          </p>
+                          <div key={i}>
+                            <p className="text-xs text-tinta/60">
+                              {linea.cantidad} × {linea.producto} — {formatearMonto(linea.subtotal, simboloMoneda)}
+                            </p>
+                            {linea.descripcion && (
+                              <p className="break-words pl-3 text-xs text-tinta/40">{linea.descripcion}</p>
+                            )}
+                          </div>
                         ))}
                       </div>
                     </li>

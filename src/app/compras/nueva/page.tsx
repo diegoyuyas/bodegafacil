@@ -5,7 +5,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
-import { mayusculasAlEscribir } from '@/core/texto';
+import { CLAVE_DESCRIPCION_LINEAS, estaActivado } from '@/core/configuracion';
+import { LIMITE_DESCRIPCION_LINEA, mayusculasAlEscribir } from '@/core/texto';
 import type { LineaCompraEntrada } from '@/core/repositorios';
 import type { MetodoPagoSinFiado, Producto, Proveedor } from '@/core/tipos';
 
@@ -23,10 +24,12 @@ const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
 export default function PaginaCompras() {
   const { contenedor, cargando, error } = usarContenedor();
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
+  const [descripcionActiva, setDescripcionActiva] = useState(false);
 
   useEffect(() => {
     if (!contenedor) return;
     setSimboloMoneda(obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)));
+    setDescripcionActiva(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_DESCRIPCION_LINEAS)));
   }, [contenedor]);
 
   const [productos, setProductos] = useState<Producto[]>([]);
@@ -88,6 +91,10 @@ export default function PaginaCompras() {
     );
   }
 
+  function cambiarDescripcion(productoId: number, texto: string) {
+    setCarrito((actual) => actual.map((l) => (l.productoId === productoId ? { ...l, descripcion: texto } : l)));
+  }
+
   function quitarLinea(productoId: number) {
     setCarrito((actual) => actual.filter((l) => l.productoId !== productoId));
   }
@@ -109,10 +116,11 @@ export default function PaginaCompras() {
         proveedorNombreLibre: proveedorSeleccionado ? null : proveedorNombreLibre.trim() || null,
         comprobante: comprobante.trim() || null,
         metodoPago,
-        lineas: carrito.map(({ productoId, cantidad, costoUnitario }) => ({
+        lineas: carrito.map(({ productoId, cantidad, costoUnitario, descripcion }) => ({
           productoId,
           cantidad,
           costoUnitario,
+          descripcion: descripcionActiva ? descripcion : null,
         })),
       });
       await contenedor.persistir();
@@ -252,6 +260,17 @@ export default function PaginaCompras() {
                     {formatearMonto(linea.cantidad * linea.costoUnitario, simboloMoneda)}
                   </span>
                 </div>
+                {descripcionActiva && (
+                  <input
+                    type="text"
+                    value={linea.descripcion ?? ''}
+                    maxLength={LIMITE_DESCRIPCION_LINEA}
+                    onChange={(e) => cambiarDescripcion(linea.productoId, e.target.value)}
+                    placeholder="Descripción (opcional)"
+                    aria-label={`Descripción de ${linea.nombre}`}
+                    className="h-9 w-full rounded-lg border border-linea px-3 text-xs text-tinta outline-none placeholder:text-tinta/30 focus:border-bodega"
+                  />
+                )}
               </li>
             ))}
           </ul>

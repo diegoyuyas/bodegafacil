@@ -14,7 +14,7 @@ const SELECT_CON_REFERENCIA = `
   SELECT
     mc.id AS id, mc.tipo AS tipo, mc.monto AS monto, mc.concepto AS concepto,
     mc.metodo_pago AS metodo_pago, mc.venta_id AS venta_id,
-    mc.saldo_resultante AS saldo_resultante, mc.fecha_hora AS fecha_hora, mc.clase AS clase,
+    mc.saldo_resultante AS saldo_resultante, mc.fecha_hora AS fecha_hora, mc.clase AS clase, mc.compra_id AS compra_id,
     COALESCE((
       SELECT SUM(pd.monto)
       FROM pago_deuda pd

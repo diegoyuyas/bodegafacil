@@ -6,12 +6,12 @@ import { usarContenedor } from '@/hooks/usar-contenedor';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { construirVenta, ErrorDeNegocio } from '@/core/reglas-negocio';
 import { LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
-import { CLAVE_NOMBRE_TIENDA, CLAVE_NOTIFICAR_STOCK_BAJO, CLAVE_PRECIO_EDITABLE_VENTA, estaActivado, obtenerNombreTienda } from '@/core/configuracion';
+import { CLAVE_DESCRIPCION_LINEAS, CLAVE_NOMBRE_TIENDA, CLAVE_NOTIFICAR_STOCK_BAJO, CLAVE_PRECIO_EDITABLE_VENTA, estaActivado, obtenerNombreTienda } from '@/core/configuracion';
 import { CLAVE_PREFIJO_PAIS, obtenerPrefijoPais } from '@/core/paises';
 import { construirMensajeVenta } from '@/core/whatsapp';
 import { construirEnlaceWhatsApp } from '@/infraestructura/whatsapp/enlace';
 import type { Cliente, MetodoPago, Producto, Venta } from '@/core/tipos';
-import { limpiarNumeroEscrito } from '@/core/texto';
+import { LIMITE_DESCRIPCION_LINEA, limpiarNumeroEscrito } from '@/core/texto';
 import { guardarTicketComoImagen } from '@/infraestructura/comprobante-imagen/compartir-ticket';
 import { capturarFotoComprobantePago } from '@/infraestructura/comprobante-pago/capturar-foto';
 import {
@@ -26,6 +26,8 @@ interface LineaCarrito {
   cantidad: number;
   precioVenta: number;
   stockDisponible: number;
+  /** Nota corta de esta línea (solo si está activo "Añadir descripción en Venta/Compra"). */
+  descripcion: string;
 }
 
 const METODOS_PAGO: { valor: MetodoPago; etiqueta: string }[] = [
@@ -94,6 +96,7 @@ export default function PaginaNuevaVenta() {
   const [limiteAlcanzado, setLimiteAlcanzado] = useState(false);
   const [ventasUsadas, setVentasUsadas] = useState(0);
   const [precioEditable, setPrecioEditable] = useState(false);
+  const [descripcionActiva, setDescripcionActiva] = useState(false);
   const [esPremium, setEsPremium] = useState(false);
   const [notificarStockBajo, setNotificarStockBajo] = useState(false);
 
@@ -105,6 +108,7 @@ export default function PaginaNuevaVenta() {
     setVentasUsadas(usadas);
     setLimiteAlcanzado(!premium && usadas >= LIMITE_VENTAS_PLAN_GRATIS);
     setPrecioEditable(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_PRECIO_EDITABLE_VENTA)));
+    setDescripcionActiva(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_DESCRIPCION_LINEAS)));
     setEsPremium(premium);
     setNotificarStockBajo(
       estaActivado(contenedor.configuracion.obtenerValor(CLAVE_NOTIFICAR_STOCK_BAJO)),
@@ -170,6 +174,7 @@ export default function PaginaNuevaVenta() {
           cantidad: 1,
           precioVenta: producto.precioVenta,
           stockDisponible: producto.controlaStock ? producto.stockActual : Infinity,
+          descripcion: '',
         },
       ];
     });
@@ -178,6 +183,10 @@ export default function PaginaNuevaVenta() {
     // El pequeño delay deja que React re-renderice el input (que se
     // vació arriba) antes de intentar enfocarlo.
     setTimeout(() => inputBusquedaProductoRef.current?.focus(), 0);
+  }
+
+  function cambiarDescripcion(productoId: number, texto: string) {
+    setCarrito((actual) => actual.map((l) => (l.productoId === productoId ? { ...l, descripcion: texto } : l)));
   }
 
   function cambiarCantidad(productoId: number, delta: number) {
@@ -326,6 +335,7 @@ export default function PaginaNuevaVenta() {
           productoId: l.productoId,
           cantidad: l.cantidad,
           precioUnitario: precioEditable ? l.precioVenta : undefined,
+          descripcion: descripcionActiva ? l.descripcion : null,
         })),
         metodoPago,
         clienteId: clienteSeleccionado?.id ?? null,
@@ -480,13 +490,18 @@ export default function PaginaNuevaVenta() {
 
         <ul className="mt-6 divide-y divide-linea border-y border-linea">
           {carrito.map((linea) => (
-            <li key={linea.productoId} className="flex items-center justify-between py-3 text-sm">
-              <span className="text-tinta/80">
-                {linea.cantidad} × {linea.nombre}
-              </span>
-              <span className="font-semibold text-tinta">
-                {formatearMonto(linea.precioVenta * linea.cantidad, simboloMoneda)}
-              </span>
+            <li key={linea.productoId} className="py-3 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-tinta/80">
+                  {linea.cantidad} × {linea.nombre}
+                </span>
+                <span className="font-semibold text-tinta">
+                  {formatearMonto(linea.precioVenta * linea.cantidad, simboloMoneda)}
+                </span>
+              </div>
+              {descripcionActiva && linea.descripcion.trim() !== '' && (
+                <p className="mt-0.5 break-words text-xs text-tinta/50">{linea.descripcion.trim()}</p>
+              )}
             </li>
           ))}
         </ul>
@@ -611,6 +626,17 @@ export default function PaginaNuevaVenta() {
                   )}
                   {avisoCantidad?.productoId === linea.productoId && (
                     <p className="mt-1 text-xs text-alerta">{avisoCantidad.texto}</p>
+                  )}
+                  {descripcionActiva && (
+                    <input
+                      type="text"
+                      value={linea.descripcion}
+                      maxLength={LIMITE_DESCRIPCION_LINEA}
+                      onChange={(e) => cambiarDescripcion(linea.productoId, e.target.value)}
+                      placeholder="Descripción (opcional)"
+                      aria-label={`Descripción de ${linea.nombre}`}
+                      className="mt-1.5 h-8 w-full rounded-md border border-linea px-2 text-xs text-tinta outline-none placeholder:text-tinta/30 focus:border-bodega"
+                    />
                   )}
                 </div>
                 <div className="flex items-center gap-2">

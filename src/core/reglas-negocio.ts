@@ -332,3 +332,43 @@ export function montoVigenteDeMovimientoCaja(m: { monto: number; anulado?: boole
   if (m.anulado) return m.monto;
   return redondear(m.monto - (m.montoAnulado ?? 0));
 }
+
+/**
+ * Compras modificadas, para mostrarlas como UNA sola fila en Ingresos/Egresos:
+ * la compra con su monto final (original + ajustes) y sin filas de ajuste aparte.
+ * Solo se fusionan los ajustes cuya compra original también está en la lista; si el
+ * ajuste cae en otro rango de fechas, se deja visible para que el total siga cuadrando.
+ */
+export function resumirComprasModificadas(
+  movimientos: {
+    id: number;
+    tipo: 'ingreso' | 'egreso';
+    monto: number;
+    clase?: 'normal' | 'anulacion' | 'ajuste';
+    compraId?: number | null;
+  }[],
+): {
+  /** id del movimiento de la compra → monto original y monto final. */
+  montos: Map<number, { original: number; final: number }>;
+  /** ids de los ajustes que ya quedaron incluidos en la fila de su compra. */
+  ajustesFusionados: Set<number>;
+} {
+  const compraOriginal = new Map<number, (typeof movimientos)[number]>();
+  for (const m of movimientos) {
+    if (m.clase === 'normal' && m.tipo === 'egreso' && m.compraId) compraOriginal.set(m.compraId, m);
+  }
+  const sumaAjustes = new Map<number, number>();
+  const ajustesFusionados = new Set<number>();
+  for (const m of movimientos) {
+    if (m.clase !== 'ajuste' || !m.compraId || !compraOriginal.has(m.compraId)) continue;
+    sumaAjustes.set(m.compraId, (sumaAjustes.get(m.compraId) ?? 0) + (m.tipo === 'egreso' ? m.monto : -m.monto));
+    ajustesFusionados.add(m.id);
+  }
+  const montos = new Map<number, { original: number; final: number }>();
+  sumaAjustes.forEach((suma, compraId) => {
+    const original = compraOriginal.get(compraId)!;
+    const final = redondear(original.monto + suma);
+    if (final !== original.monto) montos.set(original.id, { original: original.monto, final });
+  });
+  return { montos, ajustesFusionados };
+}

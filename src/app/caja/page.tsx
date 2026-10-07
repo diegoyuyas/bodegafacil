@@ -6,7 +6,12 @@ import { usarContenedor } from '@/hooks/usar-contenedor';
 import { usarSolicitudPin } from '@/hooks/usar-solicitud-pin';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { limpiarNumeroEscrito } from '@/core/texto';
-import { calcularTotalesCaja, etiquetaDeMovimientoCaja, montoVigenteDeMovimientoCaja } from '@/core/reglas-negocio';
+import {
+  calcularTotalesCaja,
+  etiquetaDeMovimientoCaja,
+  montoVigenteDeMovimientoCaja,
+  resumirComprasModificadas,
+} from '@/core/reglas-negocio';
 import { formatearFechaHora, hoyLocalSql } from '@/core/tiempo';
 import type { MetodoPagoSinFiado, MovimientoCaja } from '@/core/tipos';
 
@@ -57,16 +62,22 @@ export default function PaginaCaja() {
 
   useEffect(recargar, [contenedor, desde, hasta, rangoInvalido]);
 
+  const comprasModificadas = useMemo(() => resumirComprasModificadas(movimientos), [movimientos]);
+
   const movimientosVisibles = useMemo(
     () => {
       if (vista === 'todo') return movimientos;
       // Ingresos/Egresos: lo real (lo anulado se ve en gris). Los ajustes de compras
       // (que corrigen el monto de una compra) se ven en Egresos para que el total cuadre.
-      return movimientos.filter((m) =>
-        vista === 'egreso' ? m.clase === 'normal' ? m.tipo === 'egreso' : m.clase === 'ajuste' : m.clase === 'normal' && m.tipo === 'ingreso',
-      );
+      // Una compra modificada se ve como UNA fila con su monto final; sus ajustes quedan
+      // solo en "Ver todo" (ahí se ve el detalle completo).
+      return movimientos.filter((m) => {
+        if (vista === 'ingreso') return m.clase === 'normal' && m.tipo === 'ingreso';
+        if (m.clase === 'normal') return m.tipo === 'egreso';
+        return m.clase === 'ajuste' && !comprasModificadas.ajustesFusionados.has(m.id);
+      });
     },
-    [movimientos, vista],
+    [movimientos, vista, comprasModificadas],
   );
 
   const totales = useMemo(() => calcularTotalesCaja(movimientos), [movimientos]);
@@ -268,6 +279,12 @@ export default function PaginaCaja() {
                     <span className="text-tinta/40"> — {mov.concepto}</span>
                   </p>
                   <p className="mt-0.5 text-xs text-tinta/40">{formatearFechaHora(mov.fechaHora)}</p>
+                  {vista !== 'todo' && comprasModificadas.montos.has(mov.id) && (
+                    <p className="mt-0.5 text-xs text-tinta/50">
+                      Modificada: de {formatearMonto(comprasModificadas.montos.get(mov.id)!.original, simboloMoneda)} a{' '}
+                      {formatearMonto(comprasModificadas.montos.get(mov.id)!.final, simboloMoneda)}
+                    </p>
+                  )}
                   {!etiqueta && mov.montoAnulado > 0 && (
                     <p className="mt-0.5 text-xs text-tinta/50">
                       Pago de {formatearMonto(mov.monto, simboloMoneda)}; {formatearMonto(mov.montoAnulado, simboloMoneda)}{' '}
@@ -280,7 +297,13 @@ export default function PaginaCaja() {
                     apagado ? 'text-tinta/60' : mov.tipo === 'ingreso' ? 'text-bodega-oscuro' : 'text-alerta'
                   }`}
                 >
-                  {mov.tipo === 'ingreso' ? '+' : '−'} {formatearMonto(montoVigenteDeMovimientoCaja(mov), simboloMoneda)}
+                  {mov.tipo === 'ingreso' ? '+' : '−'}{' '}
+                  {formatearMonto(
+                    vista !== 'todo' && comprasModificadas.montos.has(mov.id)
+                      ? comprasModificadas.montos.get(mov.id)!.final
+                      : montoVigenteDeMovimientoCaja(mov),
+                    simboloMoneda,
+                  )}
                 </span>
               </li>
               );

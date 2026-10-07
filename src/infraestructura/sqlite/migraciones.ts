@@ -96,6 +96,9 @@ const MIGRACIONES: string[] = [
                AND mc.concepto LIKE 'Pago de deuda%'
                AND substr(mc.fecha_hora, 1, 16) = substr(b.fecha_pago, 1, 16))
      FROM bitacora_anulacion_pago b);`,
+  // 0013: descripción corta por producto en cada venta/compra (Más > Configuración > "Añadir descripción en Venta/Compra").
+  `ALTER TABLE detalle_venta ADD COLUMN descripcion TEXT;`,
+  `ALTER TABLE detalle_compra ADD COLUMN descripcion TEXT;`,
 ];
 
 export function aplicarMigraciones(bd: BaseDatosLocal): void {

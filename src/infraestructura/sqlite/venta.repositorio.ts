@@ -1,3 +1,4 @@
+import { normalizarDescripcionLinea } from '@/core/texto';
 import type { CajaRepositorio, ConfiguracionRepositorio, ProductoRepositorio, VentaRepositorio } from '@/core/repositorios';
 import {
   ErrorDeNegocio,
@@ -69,11 +70,11 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
       );
       const ventaId = this.bd.ultimoIdInsertado();
 
-      for (const detalle of calculada.detalles) {
+      for (const [indice, detalle] of calculada.detalles.entries()) {
         this.bd.ejecutar(
           `INSERT INTO detalle_venta
-             (venta_id, producto_id, cantidad, precio_unitario, costo_unitario, subtotal, ganancia_linea)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+             (venta_id, producto_id, cantidad, precio_unitario, costo_unitario, subtotal, ganancia_linea, descripcion)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             ventaId,
             detalle.productoId,
@@ -82,6 +83,8 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
             detalle.costoUnitario,
             detalle.subtotal,
             detalle.gananciaLinea,
+            // Mismo orden que las líneas de entrada (construirVenta usa map).
+            normalizarDescripcionLinea(input.lineas[indice]?.descripcion),
           ],
         );
 
@@ -223,14 +226,27 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
   }
 
   obtenerLineas(ventaId: number): LineaVentaResumen[] {
-    return this.bd.consultar<LineaVentaResumen>(
-      `SELECT p.nombre AS producto, dv.cantidad AS cantidad
-       FROM detalle_venta dv
-       JOIN producto p ON p.id = dv.producto_id
-       WHERE dv.venta_id = ?
-       ORDER BY dv.id`,
-      [ventaId],
-    );
+    return this.bd
+      .consultar<{
+        producto: string;
+        cantidad: number;
+        precio_unitario: number;
+        descripcion: string | null;
+      }>(
+        `SELECT p.nombre AS producto, dv.cantidad AS cantidad,
+                dv.precio_unitario AS precio_unitario, dv.descripcion AS descripcion
+         FROM detalle_venta dv
+         JOIN producto p ON p.id = dv.producto_id
+         WHERE dv.venta_id = ?
+         ORDER BY dv.id`,
+        [ventaId],
+      )
+      .map((f) => ({
+        producto: f.producto,
+        cantidad: f.cantidad,
+        precioUnitario: f.precio_unitario,
+        descripcion: f.descripcion,
+      }));
   }
 
   /** Líneas con precio unitario y subtotal, para armar el mensaje de WhatsApp de una venta. */
@@ -241,9 +257,11 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         cantidad: number;
         precio_unitario: number;
         subtotal: number;
+        descripcion: string | null;
       }>(
         `SELECT p.nombre AS producto, dv.cantidad AS cantidad,
-                dv.precio_unitario AS precio_unitario, dv.subtotal AS subtotal
+                dv.precio_unitario AS precio_unitario, dv.subtotal AS subtotal,
+                dv.descripcion AS descripcion
          FROM detalle_venta dv
          JOIN producto p ON p.id = dv.producto_id
          WHERE dv.venta_id = ?
@@ -255,6 +273,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         cantidad: fila.cantidad,
         precioUnitario: fila.precio_unitario,
         subtotal: fila.subtotal,
+        descripcion: fila.descripcion,
       }));
   }
 
@@ -472,6 +491,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         cantidad: number;
         precio_unitario: number;
         subtotal: number;
+        descripcion: string | null;
         metodo_pago: string;
         cliente: string | null;
         comprobante_pago_ruta: string | null;
@@ -483,6 +503,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
            dv.cantidad AS cantidad,
            dv.precio_unitario AS precio_unitario,
            dv.subtotal AS subtotal,
+           dv.descripcion AS descripcion,
            v.metodo_pago AS metodo_pago,
            c.nombre AS cliente,
            v.comprobante_pago_ruta AS comprobante_pago_ruta
@@ -506,6 +527,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         cantidad: fila.cantidad,
         precioUnitario: fila.precio_unitario,
         subtotal: fila.subtotal,
+        descripcion: fila.descripcion,
         metodoPago: fila.metodo_pago,
         cliente: fila.cliente ?? 'Cliente Eventual',
         comprobanteRuta: fila.comprobante_pago_ruta,

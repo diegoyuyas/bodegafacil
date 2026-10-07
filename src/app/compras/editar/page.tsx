@@ -18,7 +18,8 @@ import { usarContenedor } from '@/hooks/usar-contenedor';
 import { usarSolicitudPin } from '@/hooks/usar-solicitud-pin';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
-import { mayusculasAlEscribir } from '@/core/texto';
+import { CLAVE_DESCRIPCION_LINEAS, estaActivado } from '@/core/configuracion';
+import { LIMITE_DESCRIPCION_LINEA, mayusculasAlEscribir } from '@/core/texto';
 import type { LineaCompraEntrada } from '@/core/repositorios';
 import type { MetodoPagoSinFiado, Producto, Proveedor } from '@/core/tipos';
 
@@ -54,6 +55,7 @@ function ContenidoEditarCompra() {
   const { pedirPin, modalPin } = usarSolicitudPin(contenedor);
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
   const [cargandoCompra, setCargandoCompra] = useState(true);
+  const [descripcionActiva, setDescripcionActiva] = useState(false);
 
   const [productos, setProductos] = useState<Producto[]>([]);
   const [texto, setTexto] = useState('');
@@ -74,6 +76,7 @@ function ContenidoEditarCompra() {
     if (!contenedor) return;
     setSimboloMoneda(obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)));
     setProductos(contenedor.productos.listarActivos());
+    setDescripcionActiva(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_DESCRIPCION_LINEAS)));
   }, [contenedor]);
 
   // Precarga la compra a modificar.
@@ -93,6 +96,7 @@ function ContenidoEditarCompra() {
           nombre: l.nombreProducto,
           cantidad: l.cantidad,
           costoUnitario: l.costoUnitario,
+          descripcion: l.descripcion ?? '',
         })),
       );
       setMetodoPago(compra.metodoPago ?? 'efectivo');
@@ -144,6 +148,10 @@ function ContenidoEditarCompra() {
     );
   }
 
+  function cambiarDescripcion(productoId: number, texto: string) {
+    setCarrito((actual) => actual.map((l) => (l.productoId === productoId ? { ...l, descripcion: texto } : l)));
+  }
+
   function quitarLinea(productoId: number) {
     setCarrito((actual) => actual.filter((l) => l.productoId !== productoId));
   }
@@ -166,10 +174,12 @@ function ContenidoEditarCompra() {
         proveedorNombreLibre: proveedorSeleccionado ? null : proveedorNombreLibre.trim() || null,
         comprobante: comprobante.trim() || null,
         metodoPago,
-        lineas: carrito.map(({ productoId, cantidad, costoUnitario }) => ({
+        lineas: carrito.map(({ productoId, cantidad, costoUnitario, descripcion }) => ({
           productoId,
           cantidad,
           costoUnitario,
+          // Aunque el interruptor esté apagado, una descripción ya guardada no se pierde al modificar.
+          descripcion,
         })),
       });
       await contenedor.persistir();
@@ -281,6 +291,19 @@ function ContenidoEditarCompra() {
                         {formatearMonto(linea.cantidad * linea.costoUnitario, simboloMoneda)}
                       </span>
                     </div>
+                    {descripcionActiva ? (
+                      <input
+                        type="text"
+                        value={linea.descripcion ?? ''}
+                        maxLength={LIMITE_DESCRIPCION_LINEA}
+                        onChange={(e) => cambiarDescripcion(linea.productoId, e.target.value)}
+                        placeholder="Descripción (opcional)"
+                        aria-label={`Descripción de ${linea.nombre}`}
+                        className="h-9 w-full rounded-lg border border-linea px-3 text-xs text-tinta outline-none placeholder:text-tinta/30 focus:border-bodega"
+                      />
+                    ) : (
+                      linea.descripcion && <p className="break-words text-xs text-tinta/50">{linea.descripcion}</p>
+                    )}
                   </li>
                 ))}
               </ul>

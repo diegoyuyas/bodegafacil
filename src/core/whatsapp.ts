@@ -80,6 +80,7 @@ export function construirMensajeVenta(
 
   for (const linea of lineasVenta) {
     lineas.push(`• ${linea.producto} x${linea.cantidad} — ${formatearMonto(linea.subtotal, simboloMoneda)}`);
+    if (linea.descripcion) lineas.push(`   ${linea.descripcion}`);
   }
 
   lineas.push('');

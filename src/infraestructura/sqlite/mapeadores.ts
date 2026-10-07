@@ -74,6 +74,7 @@ export interface FilaMovimientoCaja {
   saldo_resultante: number;
   fecha_hora: string;
   clase: MovimientoCaja['clase'];
+  compra_id: number | null;
   anulado: number;
   monto_anulado: number;
   referencia: string;
@@ -90,6 +91,7 @@ export function mapearMovimientoCaja(fila: FilaMovimientoCaja): MovimientoCaja {
     saldoResultante: fila.saldo_resultante,
     fechaHora: fila.fecha_hora,
     clase: fila.clase ?? 'normal',
+    compraId: fila.compra_id ?? null,
     // Si TODO el cobro correspondía a ventas anuladas y devueltas, el movimiento entero cuenta como anulado.
     anulado: fila.anulado === 1 || (fila.monto_anulado > 0 && fila.monto_anulado >= fila.monto - 0.005),
     montoAnulado: fila.monto_anulado ?? 0,

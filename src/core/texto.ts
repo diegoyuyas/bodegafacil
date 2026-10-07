@@ -66,3 +66,19 @@ export function soloLetrasAlEscribir(texto: string): string {
       .replace(/^ /, ''),
   );
 }
+
+/** Largo máximo de la descripción que se puede añadir a cada producto de una venta o compra. */
+export const LIMITE_DESCRIPCION_LINEA = 100;
+
+/**
+ * Descripción de una línea de venta/compra lista para guardar: se aceptan TODOS los
+ * caracteres (letras, números, símbolos, emojis), solo se recortan espacios de los
+ * extremos y se limita a 100. Vacía → null (no se guarda ni se muestra nada).
+ */
+export function normalizarDescripcionLinea(texto: string | null | undefined): string | null {
+  const limpio = Array.from((texto ?? '').replace(/[\r\n]+/g, ' ').trim())
+    .slice(0, LIMITE_DESCRIPCION_LINEA)
+    .join('')
+    .trim();
+  return limpio === '' ? null : limpio;
+}

@@ -40,6 +40,15 @@ export function normalizarParaImpresora(texto: string): string {
   return limpio;
 }
 
+/**
+ * Para la ticketera: la nota de un producto puede traer cualquier carácter (símbolos, emojis…),
+ * pero el papel solo imprime bien ASCII básico. Lo que no se pueda imprimir sale como "?"
+ * en vez de ensuciar el ticket con caracteres raros. (La imagen del ticket sí muestra todo.)
+ */
+export function asegurarImprimible(texto: string): string {
+  return normalizarParaImpresora(texto).replace(/[^\x20-\x7E]/gu, '?');
+}
+
 export function centrarTexto(texto: string, ancho: number): string {
   if (texto.length >= ancho) return texto.slice(0, ancho);
   const relleno = ancho - texto.length;
@@ -62,6 +71,8 @@ export interface LineaComprobante {
   cantidad: number;
   precioUnitario: number;
   subtotal: number;
+  /** Descripción corta que se añadió a este producto en la venta (se imprime debajo del producto). */
+  nota?: string | null;
 }
 
 export interface DatosComprobante {
@@ -170,6 +181,7 @@ export function construirLineasComprobante(datos: DatosComprobante, ancho: numbe
 
   for (const linea of datos.lineas) {
     i(`${linea.cantidad} ${linea.descripcion}`);
+    if (linea.nota) i(`  ${linea.nota}`);
     i(columnas(`  ${monto(linea.precioUnitario, s)} c/u`, monto(linea.subtotal, s), ancho));
   }
   i(lineaSeparadora(ancho));
@@ -221,7 +233,7 @@ export function construirTextoComprobante(datos: DatosComprobante): string {
     partes.push(linea.alineacion === 'centro' ? CENTRAR : IZQUIERDA);
     if (linea.negrita) partes.push(NEGRITA_ON);
     if (linea.grande) partes.push(TEXTO_GRANDE);
-    partes.push(linea.texto, '\n');
+    partes.push(asegurarImprimible(linea.texto), '\n');
     if (linea.grande) partes.push(TEXTO_NORMAL);
     if (linea.negrita) partes.push(NEGRITA_OFF);
   }

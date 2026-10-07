@@ -44,6 +44,7 @@ export function construirDatosComprobanteDeVenta(
       cantidad: l.cantidad,
       precioUnitario: l.precioUnitario,
       subtotal: l.subtotal,
+      nota: l.descripcion,
     })),
     total: venta.total,
     metodoPago: venta.metodoPago,

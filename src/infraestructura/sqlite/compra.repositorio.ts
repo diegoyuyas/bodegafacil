@@ -1,3 +1,4 @@
+import { normalizarDescripcionLinea } from '@/core/texto';
 import type {
   CajaRepositorio,
   CompraRepositorio,
@@ -143,6 +144,7 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
         cantidad: number;
         costo_unitario: number;
         subtotal: number;
+        descripcion: string | null;
         total_compra: number;
         comprobante: string | null;
         estado: Compra['estado'];
@@ -156,6 +158,7 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
            dc.cantidad AS cantidad,
            dc.costo_unitario AS costo_unitario,
            dc.subtotal AS subtotal,
+           dc.descripcion AS descripcion,
            c.total AS total_compra,
            c.comprobante AS comprobante,
            c.estado AS estado
@@ -175,6 +178,7 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
         cantidad: fila.cantidad,
         precioUnitario: fila.costo_unitario,
         subtotal: fila.subtotal,
+        descripcion: fila.descripcion,
         totalCompra: fila.total_compra,
         comprobante: fila.comprobante,
         estado: fila.estado,
@@ -237,9 +241,11 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
       cantidad: number;
       costo_unitario: number;
       nombre: string;
+      descripcion: string | null;
     }>(
       `SELECT dc.producto_id AS producto_id, dc.cantidad AS cantidad,
-              dc.costo_unitario AS costo_unitario, p.nombre AS nombre
+              dc.costo_unitario AS costo_unitario, p.nombre AS nombre,
+              dc.descripcion AS descripcion
          FROM detalle_compra dc
          JOIN producto p ON p.id = dc.producto_id
         WHERE dc.compra_id = ?
@@ -252,6 +258,7 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
         productoId: l.producto_id,
         cantidad: l.cantidad,
         costoUnitario: l.costo_unitario,
+        descripcion: l.descripcion,
         nombreProducto: l.nombre,
       })),
     };
@@ -278,6 +285,43 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
       const actual = this.obtenerPorId(id);
       if (actual.estado === 'anulada') {
         throw new ErrorDeNegocio(`La compra C-${id} está anulada; no se puede modificar.`);
+      }
+
+      // Camino corto: si NO cambió ningún producto, cantidad, costo ni forma de pago (solo
+      // descripciones, proveedor o comprobante), no se toca stock, Kardex ni Caja: no hay
+      // nada que retirar y volver a meter. Se actualizan solo esos datos.
+      const detalleActual = this.bd.consultar<{ id: number; producto_id: number; cantidad: number; costo_unitario: number }>(
+        'SELECT id, producto_id, cantidad, costo_unitario FROM detalle_compra WHERE compra_id = ? ORDER BY id',
+        [id],
+      );
+      const mismasLineas =
+        detalleActual.length === input.lineas.length &&
+        detalleActual.every((d, i) => {
+          const n = input.lineas[i];
+          return (
+            !!n &&
+            n.productoId === d.producto_id &&
+            redondear(n.cantidad) === redondear(d.cantidad) &&
+            redondear(n.costoUnitario) === redondear(d.costo_unitario)
+          );
+        });
+      if (mismasLineas && (actual.metodoPago ?? 'efectivo') === input.metodoPago) {
+        detalleActual.forEach((d, i) => {
+          this.bd.ejecutar('UPDATE detalle_compra SET descripcion = ? WHERE id = ?', [
+            normalizarDescripcionLinea(input.lineas[i]?.descripcion),
+            d.id,
+          ]);
+        });
+        this.bd.ejecutar(
+          'UPDATE compra SET proveedor_id = ?, proveedor_nombre_libre = ?, comprobante = ? WHERE id = ?',
+          [
+            input.proveedorId ?? null,
+            input.proveedorId ? null : input.proveedorNombreLibre || null,
+            input.comprobante || null,
+            id,
+          ],
+        );
+        return this.obtenerPorId(id);
       }
 
       const lineasAnteriores = this.bd.consultar<{ producto_id: number; cantidad: number }>(
@@ -409,9 +453,16 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
     const subtotal = redondear(linea.cantidad * linea.costoUnitario);
 
     this.bd.ejecutar(
-      `INSERT INTO detalle_compra (compra_id, producto_id, cantidad, costo_unitario, subtotal)
-       VALUES (?, ?, ?, ?, ?)`,
-      [compraId, linea.productoId, linea.cantidad, linea.costoUnitario, subtotal],
+      `INSERT INTO detalle_compra (compra_id, producto_id, cantidad, costo_unitario, subtotal, descripcion)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        compraId,
+        linea.productoId,
+        linea.cantidad,
+        linea.costoUnitario,
+        subtotal,
+        normalizarDescripcionLinea(linea.descripcion),
+      ],
     );
 
     const producto = this.productos.obtenerPorId(linea.productoId);

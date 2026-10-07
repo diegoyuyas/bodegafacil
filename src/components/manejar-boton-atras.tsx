@@ -8,12 +8,17 @@ import { App } from '@capacitor/app';
 /**
  * Rutas donde subir un nivel (quitarle el último segmento a la URL)
  * NO da la pantalla "padre" correcta, porque esa ruta intermedia no
- * existe como pantalla propia. Hoy solo pasa con Ventas: no hay
- * ningún `/ventas` a secas, solo `/ventas/nueva` — su padre lógico es
- * Inicio, no "/ventas".
+ * existe como pantalla propia, o porque la pantalla se abre desde
+ * Más aunque su carpeta esté en la raíz:
+ *  - Ventas: no hay ningún `/ventas` a secas, solo `/ventas/nueva` —
+ *    su padre lógico es Inicio, no "/ventas".
+ *  - Caja y Compras viven en `/caja` y `/compras`, pero solo se entra
+ *    a ellas desde Más; el botón atrás debe volver a Más, no saltar a Inicio.
  */
 const PADRES_ESPECIALES: Record<string, string> = {
   '/ventas/nueva': '/',
+  '/caja': '/mas',
+  '/compras': '/mas',
 };
 
 /**

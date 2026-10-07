@@ -30,6 +30,8 @@ export interface FilaVentaDetallada {
   subtotal: number;
   metodoPago: string;
   cliente: string;
+  /** Descripción corta que se añadió al producto en esa venta (si la hay). */
+  descripcion?: string | null;
   /** URI de la foto del pago (Yape/Plin), si el bodeguero adjuntó una. Solo para verla en pantalla; no va a Excel/CSV. */
   comprobanteRuta?: string | null;
 }
@@ -54,6 +56,7 @@ function filasACsv(
 }
 
 export function exportarVentasACsv(filas: FilaVentaDetallada[]): string {
+  const conDescripcion = filas.some((f) => f.descripcion);
   return filasACsv(
     [
       'Nombre vendedor',
@@ -61,6 +64,7 @@ export function exportarVentasACsv(filas: FilaVentaDetallada[]): string {
       'Pedido',
       'Fecha',
       'Producto',
+      ...(conDescripcion ? ['Descripción'] : []),
       'Cantidad',
       'Precio unitario',
       'Subtotal',
@@ -73,6 +77,7 @@ export function exportarVentasACsv(filas: FilaVentaDetallada[]): string {
       f.pedido,
       f.fecha,
       f.producto,
+      ...(conDescripcion ? [f.descripcion ?? ''] : []),
       f.cantidad,
       f.precioUnitario,
       f.subtotal,
@@ -169,9 +174,12 @@ export interface FilaCompraDetallada {
   totalCompra: number;
   comprobante: string | null;
   estado: string;
+  /** Descripción corta que se añadió al producto en esa compra (si la hay). */
+  descripcion?: string | null;
 }
 
 export function construirHojaComprasDetallado(filas: FilaCompraDetallada[]): HojaExcel {
+  const conDescripcion = filas.some((f) => f.descripcion);
   return {
     nombre: 'Compras',
     encabezados: [
@@ -179,6 +187,7 @@ export function construirHojaComprasDetallado(filas: FilaCompraDetallada[]): Hoj
       'Fecha',
       'Proveedor',
       'Producto',
+      ...(conDescripcion ? ['Descripción'] : []),
       'Cantidad',
       'Precio unitario',
       'Subtotal',
@@ -191,6 +200,7 @@ export function construirHojaComprasDetallado(filas: FilaCompraDetallada[]): Hoj
       f.fecha,
       f.proveedor,
       f.producto,
+      ...(conDescripcion ? [f.descripcion ?? ''] : []),
       f.cantidad,
       f.precioUnitario,
       f.subtotal,
@@ -210,6 +220,7 @@ export function construirHojaMasVendidos(items: ProductoMasVendidoItem[]): HojaE
 }
 
 export function construirHojaVentas(filas: FilaVentaDetallada[]): HojaExcel {
+  const conDescripcion = filas.some((f) => f.descripcion);
   return {
     nombre: 'Ventas',
     encabezados: [
@@ -218,6 +229,7 @@ export function construirHojaVentas(filas: FilaVentaDetallada[]): HojaExcel {
       'Pedido',
       'Fecha',
       'Producto',
+      ...(conDescripcion ? ['Descripción'] : []),
       'Cantidad',
       'Precio unitario',
       'Subtotal',
@@ -230,6 +242,7 @@ export function construirHojaVentas(filas: FilaVentaDetallada[]): HojaExcel {
       f.pedido,
       f.fecha,
       f.producto,
+      ...(conDescripcion ? [f.descripcion ?? ''] : []),
       f.cantidad,
       f.precioUnitario,
       f.subtotal,

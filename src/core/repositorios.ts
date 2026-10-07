@@ -283,6 +283,8 @@ export interface LineaCompraEntrada {
   productoId: number;
   cantidad: number;
   costoUnitario: number;
+  /** Nota corta de la línea (hasta 100 caracteres). */
+  descripcion?: string | null;
 }
 
 export interface RegistrarCompraInput {

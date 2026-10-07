@@ -15,6 +15,9 @@
 /** Precio editable al momento de vender — Free. Default: OFF. */
 export const CLAVE_PRECIO_EDITABLE_VENTA = 'precio_editable_venta';
 
+/** Añadir una descripción corta (hasta 100 caracteres) a cada producto de una venta o compra — Free. Default: OFF. */
+export const CLAVE_DESCRIPCION_LINEAS = 'descripcion_en_lineas';
+
 /** Notificación de stock bajo — Premium. Default: OFF. */
 export const CLAVE_NOTIFICAR_STOCK_BAJO = 'notificar_stock_bajo';
 
