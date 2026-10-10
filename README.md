@@ -1,4 +1,4 @@
-# Vende Fácil
+# Vende Fácil App
 
 Proyecto base de **Vende Fácil**: app offline-first para bodegueros,
 según el documento maestro del proyecto.
