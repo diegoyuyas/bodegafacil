@@ -6,7 +6,8 @@ import { usarContenedor } from '@/hooks/usar-contenedor';
 import { restaurarRespaldo } from '@/infraestructura/sqlite/contenedor';
 import { descargarBinario, descargarTexto, leerArchivoComoBytes } from '@/infraestructura/exportacion/descargas';
 import { exportarFiadosACsv, exportarProductosACsv, exportarVentasACsv } from '@/core/exportacion';
-import { hoyLocalSql } from '@/core/tiempo';
+import { horaLocalCompacta, hoyLocalSql } from '@/core/tiempo';
+import { nombreRespaldoPorDefecto } from '@/core/backup-automatico';
 import { CLAVE_PLAN_FECHA_MAXIMA_VISTA, CLAVE_PLAN_VENCE_EN } from '@/core/plan';
 
 function fechaParaNombreArchivo(): string {
@@ -18,6 +19,7 @@ export default function PaginaRespaldo() {
   const inputArchivoRef = useRef<HTMLInputElement>(null);
   const [restaurando, setRestaurando] = useState(false);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
+  const [respaldoRestaurado, setRespaldoRestaurado] = useState(false);
 
   // Por defecto, "Desde" y "Hasta" arrancan en la fecha actual del
   // dispositivo (misma fecha local que usa el resto de la app — ver
@@ -51,7 +53,7 @@ export default function PaginaRespaldo() {
   async function descargarRespaldoCompleto() {
     if (!contenedor) return;
     const bytes = contenedor.exportarRespaldoCompleto();
-    await descargarBinario(`venta-facil-respaldo-${fechaParaNombreArchivo()}.sqlite`, bytes);
+    await descargarBinario(`${nombreRespaldoPorDefecto(hoyLocalSql(), horaLocalCompacta())}.sqlite`, bytes);
   }
 
   async function manejarArchivoSeleccionado(archivos: FileList | null) {
@@ -77,7 +79,12 @@ export default function PaginaRespaldo() {
         venceEn: contenedor.configuracion.obtenerValor(CLAVE_PLAN_VENCE_EN),
         fechaMaximaVista: contenedor.configuracion.obtenerValor(CLAVE_PLAN_FECHA_MAXIMA_VISTA),
       };
-      await restaurarRespaldo(bytes, premiumAConservar); // recarga la página si todo sale bien
+      await restaurarRespaldo(bytes, premiumAConservar);
+      // Se vuelve a cargar la app DESDE LA RAÍZ ('/'), no con location.reload(): en el
+      // APK, recargar en /mas/respaldo dejaba la app "pegada" en esa ruta mostrando
+      // Inicio, y no dejaba volver a entrar a esta opción hasta cerrar la app.
+      setRespaldoRestaurado(true);
+      setTimeout(() => window.location.replace('/'), 1200);
     } catch (e) {
       setMensajeError(e instanceof Error ? e.message : 'No se pudo restaurar el respaldo.');
       setRestaurando(false);
@@ -194,7 +201,12 @@ export default function PaginaRespaldo() {
           disabled={restaurando}
           className="mt-3 block w-full text-sm text-tinta/70"
         />
-        {restaurando && <p className="mt-2 text-sm text-tinta/60">Restaurando…</p>}
+        {restaurando && !respaldoRestaurado && <p className="mt-2 text-sm text-tinta/60">Restaurando…</p>}
+        {respaldoRestaurado && (
+          <p className="mt-2 text-sm font-semibold text-bodega-oscuro">
+            Respaldo restaurado correctamente. Abriendo la app…
+          </p>
+        )}
         {mensajeError && <p className="mt-2 text-sm text-alerta">{mensajeError}</p>}
       </section>
     </div>

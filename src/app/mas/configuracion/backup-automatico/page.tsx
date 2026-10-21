@@ -157,7 +157,7 @@ export default function PaginaConfigurarBackupAutomatico() {
             <input
               value={nombreArchivo}
               onChange={(e) => setNombreArchivo(e.target.value)}
-              placeholder="respaldo-vende-facil-dd-mm-aaaa-hhmmss"
+              placeholder="dd-mm-aaaa-hhmmss-respaldo-vende-facil"
               maxLength={60}
               className="mt-2 h-11 w-full rounded-xl border border-linea px-3 text-sm"
             />

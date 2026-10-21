@@ -12,6 +12,8 @@ import type { MetodoPagoSinFiado, Producto, Proveedor } from '@/core/tipos';
 
 interface LineaCarritoCompra extends LineaCompraEntrada {
   nombre: string;
+  /** Insumo: no maneja cantidad ni stock, solo el monto que costó. */
+  esInsumo: boolean;
 }
 
 const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
@@ -49,6 +51,7 @@ export default function PaginaCompras() {
   const [mensajeError, setMensajeError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [totalGuardado, setTotalGuardado] = useState<number | null>(null);
+  const [actualizoStock, setActualizoStock] = useState(true);
 
   useEffect(() => {
     if (!contenedor) return;
@@ -80,7 +83,13 @@ export default function PaginaCompras() {
       if (actual.some((l) => l.productoId === producto.id)) return actual;
       return [
         ...actual,
-        { productoId: producto.id, nombre: producto.nombre, cantidad: 1, costoUnitario: producto.costo },
+        {
+          productoId: producto.id,
+          nombre: producto.nombre,
+          cantidad: 1,
+          costoUnitario: producto.costo,
+          esInsumo: producto.tipo === 'insumo',
+        },
       ];
     });
   }
@@ -124,6 +133,7 @@ export default function PaginaCompras() {
         })),
       });
       await contenedor.persistir();
+      setActualizoStock(carrito.some((l) => !l.esInsumo));
       setTotalGuardado(compra.total);
       setCarrito([]);
       setProveedorSeleccionado(null);
@@ -146,7 +156,7 @@ export default function PaginaCompras() {
         <div>
           <p className="text-sm text-tinta/60">Compra registrada</p>
           <p className="text-4xl font-extrabold text-tinta">{formatearMonto(totalGuardado, simboloMoneda)}</p>
-          <p className="mt-1 text-sm text-tinta/60">El stock ya quedó actualizado.</p>
+          {actualizoStock && <p className="mt-1 text-sm text-tinta/60">El stock ya quedó actualizado.</p>}
         </div>
         <div className="flex w-full flex-col gap-3">
           <button
@@ -195,7 +205,9 @@ export default function PaginaCompras() {
                   className="flex w-full items-center justify-between px-4 py-3 text-left text-sm"
                 >
                   <span>{producto.nombre}</span>
-                  <span className="text-tinta/60">Stock: {producto.stockActual}</span>
+                  <span className="text-tinta/60">
+                    {producto.tipo === 'insumo' ? 'Insumo' : `Stock: ${producto.stockActual}`}
+                  </span>
                 </button>
               </li>
             ))}
@@ -221,7 +233,10 @@ export default function PaginaCompras() {
             {carrito.map((linea) => (
               <li key={linea.productoId} className="space-y-2 py-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-tinta">{linea.nombre}</span>
+                  <span className="text-sm text-tinta">
+                    {linea.nombre}
+                    {linea.esInsumo && <span className="ml-2 text-xs font-semibold text-tinta/50">(Insumo)</span>}
+                  </span>
                   <button
                     onClick={() => quitarLinea(linea.productoId)}
                     className="text-tinta/40"
@@ -231,6 +246,7 @@ export default function PaginaCompras() {
                   </button>
                 </div>
                 <div className="flex items-center gap-3">
+                  {!linea.esInsumo && (
                   <label className="flex-1 text-xs text-tinta/50">
                     Cantidad
                     <input
@@ -243,8 +259,9 @@ export default function PaginaCompras() {
                       className="mt-1 h-10 w-full rounded-lg border border-linea px-3 text-sm"
                     />
                   </label>
+                  )}
                   <label className="flex-1 text-xs text-tinta/50">
-                    Costo unitario
+                    {linea.esInsumo ? 'Monto' : 'Costo unitario'}
                     <input
                       type="number"
                       min={0}

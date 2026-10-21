@@ -99,6 +99,9 @@ const MIGRACIONES: string[] = [
   // 0013: descripción corta por producto en cada venta/compra (Más > Configuración > "Añadir descripción en Venta/Compra").
   `ALTER TABLE detalle_venta ADD COLUMN descripcion TEXT;`,
   `ALTER TABLE detalle_compra ADD COLUMN descripcion TEXT;`,
+  // 0014: tipo de producto. 'venta_compra' (todos los productos que ya existían) o
+  // 'insumo' (solo sirve para Compras: sin stock ni precio de venta, no sale a vender).
+  `ALTER TABLE producto ADD COLUMN tipo TEXT NOT NULL DEFAULT 'venta_compra' CHECK (tipo IN ('venta_compra','insumo'));`,
 ];
 
 export function aplicarMigraciones(bd: BaseDatosLocal): void {

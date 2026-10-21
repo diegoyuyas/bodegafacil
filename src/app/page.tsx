@@ -388,46 +388,9 @@ export default function PaginaInicio() {
 
             {/* Pedidos Generados: rango de fechas + desplegable con buscador, preview y anular */}
             <section aria-label="Pedidos Generados" className="mt-8">
-              <div className="flex gap-2">
-                <div className="flex-1">
-                  <label className="mb-1 block text-xs text-tinta/50">Desde</label>
-                  <input
-                    type="date"
-                    value={desdePedidos}
-                    onChange={(e) => setDesdePedidos(e.target.value)}
-                    max={hastaPedidos}
-                    className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
-                  />
-                </div>
-                <div className="flex-1">
-                  <label className="mb-1 block text-xs text-tinta/50">Hasta</label>
-                  <input
-                    type="date"
-                    value={hastaPedidos}
-                    onChange={(e) => setHastaPedidos(e.target.value)}
-                    min={desdePedidos}
-                    className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
-                  />
-                </div>
-                {!rangoEsHoy && (
-                  <button
-                    onClick={() => {
-                      setDesdePedidos(hoyLocalSql());
-                      setHastaPedidos(hoyLocalSql());
-                    }}
-                    className="mt-6 h-11 shrink-0 rounded-lg border border-linea px-3 text-xs font-semibold text-tinta/60"
-                  >
-                    Hoy
-                  </button>
-                )}
-              </div>
-              {rangoInvalido && (
-                <p className="mt-2 text-xs text-alerta">La fecha "desde" no puede ser posterior a "hasta".</p>
-              )}
-
               <button
                 onClick={() => setPedidosAbiertos((v) => !v)}
-                className="mt-3 flex w-full items-center justify-between border-y border-linea py-3 text-sm font-semibold text-tinta"
+                className="flex w-full items-center justify-between border-y border-linea py-3 text-sm font-semibold text-tinta"
               >
                 <span>Pedidos Generados ({rangoEsHoy ? 'Hoy' : 'Total'}: {pedidosNoAnulados})</span>
                 <span className={`text-tinta/50 transition-transform ${pedidosAbiertos ? 'rotate-180' : ''}`}>
@@ -437,11 +400,47 @@ export default function PaginaInicio() {
 
               {pedidosAbiertos && (
                 <div className="pt-3">
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="mb-1 block text-xs text-tinta/50">Desde</label>
+                      <input
+                        type="date"
+                        value={desdePedidos}
+                        onChange={(e) => setDesdePedidos(e.target.value)}
+                        max={hastaPedidos}
+                        className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="mb-1 block text-xs text-tinta/50">Hasta</label>
+                      <input
+                        type="date"
+                        value={hastaPedidos}
+                        onChange={(e) => setHastaPedidos(e.target.value)}
+                        min={desdePedidos}
+                        className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
+                      />
+                    </div>
+                    {!rangoEsHoy && (
+                      <button
+                        onClick={() => {
+                          setDesdePedidos(hoyLocalSql());
+                          setHastaPedidos(hoyLocalSql());
+                        }}
+                        className="mt-6 h-11 shrink-0 rounded-lg border border-linea px-3 text-xs font-semibold text-tinta/60"
+                      >
+                        Hoy
+                      </button>
+                    )}
+                  </div>
+                  {rangoInvalido && (
+                    <p className="mt-2 text-xs text-alerta">La fecha "desde" no puede ser posterior a "hasta".</p>
+                  )}
                   <input
                     value={busquedaPedidos}
                     onChange={(e) => setBusquedaPedidos(e.target.value)}
                     placeholder="Buscar por monto, cliente o producto…"
-                    className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+                    className="mt-3 h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
                   />
 
                   {mensajeImpresion && <p className="mt-2 text-xs text-alerta">{mensajeImpresion}</p>}

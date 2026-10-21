@@ -65,6 +65,10 @@ export function ManejarBotonAtras() {
     if (!Capacitor.isNativePlatform()) return;
 
     const listener = App.addListener('backButton', () => {
+      // Una pantalla con sub-vistas (ej. un reporte abierto) puede atender el "Atrás"
+      // ella misma: escucha este evento y llama a preventDefault().
+      const evento = new CustomEvent('vendefacil:atras', { cancelable: true });
+      if (!window.dispatchEvent(evento)) return;
       const rutaPadre = calcularRutaPadre(pathname);
       if (rutaPadre) {
         router.replace(rutaPadre);

@@ -30,6 +30,8 @@ CREATE TABLE producto (
     stock_actual    REAL NOT NULL DEFAULT 0,
     stock_minimo    REAL NOT NULL DEFAULT 0,
     controla_stock  INTEGER NOT NULL DEFAULT 1,       -- 0 = no lleva stock (ej. servicios, recarga de celular): no descuenta ni bloquea venta
+    tipo            TEXT NOT NULL DEFAULT 'venta_compra'
+                        CHECK (tipo IN ('venta_compra','insumo')),  -- 'insumo' = solo sirve para Compras: sin stock, sin precio de venta, no sale a vender
     unidad_medida   TEXT NOT NULL DEFAULT 'unidad',   -- unidad, kg, litro, paquete, etc.
     activo          INTEGER NOT NULL DEFAULT 1,       -- eliminación lógica
     creado_en       TEXT NOT NULL DEFAULT (datetime('now')),

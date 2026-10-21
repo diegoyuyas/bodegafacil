@@ -26,7 +26,12 @@ import type {
   MovimientoCaja,
   MovimientoInventarioItem,
   Producto,
+  TipoProducto,
   ProductoMasVendidoItem,
+  GananciaProductoItem,
+  VentaFormaPagoItem,
+  ClienteCompradorItem,
+  DeudaClienteItem,
   Proveedor,
   RegistrarVentaInput,
   ReferenciaCajaMovimiento,
@@ -41,7 +46,10 @@ import type { EstadoPlan } from './plan';
 import type { DestinoPin } from './bloqueo-pin';
 
 export interface ProductoRepositorio {
+  /** Todos los activos, incluidos los insumos (los usa Compras). */
   listarActivos(): Producto[];
+  /** Solo los activos que se pueden vender (excluye los insumos). */
+  listarActivosParaVenta(): Producto[];
   /** Para la pantalla de administración: incluye también los inactivos. */
   listarTodos(): Producto[];
   buscarPorNombre(texto: string): Producto[];
@@ -79,6 +87,8 @@ export interface DatosNuevoProducto {
   stockMinimo: number;
   controlaStock: boolean;
   unidadMedida: string;
+  /** Por defecto 'venta_compra'. Si es 'insumo' se guarda sin stock ni precio de venta. */
+  tipo?: TipoProducto;
 }
 
 export interface DatosActualizarProducto {
@@ -91,6 +101,8 @@ export interface DatosActualizarProducto {
   controlaStock: boolean;
   unidadMedida: string;
   activo: boolean;
+  /** Si no se indica, conserva el tipo actual. Pasar a 'insumo' exige stock 0. */
+  tipo?: TipoProducto;
 }
 
 export interface ClienteRepositorio {
@@ -155,6 +167,12 @@ export interface VentaRepositorio {
    * (Premium).
    */
   listarProductosMasVendidos(desde: string, hasta: string, limite?: number): ProductoMasVendidoItem[];
+  /** Ganancia por producto en el rango (ventas no anuladas), de mayor a menor ganancia. */
+  listarGananciaPorProducto(desde: string, hasta: string): GananciaProductoItem[];
+  /** Ventas no anuladas del rango agrupadas por forma de pago, de mayor a menor total. */
+  listarVentasPorFormaPago(desde: string, hasta: string): VentaFormaPagoItem[];
+  /** Clientes registrados que más compraron en el rango, de mayor a menor total. */
+  listarClientesQueMasCompran(desde: string, hasta: string, limite?: number): ClienteCompradorItem[];
   /**
    * Para Más > Reimprimir documentos: ventas dentro de un rango de
    * fechas 'YYYY-MM-DD' inclusive que además coincidan con `texto`
@@ -242,6 +260,11 @@ export interface FiadoRepositorio {
   anularPago(clienteId: number, clave: string, motivo: string): void;
   /** Bitácora de pagos anulados cuya anulación cae dentro del rango 'YYYY-MM-DD' inclusive. */
   listarBitacoraAnulaciones(desde: string, hasta: string): RegistroBitacoraAnulacionPago[];
+  /**
+   * Deuda vigente por cliente repartida en 0-7, 8-30 y 31+ días de antigüedad,
+   * contada hasta `hoy` ('YYYY-MM-DD'). No depende de un rango de fechas.
+   */
+  listarDeudasPorAntiguedad(hoy: string): DeudaClienteItem[];
   /**
    * TODAS las ventas al fiado de un cliente, pagadas o no (a diferencia
    * de `listarDeudasPendientesDetalladas`, que solo trae las que aún

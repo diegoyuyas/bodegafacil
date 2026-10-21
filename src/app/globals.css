@@ -123,3 +123,17 @@
     transform: none;
   }
 }
+
+/* Hoja inferior (pop-up de Productos): sube desde el borde de abajo. */
+.hoja-inferior {
+  animation: hoja-inferior-sube 180ms ease-out both;
+}
+
+@keyframes hoja-inferior-sube {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: none;
+  }
+}

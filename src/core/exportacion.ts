@@ -10,13 +10,17 @@
 import { etiquetaDeMovimientoCaja } from './reglas-negocio';
 import type {
   Cliente,
+  ClienteCompradorItem,
   CompraListaItem,
+  DeudaClienteItem,
+  GananciaProductoItem,
   HistorialCostoItem,
   MovimientoCaja,
   MovimientoInventarioItem,
   Producto,
   ProductoMasVendidoItem,
   Proveedor,
+  VentaFormaPagoItem,
 } from './tipos';
 
 export interface FilaVentaDetallada {
@@ -216,6 +220,69 @@ export function construirHojaMasVendidos(items: ProductoMasVendidoItem[]): HojaE
     nombre: 'Más vendidos',
     encabezados: ['Producto', 'Cantidad vendida', 'Total vendido', 'Ganancia'],
     filas: items.map((i) => [i.nombre, i.cantidadVendida, i.totalVendido, i.gananciaTotal]),
+  };
+}
+
+export function construirHojaGananciaProductos(items: GananciaProductoItem[]): HojaExcel {
+  return {
+    nombre: 'Ganancia por producto',
+    encabezados: ['Producto', 'Cantidad vendida', 'Total vendido', 'Costo', 'Ganancia', 'Margen %'],
+    filas: items.map((i) => [
+      i.nombre,
+      i.cantidadVendida,
+      i.totalVendido,
+      i.costoTotal,
+      i.gananciaTotal,
+      Math.round(i.margenPorcentaje * 10) / 10,
+    ]),
+  };
+}
+
+export function construirHojaVentasFormaPago(
+  items: VentaFormaPagoItem[],
+  etiquetas: Record<string, string>,
+): HojaExcel {
+  return {
+    nombre: 'Ventas por forma de pago',
+    encabezados: ['Forma de pago', 'Cantidad de ventas', 'Total', '% del total'],
+    filas: items.map((i) => [
+      etiquetas[i.metodoPago] ?? i.metodoPago,
+      i.cantidadVentas,
+      i.total,
+      Math.round(i.porcentaje * 10) / 10,
+    ]),
+  };
+}
+
+export function construirHojaMejoresClientes(items: ClienteCompradorItem[]): HojaExcel {
+  return {
+    nombre: 'Clientes que más compran',
+    encabezados: ['Cliente', 'Cantidad de compras', 'Total comprado', 'Última compra'],
+    filas: items.map((i) => [i.nombre, i.cantidadCompras, i.totalComprado, i.ultimaCompra.slice(0, 10)]),
+  };
+}
+
+export function construirHojaDeudaAntiguedad(items: DeudaClienteItem[]): HojaExcel {
+  return {
+    nombre: 'Deuda por antigüedad',
+    encabezados: ['Cliente', 'Celular', '0 a 7 días', '8 a 30 días', 'Más de 30 días', 'Total', 'Días de la más antigua'],
+    filas: items.map((i) => [
+      i.nombre,
+      i.telefono ?? '',
+      i.deuda0a7,
+      i.deuda8a30,
+      i.deuda31omas,
+      i.total,
+      i.diasMasAntigua,
+    ]),
+  };
+}
+
+export function construirHojaMayoresDeudores(items: DeudaClienteItem[]): HojaExcel {
+  return {
+    nombre: 'Clientes que más deben',
+    encabezados: ['Cliente', 'Celular', 'Deuda total', 'Deudas pendientes', 'Días de la más antigua'],
+    filas: items.map((i) => [i.nombre, i.telefono ?? '', i.total, i.cantidadDeudas, i.diasMasAntigua]),
   };
 }
 

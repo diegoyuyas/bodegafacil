@@ -67,6 +67,30 @@ export function soloLetrasAlEscribir(texto: string): string {
   );
 }
 
+/**
+ * Parte un texto en líneas de hasta `maximo` caracteres sin cortar palabras:
+ * una palabra que no entra completa pasa entera a la línea siguiente.
+ * Ej. con 25: "LAPTOP LENOVO NEGRA CPU CORE I7" → ["LAPTOP LENOVO NEGRA CPU", "CORE I7"].
+ * Una sola palabra más larga que el máximo se deja entera (no se parte).
+ */
+export function partirEnLineas(texto: string, maximo = 25): string[] {
+  const palabras = texto.trim().split(/\s+/).filter(Boolean);
+  const lineas: string[] = [];
+  let actual = '';
+  for (const palabra of palabras) {
+    if (actual === '') {
+      actual = palabra;
+    } else if (actual.length + 1 + palabra.length <= maximo) {
+      actual += ` ${palabra}`;
+    } else {
+      lineas.push(actual);
+      actual = palabra;
+    }
+  }
+  if (actual !== '') lineas.push(actual);
+  return lineas;
+}
+
 /** Largo máximo de la descripción que se puede añadir a cada producto de una venta o compra. */
 export const LIMITE_DESCRIPCION_LINEA = 100;
 

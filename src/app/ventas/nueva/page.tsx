@@ -102,7 +102,7 @@ export default function PaginaNuevaVenta() {
 
   useEffect(() => {
     if (!contenedor) return;
-    setProductos(contenedor.productos.listarActivos());
+    setProductos(contenedor.productos.listarActivosParaVenta());
     const usadas = contenedor.ventas.contarTotalHistorico();
     const premium = contenedor.plan.obtenerEstado().tipo === 'premium';
     setVentasUsadas(usadas);
@@ -396,7 +396,7 @@ export default function PaginaNuevaVenta() {
     setMensajeFotoPago(null);
     setMensajeError(null);
     setEtapa('armando');
-    if (contenedor) setProductos(contenedor.productos.listarActivos());
+    if (contenedor) setProductos(contenedor.productos.listarActivosParaVenta());
   }
 
   if (cargando) {

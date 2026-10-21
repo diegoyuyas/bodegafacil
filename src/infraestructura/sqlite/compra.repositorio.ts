@@ -20,7 +20,19 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
     private readonly caja: CajaRepositorio,
   ) {}
 
-  registrarCompra(input: RegistrarCompraInput): Compra {
+  /**
+   * Un insumo no maneja cantidad ni stock: la compra solo guarda cuánto costó.
+   * Se guarda como 1 unidad por el monto digitado, así el total y los reportes
+   * siguen funcionando igual que con cualquier otra línea.
+   */
+  private normalizarLineas(lineas: LineaCompraEntrada[]): LineaCompraEntrada[] {
+    return lineas.map((l) =>
+      this.productos.obtenerPorId(l.productoId).tipo === 'insumo' ? { ...l, cantidad: 1 } : l,
+    );
+  }
+
+  registrarCompra(entrada: RegistrarCompraInput): Compra {
+    const input: RegistrarCompraInput = { ...entrada, lineas: this.normalizarLineas(entrada.lineas) };
     if (input.lineas.length === 0) {
       throw new ErrorDeNegocio('Una compra debe tener al menos un producto.');
     }
@@ -273,7 +285,8 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
    * compra se hubiera registrado así desde el principio. Conserva el
    * mismo correlativo (id) y la fecha original.
    */
-  modificarCompra(id: number, input: RegistrarCompraInput): Compra {
+  modificarCompra(id: number, entrada: RegistrarCompraInput): Compra {
+    const input: RegistrarCompraInput = { ...entrada, lineas: this.normalizarLineas(entrada.lineas) };
     if (input.lineas.length === 0) {
       throw new ErrorDeNegocio('Una compra debe tener al menos un producto.');
     }
@@ -347,6 +360,7 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
       ]);
       Array.from(idsProductos).forEach((productoId) => {
         const producto = this.productos.obtenerPorId(productoId);
+        if (producto.tipo === 'insumo') return; // los insumos no registran stock
         const anterior = anteriorPorProducto.get(productoId) ?? 0;
         const nuevo = nuevoPorProducto.get(productoId) ?? 0;
         const stockFinal = redondear(producto.stockActual - anterior + nuevo);
@@ -466,11 +480,14 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
     );
 
     const producto = this.productos.obtenerPorId(linea.productoId);
-    const stockNuevo = calcularStockNuevo(producto.stockActual, linea.cantidad, 0);
-    this.productos.actualizarStock(producto.id, stockNuevo);
     // El costo puede cambiar de una compra a otra; se actualiza para
     // que la ganancia de las próximas ventas sea correcta.
     this.bd.ejecutar('UPDATE producto SET costo = ? WHERE id = ?', [linea.costoUnitario, producto.id]);
+    // Un insumo no registra stock ni movimientos de inventario: solo el costo.
+    if (producto.tipo === 'insumo') return;
+
+    const stockNuevo = calcularStockNuevo(producto.stockActual, linea.cantidad, 0);
+    this.productos.actualizarStock(producto.id, stockNuevo);
 
     this.bd.ejecutar(
       `INSERT INTO movimiento_inventario
@@ -488,6 +505,7 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
     motivo: 'anulacion' | 'modificacion',
   ): void {
     const producto = this.productos.obtenerPorId(productoId);
+    if (producto.tipo === 'insumo') return; // nunca entró stock, no hay nada que retirar
     const stockNuevo = calcularStockNuevo(producto.stockActual, 0, cantidad);
     this.productos.actualizarStock(producto.id, stockNuevo);
     this.bd.ejecutar(

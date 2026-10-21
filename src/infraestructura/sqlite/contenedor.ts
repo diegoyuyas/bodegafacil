@@ -118,12 +118,18 @@ async function inicializar(): Promise<ContenedorRepositorios> {
 }
 
 /**
- * Sobrescribe la base local con un respaldo (.sqlite) y recarga la
- * página. Antes de guardar, valida que el archivo sea realmente una
+ * Sobrescribe la base local con un respaldo (.sqlite). NO recarga la
+ * página: quien la llama debe volver a cargar la app desde la raíz
+ * (`window.location.replace('/')`) para que arranque con la base
+ * restaurada. Recargar en la misma dirección (`location.reload()`) no
+ * sirve en el APK: desde una ruta como /mas/respaldo, Capacitor responde
+ * con la pantalla de Inicio pero la app sigue creyendo que está en esa
+ * ruta, y por eso después no dejaba volver a entrar a esa misma opción.
+ * Antes de guardar, valida que el archivo sea realmente una
  * base de Vende Fácil (evita dejar la app rota si suben un archivo
  * cualquiera). Se recarga en vez de reasignar en caliente porque todos
  * los repositorios ya instanciados quedarían apuntando a la base
- * vieja; un reload es más simple y a prueba de errores.
+ * vieja; volver a cargar la app es más simple y a prueba de errores.
  *
  * El respaldo solo debe traer de vuelta la información del negocio
  * (ventas, productos, caja, fiados, compras…) — NUNCA el estado de
@@ -165,7 +171,6 @@ export async function restaurarRespaldo(
   conservarClave(CLAVE_PLAN_FECHA_MAXIMA_VISTA, premiumAConservar.fechaMaximaVista);
 
   await guardarBinario(CLAVE_PERSISTENCIA, bdDePrueba.exportar());
-  window.location.reload();
 }
 
 /**

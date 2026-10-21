@@ -7,6 +7,10 @@ import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moned
 import type { EstadoPlan } from '@/core/plan';
 import type { FotoPagoFiado, RegistroBitacoraAnulacionPago } from '@/core/tipos';
 import type {
+  ClienteCompradorItem,
+  DeudaClienteItem,
+  GananciaProductoItem,
+  VentaFormaPagoItem,
   HistorialCostoItem,
   MetodoPagoSinFiado,
   MovimientoCaja,
@@ -19,6 +23,11 @@ import { calcularTotalesCaja, etiquetaDeMovimientoCaja, montoVigenteDeMovimiento
 import type { FilaCompraDetallada, FilaVentaDetallada } from '@/core/exportacion';
 import {
   construirHojaCaja,
+  construirHojaDeudaAntiguedad,
+  construirHojaGananciaProductos,
+  construirHojaMayoresDeudores,
+  construirHojaMejoresClientes,
+  construirHojaVentasFormaPago,
   construirHojaComprasDetallado,
   construirHojaHistorialCostos,
   construirHojaKardex,
@@ -31,15 +40,7 @@ import { descargarExcel } from '@/infraestructura/exportacion/descargas';
 import { IconoImagen, VisorFotoComprobante } from '@/components/visor-foto-comprobante';
 import { capturarFotoComprobantePago } from '@/infraestructura/comprobante-pago/capturar-foto';
 
-const PESTANAS = [
-  { valor: 'ventas', etiqueta: 'Ventas' },
-  { valor: 'caja', etiqueta: 'Caja' },
-  { valor: 'compras', etiqueta: 'Compras' },
-  { valor: 'productos', etiqueta: 'Más vendidos' },
-  { valor: 'costos', etiqueta: 'Costos' },
-  { valor: 'kardex', etiqueta: 'Kardex' },
-  { valor: 'anulaciones', etiqueta: 'Anulaciones' },
-] as const;
+import { MenuReportes, TODOS_LOS_REPORTES, type Pestana } from './areas';
 
 const ETIQUETAS_METODO_PAGO_REPORTE: Record<string, string> = {
   efectivo: 'Efectivo',
@@ -54,8 +55,6 @@ const ETIQUETAS_TIPO_MOVIMIENTO_KARDEX: Record<MovimientoInventarioItem['tipo'],
   salida: 'Salida',
   ajuste: 'Ajuste',
 };
-
-type Pestana = (typeof PESTANAS)[number]['valor'];
 
 interface VentaAgrupada {
   pedido: string;
@@ -86,7 +85,27 @@ export default function PaginaReportes() {
     setSimboloMoneda(obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)));
   }, [contenedor]);
   const [estadoPlan, setEstadoPlan] = useState<EstadoPlan | null>(null);
-  const [pestana, setPestana] = useState<Pestana>('ventas');
+  // null = pantalla principal con las tarjetas por área; con valor = ese reporte abierto.
+  const [pestana, setPestana] = useState<Pestana | null>(null);
+  const [busquedaReporte, setBusquedaReporte] = useState('');
+  const reporteActual = TODOS_LOS_REPORTES.find((r) => r.valor === pestana);
+
+  // El rango de fechas se conserva al cambiar de reporte; al abrir uno se parte desde arriba.
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [pestana]);
+
+  // Botón físico "Atrás" de Android: con un reporte abierto vuelve a las tarjetas
+  // (en vez de salir de Reportes). Ver ManejarBotonAtras.
+  useEffect(() => {
+    if (!pestana) return;
+    const volverAlMenu = (e: Event) => {
+      e.preventDefault();
+      setPestana(null);
+    };
+    window.addEventListener('vendefacil:atras', volverAlMenu);
+    return () => window.removeEventListener('vendefacil:atras', volverAlMenu);
+  }, [pestana]);
 
   const [desde, setDesde] = useState(hoyLocalSql());
   const [hasta, setHasta] = useState(hoyLocalSql());
@@ -96,6 +115,14 @@ export default function PaginaReportes() {
   const [movimientosCaja, setMovimientosCaja] = useState<MovimientoCaja[]>([]);
   const [detalleCompras, setDetalleCompras] = useState<FilaCompraDetallada[]>([]);
   const [masVendidos, setMasVendidos] = useState<ProductoMasVendidoItem[]>([]);
+  const [ganancias, setGanancias] = useState<GananciaProductoItem[]>([]);
+  const [formasPago, setFormasPago] = useState<VentaFormaPagoItem[]>([]);
+  const [compradores, setCompradores] = useState<ClienteCompradorItem[]>([]);
+  const [deudas, setDeudas] = useState<DeudaClienteItem[]>([]);
+  const [busquedaGanancia, setBusquedaGanancia] = useState('');
+  const [busquedaCompradores, setBusquedaCompradores] = useState('');
+  const [busquedaAntiguedad, setBusquedaAntiguedad] = useState('');
+  const [busquedaDeudores, setBusquedaDeudores] = useState('');
 
   // Filtros de cada pestaña — todos se aplican sobre lo ya cargado en
   // el rango de fechas de arriba, sin volver a consultar la base.
@@ -143,6 +170,10 @@ export default function PaginaReportes() {
     setMovimientosCaja(contenedor.caja.listarMovimientosPorRango(desde, hasta));
     setDetalleCompras(contenedor.compras.listarDetalleParaExportar(desde, hasta));
     setMasVendidos(contenedor.ventas.listarProductosMasVendidos(desde, hasta));
+    setGanancias(contenedor.ventas.listarGananciaPorProducto(desde, hasta));
+    setFormasPago(contenedor.ventas.listarVentasPorFormaPago(desde, hasta));
+    setCompradores(contenedor.ventas.listarClientesQueMasCompran(desde, hasta));
+    setDeudas(contenedor.fiados.listarDeudasPorAntiguedad(hoyLocalSql()));
     setFotosPagosFiado(contenedor.fiados.listarFotosPagosFiado(desde, hasta));
     setBitacoraAnulaciones(contenedor.fiados.listarBitacoraAnulaciones(desde, hasta));
   }
@@ -308,9 +339,74 @@ export default function PaginaReportes() {
     );
   }, [busquedaAnulaciones, bitacoraAnulaciones]);
 
+  const gananciasFiltradas = useMemo(() => {
+    const texto = busquedaGanancia.trim().toLowerCase();
+    return texto ? ganancias.filter((g) => g.nombre.toLowerCase().includes(texto)) : ganancias;
+  }, [busquedaGanancia, ganancias]);
+
+  const resumenGanancia = useMemo(() => {
+    const vendido = gananciasFiltradas.reduce((s, g) => s + g.totalVendido, 0);
+    const ganancia = gananciasFiltradas.reduce((s, g) => s + g.gananciaTotal, 0);
+    return { vendido, ganancia, margen: vendido > 0 ? (ganancia / vendido) * 100 : 0 };
+  }, [gananciasFiltradas]);
+
+  const totalFormasPago = useMemo(() => formasPago.reduce((s, f) => s + f.total, 0), [formasPago]);
+
+  const compradoresFiltrados = useMemo(() => {
+    const texto = busquedaCompradores.trim().toLowerCase();
+    return texto ? compradores.filter((c) => c.nombre.toLowerCase().includes(texto)) : compradores;
+  }, [busquedaCompradores, compradores]);
+
+  const deudoresFiltrados = useMemo(() => {
+    const texto = busquedaDeudores.trim().toLowerCase();
+    const lista = texto ? deudas.filter((d) => d.nombre.toLowerCase().includes(texto)) : deudas;
+    return [...lista].sort((a, b) => b.total - a.total);
+  }, [busquedaDeudores, deudas]);
+
+  const antiguedadFiltrada = useMemo(() => {
+    const texto = busquedaAntiguedad.trim().toLowerCase();
+    const lista = texto ? deudas.filter((d) => d.nombre.toLowerCase().includes(texto)) : deudas;
+    return [...lista].sort((a, b) => b.diasMasAntigua - a.diasMasAntigua || b.total - a.total);
+  }, [busquedaAntiguedad, deudas]);
+
+  const totalesAntiguedad = useMemo(
+    () => ({
+      a: antiguedadFiltrada.reduce((s, d) => s + d.deuda0a7, 0),
+      b: antiguedadFiltrada.reduce((s, d) => s + d.deuda8a30, 0),
+      c: antiguedadFiltrada.reduce((s, d) => s + d.deuda31omas, 0),
+    }),
+    [antiguedadFiltrada],
+  );
+
+  const totalDeudores = useMemo(() => deudoresFiltrados.reduce((s, d) => s + d.total, 0), [deudoresFiltrados]);
+
   async function descargarExcelDelReporte() {
-    if (!esPremium || !contenedor) return;
+    if (!esPremium || !contenedor || !pestana) return;
     if (pestana === 'anulaciones') return; // la bitácora es solo de consulta
+    const sufijoRango = `${desde}-a-${hasta}`;
+    if (pestana === 'ganancia') {
+      await descargarExcel(`ganancia-por-producto-${sufijoRango}.xlsx`, generarLibroExcel([construirHojaGananciaProductos(gananciasFiltradas)]));
+      return;
+    }
+    if (pestana === 'formaspago') {
+      await descargarExcel(
+        `ventas-por-forma-de-pago-${sufijoRango}.xlsx`,
+        generarLibroExcel([construirHojaVentasFormaPago(formasPago, ETIQUETAS_METODO_PAGO_REPORTE)]),
+      );
+      return;
+    }
+    if (pestana === 'compradores') {
+      await descargarExcel(`clientes-que-mas-compran-${sufijoRango}.xlsx`, generarLibroExcel([construirHojaMejoresClientes(compradoresFiltrados)]));
+      return;
+    }
+    if (pestana === 'antiguedad') {
+      await descargarExcel(`deuda-por-antiguedad-${hoyLocalSql()}.xlsx`, generarLibroExcel([construirHojaDeudaAntiguedad(antiguedadFiltrada)]));
+      return;
+    }
+    if (pestana === 'deudores') {
+      await descargarExcel(`clientes-que-mas-deben-${hoyLocalSql()}.xlsx`, generarLibroExcel([construirHojaMayoresDeudores(deudoresFiltrados)]));
+      return;
+    }
     if (pestana === 'ventas') {
       const libro = generarLibroExcel([construirHojaVentas(ventasFiltradas.flatMap((v) => v.lineas))]);
       await descargarExcel(`reporte-ventas-${desde}-a-${hasta}.xlsx`, libro);
@@ -343,9 +439,15 @@ export default function PaginaReportes() {
 
   const totalesCaja = useMemo(() => calcularTotalesCaja(movimientosCajaFiltrados), [movimientosCajaFiltrados]);
 
+  const usaRango = reporteActual?.usaRango ?? true;
   const botonExcelDeshabilitado =
     !esPremium ||
-    rangoInvalido ||
+    (usaRango && rangoInvalido) ||
+    (pestana === 'ganancia' && gananciasFiltradas.length === 0) ||
+    (pestana === 'formaspago' && formasPago.length === 0) ||
+    (pestana === 'compradores' && compradoresFiltrados.length === 0) ||
+    (pestana === 'antiguedad' && antiguedadFiltrada.length === 0) ||
+    (pestana === 'deudores' && deudoresFiltrados.length === 0) ||
     pestana === 'anulaciones' ||
     (pestana === 'costos' && (!productoElegido || historialCostos.length === 0)) ||
     (pestana === 'kardex' && (!productoElegidoKardex || movimientosKardex.length === 0)) ||
@@ -357,60 +459,63 @@ export default function PaginaReportes() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
-        <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver">
-          ←
-        </Link>
-        <h1 className="text-lg font-extrabold text-bodega-oscuro">Reportes</h1>
+        {pestana ? (
+          <button onClick={() => setPestana(null)} className="text-xl text-tinta/60" aria-label="Volver a Reportes">
+            ←
+          </button>
+        ) : (
+          <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver">
+            ←
+          </Link>
+        )}
+        <h1 className="text-lg font-extrabold text-bodega-oscuro">{reporteActual?.etiqueta ?? 'Reportes'}</h1>
       </header>
 
       {cargando && <p className="mt-4 text-sm text-tinta/60">Cargando…</p>}
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       <>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {PESTANAS.map((p) => (
-              <button
-                key={p.valor}
-                onClick={() => setPestana(p.valor)}
-                className={`h-9 flex-1 rounded-full border text-sm font-medium ${
-                  pestana === p.valor
-                    ? 'border-bodega bg-bodega text-white'
-                    : 'border-linea text-tinta/70'
-                }`}
-              >
-                {p.etiqueta}
-              </button>
-            ))}
-          </div>
+          {pestana === null && (
+            <MenuReportes
+              esPremium={esPremium}
+              busqueda={busquedaReporte}
+              onBusqueda={setBusquedaReporte}
+              onElegir={setPestana}
+            />
+          )}
 
-          <div className="mt-4 rounded-xl border border-linea p-3">
-            <p className="text-xs font-semibold text-tinta/70">Rango de fechas</p>
-            <div className="mt-2 flex gap-2">
-              <div className="flex-1">
-                <label className="mb-1 block text-xs text-tinta/50">Desde</label>
-                <input
-                  type="date"
-                  value={desde}
-                  onChange={(e) => setDesde(e.target.value)}
-                  max={hasta || undefined}
-                  className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
-                />
+          {pestana !== null && (
+            <>
+          {usaRango && (
+            <div className="mt-4 rounded-xl border border-linea p-3">
+              <p className="text-xs font-semibold text-tinta/70">Rango de fechas</p>
+              <div className="mt-2 flex gap-2">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-tinta/50">Desde</label>
+                  <input
+                    type="date"
+                    value={desde}
+                    onChange={(e) => setDesde(e.target.value)}
+                    max={hasta || undefined}
+                    className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-tinta/50">Hasta</label>
+                  <input
+                    type="date"
+                    value={hasta}
+                    onChange={(e) => setHasta(e.target.value)}
+                    min={desde || undefined}
+                    className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
+                  />
+                </div>
               </div>
-              <div className="flex-1">
-                <label className="mb-1 block text-xs text-tinta/50">Hasta</label>
-                <input
-                  type="date"
-                  value={hasta}
-                  onChange={(e) => setHasta(e.target.value)}
-                  min={desde || undefined}
-                  className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
-                />
-              </div>
+              {rangoInvalido && (
+                <p className="mt-2 text-xs text-alerta">La fecha "desde" no puede ser posterior a "hasta".</p>
+              )}
             </div>
-            {rangoInvalido && (
-              <p className="mt-2 text-xs text-alerta">La fecha "desde" no puede ser posterior a "hasta".</p>
-            )}
-          </div>
+          )}
 
           {pestana !== 'costos' && (
             <button
@@ -422,6 +527,8 @@ export default function PaginaReportes() {
             >
               {esPremium ? 'Descargar Excel ↓' : '🔒 Descargar Excel (Premium)'}
             </button>
+          )}
+            </>
           )}
 
           {pestana === 'ventas' && (
@@ -736,6 +843,246 @@ export default function PaginaReportes() {
                       </div>
                       <span className="shrink-0 text-sm font-semibold text-tinta">
                         {formatearMonto(item.totalVendido, simboloMoneda)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+
+          {pestana === 'ganancia' && (
+            <section className="mt-4">
+              <input
+                value={busquedaGanancia}
+                onChange={(e) => setBusquedaGanancia(e.target.value)}
+                placeholder="Buscar producto…"
+                className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+              />
+
+              <div className="mt-3 rounded-xl border border-linea px-4 py-3">
+                <p className="text-xs text-tinta/60">Ganancia en el rango</p>
+                <p className="text-2xl font-extrabold text-tinta">
+                  {formatearMonto(resumenGanancia.ganancia, simboloMoneda)}
+                </p>
+                <p className="text-xs text-tinta/50">
+                  Vendido {formatearMonto(resumenGanancia.vendido, simboloMoneda)} · margen{' '}
+                  {resumenGanancia.margen.toFixed(1)}%
+                </p>
+              </div>
+
+              {gananciasFiltradas.length === 0 ? (
+                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                  {busquedaGanancia
+                    ? `Ningún producto coincide con "${busquedaGanancia}".`
+                    : 'No hay ventas registradas en este rango.'}
+                </p>
+              ) : (
+                <ul className="mt-4 divide-y divide-linea border-y border-linea">
+                  {gananciasFiltradas.map((item, indice) => (
+                    <li key={item.productoId} className="flex items-center justify-between gap-3 py-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="w-5 shrink-0 text-sm font-semibold text-tinta/40">{indice + 1}</span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm text-tinta">{item.nombre}</p>
+                          <p className="text-xs text-tinta/50">
+                            {item.cantidadVendida} vendidas · costo {formatearMonto(item.costoTotal, simboloMoneda)} ·
+                            margen {item.margenPorcentaje.toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-sm font-semibold text-tinta">
+                          {formatearMonto(item.gananciaTotal, simboloMoneda)}
+                        </p>
+                        <p className="text-xs text-tinta/50">de {formatearMonto(item.totalVendido, simboloMoneda)}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+
+          {pestana === 'formaspago' && (
+            <section className="mt-4">
+              <div className="rounded-xl border border-linea px-4 py-3">
+                <p className="text-xs text-tinta/60">Total vendido en el rango</p>
+                <p className="text-2xl font-extrabold text-tinta">{formatearMonto(totalFormasPago, simboloMoneda)}</p>
+              </div>
+
+              {formasPago.length === 0 ? (
+                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                  No hay ventas registradas en este rango.
+                </p>
+              ) : (
+                <ul className="mt-4 divide-y divide-linea border-y border-linea">
+                  {formasPago.map((item) => (
+                    <li key={item.metodoPago} className="py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm text-tinta">
+                            {ETIQUETAS_METODO_PAGO_REPORTE[item.metodoPago] ?? item.metodoPago}
+                          </p>
+                          <p className="text-xs text-tinta/50">
+                            {item.cantidadVentas} {item.cantidadVentas === 1 ? 'venta' : 'ventas'} ·{' '}
+                            {item.porcentaje.toFixed(1)}%
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-sm font-semibold text-tinta">
+                          {formatearMonto(item.total, simboloMoneda)}
+                        </span>
+                      </div>
+                      <div className="mt-2 h-1.5 rounded-full bg-linea">
+                        <div
+                          className="h-1.5 rounded-full bg-bodega"
+                          style={{ width: `${Math.min(100, Math.max(0, item.porcentaje))}%` }}
+                        />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+
+          {pestana === 'compradores' && (
+            <section className="mt-4">
+              <input
+                value={busquedaCompradores}
+                onChange={(e) => setBusquedaCompradores(e.target.value)}
+                placeholder="Buscar cliente…"
+                className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+              />
+              <p className="mt-2 text-xs text-tinta/50">Solo cuentan las ventas hechas a clientes registrados.</p>
+
+              {compradoresFiltrados.length === 0 ? (
+                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                  {busquedaCompradores
+                    ? `Ningún cliente coincide con "${busquedaCompradores}".`
+                    : 'No hay ventas a clientes registrados en este rango.'}
+                </p>
+              ) : (
+                <ul className="mt-3 divide-y divide-linea border-y border-linea">
+                  {compradoresFiltrados.map((item, indice) => (
+                    <li key={item.clienteId} className="flex items-center justify-between gap-3 py-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="w-5 shrink-0 text-sm font-semibold text-tinta/40">{indice + 1}</span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm text-tinta">{item.nombre}</p>
+                          <p className="text-xs text-tinta/50">
+                            {item.cantidadCompras} {item.cantidadCompras === 1 ? 'compra' : 'compras'} · última{' '}
+                            {formatearFechaHora(item.ultimaCompra)}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="shrink-0 text-sm font-semibold text-tinta">
+                        {formatearMonto(item.totalComprado, simboloMoneda)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+
+          {pestana === 'antiguedad' && (
+            <section className="mt-4">
+              <input
+                value={busquedaAntiguedad}
+                onChange={(e) => setBusquedaAntiguedad(e.target.value)}
+                placeholder="Buscar cliente…"
+                className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+              />
+              <p className="mt-2 text-xs text-tinta/50">Situación de hoy, sin rango de fechas.</p>
+
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <div className="rounded-xl border border-linea px-3 py-2">
+                  <p className="text-xs text-tinta/60">0 a 7 días</p>
+                  <p className="text-sm font-extrabold text-tinta">{formatearMonto(totalesAntiguedad.a, simboloMoneda)}</p>
+                </div>
+                <div className="rounded-xl border border-linea px-3 py-2">
+                  <p className="text-xs text-tinta/60">8 a 30 días</p>
+                  <p className="text-sm font-extrabold text-tinta">{formatearMonto(totalesAntiguedad.b, simboloMoneda)}</p>
+                </div>
+                <div className="rounded-xl border border-alerta/40 px-3 py-2">
+                  <p className="text-xs text-alerta">Más de 30</p>
+                  <p className="text-sm font-extrabold text-alerta">{formatearMonto(totalesAntiguedad.c, simboloMoneda)}</p>
+                </div>
+              </div>
+
+              {antiguedadFiltrada.length === 0 ? (
+                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                  {busquedaAntiguedad
+                    ? `Ningún cliente coincide con "${busquedaAntiguedad}".`
+                    : 'Nadie tiene deuda pendiente.'}
+                </p>
+              ) : (
+                <ul className="mt-4 divide-y divide-linea border-y border-linea">
+                  {antiguedadFiltrada.map((item) => (
+                    <li key={item.clienteId} className="py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm text-tinta">{item.nombre}</p>
+                          <p className="text-xs text-tinta/50">
+                            deuda más antigua: {item.diasMasAntigua} {item.diasMasAntigua === 1 ? 'día' : 'días'}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-sm font-semibold text-tinta">
+                          {formatearMonto(item.total, simboloMoneda)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-tinta/60">
+                        {item.deuda0a7 > 0 && <span className="mr-3">0-7: {formatearMonto(item.deuda0a7, simboloMoneda)}</span>}
+                        {item.deuda8a30 > 0 && <span className="mr-3">8-30: {formatearMonto(item.deuda8a30, simboloMoneda)}</span>}
+                        {item.deuda31omas > 0 && (
+                          <span className="font-semibold text-alerta">+30: {formatearMonto(item.deuda31omas, simboloMoneda)}</span>
+                        )}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
+
+          {pestana === 'deudores' && (
+            <section className="mt-4">
+              <input
+                value={busquedaDeudores}
+                onChange={(e) => setBusquedaDeudores(e.target.value)}
+                placeholder="Buscar cliente…"
+                className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+              />
+              <p className="mt-2 text-xs text-tinta/50">Situación de hoy, sin rango de fechas.</p>
+
+              <div className="mt-3 rounded-xl border border-linea px-4 py-3">
+                <p className="text-xs text-tinta/60">Total que te deben</p>
+                <p className="text-2xl font-extrabold text-tinta">{formatearMonto(totalDeudores, simboloMoneda)}</p>
+              </div>
+
+              {deudoresFiltrados.length === 0 ? (
+                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                  {busquedaDeudores
+                    ? `Ningún cliente coincide con "${busquedaDeudores}".`
+                    : 'Nadie tiene deuda pendiente.'}
+                </p>
+              ) : (
+                <ul className="mt-4 divide-y divide-linea border-y border-linea">
+                  {deudoresFiltrados.map((item, indice) => (
+                    <li key={item.clienteId} className="flex items-center justify-between gap-3 py-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="w-5 shrink-0 text-sm font-semibold text-tinta/40">{indice + 1}</span>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm text-tinta">{item.nombre}</p>
+                          <p className="text-xs text-tinta/50">
+                            {item.cantidadDeudas} {item.cantidadDeudas === 1 ? 'deuda' : 'deudas'} · la más antigua hace{' '}
+                            {item.diasMasAntigua} {item.diasMasAntigua === 1 ? 'día' : 'días'}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="shrink-0 text-sm font-semibold text-tinta">
+                        {formatearMonto(item.total, simboloMoneda)}
                       </span>
                     </li>
                   ))}

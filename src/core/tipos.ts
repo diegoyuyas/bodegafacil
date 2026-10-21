@@ -14,6 +14,8 @@ export type TipoMovimientoCaja = 'ingreso' | 'egreso';
 export type TipoMovimientoInventario = 'entrada' | 'salida' | 'ajuste';
 export type EstadoCompra = 'pendiente' | 'recibida' | 'anulada';
 export type TipoRespaldo = 'manual' | 'automatico';
+/** 'venta_compra': producto normal. 'insumo': solo sirve para Compras (sin stock ni precio de venta, no sale a vender). */
+export type TipoProducto = 'venta_compra' | 'insumo';
 export type EstadoRespaldo = 'completado' | 'fallido';
 
 export interface Categoria {
@@ -35,6 +37,8 @@ export interface Producto {
   stockMinimo: number;
   /** false = no lleva stock (ej. servicios, recarga de celular): no descuenta ni bloquea venta; stockActual/stockMinimo quedan en 0. */
   controlaStock: boolean;
+  /** 'insumo' = solo para Compras: controlaStock=false, precioVenta=0, stock en 0. */
+  tipo: TipoProducto;
   unidadMedida: string;
   activo: boolean;
   creadoEn: string;
@@ -372,6 +376,50 @@ export interface ProductoMasVendidoItem {
   cantidadVendida: number;
   totalVendido: number;
   gananciaTotal: number;
+}
+
+/** Reporte "Ganancia por Producto": lo vendido, lo que costó y lo que quedó. */
+export interface GananciaProductoItem {
+  productoId: number;
+  nombre: string;
+  cantidadVendida: number;
+  totalVendido: number;
+  costoTotal: number;
+  gananciaTotal: number;
+  /** Ganancia / total vendido, en %. 0 si no hubo ingreso. */
+  margenPorcentaje: number;
+}
+
+/** Reporte "Ventas por Forma de Pago" (ventas no anuladas). */
+export interface VentaFormaPagoItem {
+  metodoPago: string;
+  cantidadVentas: number;
+  total: number;
+  /** Parte del total vendido en el rango, en %. */
+  porcentaje: number;
+}
+
+/** Reporte "Clientes que Más Compran" (solo ventas con cliente registrado). */
+export interface ClienteCompradorItem {
+  clienteId: number;
+  nombre: string;
+  cantidadCompras: number;
+  totalComprado: number;
+  ultimaCompra: string;
+}
+
+/** Deuda vigente de un cliente, repartida por antigüedad (reportes de Fiados). */
+export interface DeudaClienteItem {
+  clienteId: number;
+  nombre: string;
+  telefono: string | null;
+  deuda0a7: number;
+  deuda8a30: number;
+  deuda31omas: number;
+  total: number;
+  cantidadDeudas: number;
+  /** Días de la deuda más antigua que aún tiene saldo. */
+  diasMasAntigua: number;
 }
 
 /**

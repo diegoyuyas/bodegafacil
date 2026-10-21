@@ -11,7 +11,7 @@ const OPCIONES = [
   {
     href: '/mas/reportes',
     etiqueta: 'Reportes',
-    descripcion: 'Caja, compras y más vendidos por rango de fechas',
+    descripcion: 'Ventas, fiados, compras, inventario y caja por rango de fechas',
   },
   { href: '/mas/clientes', etiqueta: 'Clientes', descripcion: 'Guardar clientes con su documento' },
   { href: '/mas/proveedores', etiqueta: 'Proveedores', descripcion: 'Guardar proveedores con RUC y celular' },

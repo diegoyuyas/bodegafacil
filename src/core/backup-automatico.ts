@@ -48,11 +48,20 @@ function fechaDdMmAaaa(fechaIso: string): string {
 }
 
 /**
- * Nombre por defecto: "respaldo-vende-facil-dd-mm-aaaa-hhmmss" (la
- * hora va sin separadores y siempre está presente, para que dos
- * backups del mismo día — por ejemplo uno automático y otro manual —
- * nunca se pisen entre sí). Si el bodeguero configuró un nombre
- * propio, se usa tal cual, sin agregarle nada.
+ * Nombre por defecto de cualquier respaldo (manual o automático), sin
+ * extensión: "dd-mm-aaaa-hhmmss-respaldo-vende-facil". Empieza por la fecha
+ * y la hora para que se vea al instante a qué día corresponde cada archivo
+ * y los respaldos se ordenen cronológicamente por nombre. La hora va sin
+ * separadores y siempre está presente, para que dos respaldos del mismo día
+ * — por ejemplo uno automático y otro manual — nunca se pisen entre sí.
+ */
+export function nombreRespaldoPorDefecto(fechaIso: string, horaCompacta: string): string {
+  return `${fechaDdMmAaaa(fechaIso)}-${horaCompacta}-respaldo-vende-facil`;
+}
+
+/**
+ * Nombre del backup automático: el configurado por el bodeguero tal cual
+ * (sin agregarle nada) o, si lo dejó vacío, el por defecto de arriba.
  */
 export function nombreArchivoBackupAutomatico(
   nombreConfigurado: string,
@@ -60,7 +69,7 @@ export function nombreArchivoBackupAutomatico(
   horaCompacta: string,
 ): string {
   const limpio = nombreConfigurado.trim();
-  const base = limpio || `respaldo-vende-facil-${fechaDdMmAaaa(fechaIso)}-${horaCompacta}`;
+  const base = limpio || nombreRespaldoPorDefecto(fechaIso, horaCompacta);
   return base.toLowerCase().endsWith('.sqlite') ? base : `${base}.sqlite`;
 }
 

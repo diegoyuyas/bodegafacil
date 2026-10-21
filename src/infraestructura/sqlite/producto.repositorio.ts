@@ -20,6 +20,14 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
       .map(mapearProducto);
   }
 
+  listarActivosParaVenta(): Producto[] {
+    return this.bd
+      .consultar<FilaProducto>(
+        "SELECT * FROM producto WHERE activo = 1 AND tipo = 'venta_compra' ORDER BY nombre",
+      )
+      .map(mapearProducto);
+  }
+
   listarTodos(): Producto[] {
     return this.bd
       .consultar<FilaProducto>('SELECT * FROM producto ORDER BY nombre')
@@ -31,7 +39,7 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
     return this.bd
       .consultar<FilaProducto>(
         `SELECT * FROM producto
-         WHERE activo = 1 AND (nombre LIKE ? OR CAST(precio_venta AS TEXT) LIKE ?)
+         WHERE activo = 1 AND tipo = 'venta_compra' AND (nombre LIKE ? OR CAST(precio_venta AS TEXT) LIKE ?)
          ORDER BY nombre LIMIT 20`,
         [patron, patron],
       )
@@ -52,24 +60,33 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
       throw new ErrorDeNegocio(`Ya existe un producto llamado "${nombreNormalizado}".`);
     }
 
+    const esInsumo = datos.tipo === 'insumo';
+    if (esInsumo && datos.costo < 0) {
+      throw new ErrorDeNegocio('El costo no puede ser negativo.');
+    }
+
     return this.bd.transaccion(() => {
-      const stockInicial = datos.controlaStock ? datos.stockActual : 0;
-      const stockMinimoInicial = datos.controlaStock ? datos.stockMinimo : 0;
+      // Un insumo nunca lleva stock ni precio de venta: solo sirve para registrar compras.
+      const controlaStock = esInsumo ? false : datos.controlaStock;
+      const precioVenta = esInsumo ? 0 : datos.precioVenta;
+      const stockInicial = controlaStock ? datos.stockActual : 0;
+      const stockMinimoInicial = controlaStock ? datos.stockMinimo : 0;
 
       this.bd.ejecutar(
         `INSERT INTO producto
-           (nombre, categoria_id, codigo, precio_venta, costo, stock_actual, stock_minimo, controla_stock, unidad_medida)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (nombre, categoria_id, codigo, precio_venta, costo, stock_actual, stock_minimo, controla_stock, unidad_medida, tipo)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           nombreNormalizado,
           datos.categoriaId ?? null,
           datos.codigo ?? null,
-          datos.precioVenta,
+          precioVenta,
           datos.costo,
           stockInicial,
           stockMinimoInicial,
-          datos.controlaStock ? 1 : 0,
+          controlaStock ? 1 : 0,
           datos.unidadMedida,
+          esInsumo ? 'insumo' : 'venta_compra',
         ],
       );
       const id = this.bd.ultimoIdInsertado();
@@ -77,7 +94,7 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
       // Deja en la bitácora con qué valores se registró, para tener un
       // punto de partida con el que comparar cambios futuros.
       this.registrarHistorial(id, 'nombre', null, nombreNormalizado);
-      this.registrarHistorial(id, 'precio_venta', null, String(datos.precioVenta));
+      this.registrarHistorial(id, 'precio_venta', null, String(precioVenta));
       this.registrarHistorial(id, 'costo', null, String(datos.costo));
       this.registrarHistorial(id, 'stock', null, String(stockInicial));
       this.registrarHistorial(id, 'stock_minimo', null, String(stockMinimoInicial));
@@ -106,31 +123,45 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
       throw new ErrorDeNegocio(`Ya existe un producto llamado "${nombreNormalizado}".`);
     }
 
+    const tipoNuevo = datos.tipo ?? actual.tipo;
+    const esInsumo = tipoNuevo === 'insumo';
+    // Un producto de Venta y Compra solo puede pasar a Insumo si no tiene stock:
+    // si no, ese stock quedaría "colgado" sin forma de venderse ni de ajustarse.
+    if (esInsumo && actual.tipo !== 'insumo' && actual.stockActual !== 0) {
+      throw new ErrorDeNegocio(
+        `No se puede pasar "${actual.nombre}" a Insumo: todavía tiene stock (${actual.stockActual}). Primero déjalo en 0 con un Ajuste.`,
+      );
+    }
+
     return this.bd.transaccion(() => {
-      const stockMinimoNuevo = datos.controlaStock ? datos.stockMinimo : 0;
+      const controlaStock = esInsumo ? false : datos.controlaStock;
+      const precioVentaNuevo = esInsumo ? 0 : datos.precioVenta;
+      const stockMinimoNuevo = controlaStock ? datos.stockMinimo : 0;
 
       this.bd.ejecutar(
         `UPDATE producto
            SET nombre = ?, categoria_id = ?, codigo = ?, precio_venta = ?, costo = ?,
-               stock_minimo = ?, controla_stock = ?, unidad_medida = ?, activo = ?, actualizado_en = datetime('now')
+               stock_minimo = ?, controla_stock = ?, unidad_medida = ?, activo = ?, tipo = ?,
+               actualizado_en = datetime('now')
          WHERE id = ?`,
         [
           nombreNormalizado,
           datos.categoriaId ?? null,
           datos.codigo ?? null,
-          datos.precioVenta,
+          precioVentaNuevo,
           datos.costo,
           stockMinimoNuevo,
-          datos.controlaStock ? 1 : 0,
+          controlaStock ? 1 : 0,
           datos.unidadMedida,
           datos.activo ? 1 : 0,
+          tipoNuevo,
           id,
         ],
       );
       // Si se desactivó el control de stock, el stock actual también vuelve a 0
       // (no tiene sentido dejar un número "colgado" que ya no se usa para nada).
-      const stockNuevo = datos.controlaStock ? actual.stockActual : 0;
-      if (!datos.controlaStock) {
+      const stockNuevo = controlaStock ? actual.stockActual : 0;
+      if (!controlaStock) {
         this.actualizarStock(id, 0);
       }
 
@@ -138,8 +169,8 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
       if (actual.nombre !== nombreNormalizado) {
         this.registrarHistorial(id, 'nombre', actual.nombre, nombreNormalizado);
       }
-      if (actual.precioVenta !== datos.precioVenta) {
-        this.registrarHistorial(id, 'precio_venta', String(actual.precioVenta), String(datos.precioVenta));
+      if (actual.precioVenta !== precioVentaNuevo) {
+        this.registrarHistorial(id, 'precio_venta', String(actual.precioVenta), String(precioVentaNuevo));
       }
       if (actual.costo !== datos.costo) {
         this.registrarHistorial(id, 'costo', String(actual.costo), String(datos.costo));
@@ -165,6 +196,9 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
 
     return this.bd.transaccion(() => {
       const producto = this.obtenerPorId(id);
+      if (producto.tipo === 'insumo') {
+        throw new ErrorDeNegocio(`"${producto.nombre}" es un insumo: no registra stock, no se puede ajustar.`);
+      }
       const stockNuevo = calcularStockNuevo(
         producto.stockActual,
         delta > 0 ? delta : 0,

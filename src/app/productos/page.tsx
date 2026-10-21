@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { usarSolicitudPin } from '@/hooks/usar-solicitud-pin';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
-import type { HistorialProductoItem, Producto } from '@/core/tipos';
+import type { HistorialProductoItem, Producto, TipoProducto } from '@/core/tipos';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
-import { limpiarNumeroEscrito, mayusculasAlEscribir } from '@/core/texto';
+import { limpiarNumeroEscrito, mayusculasAlEscribir, partirEnLineas } from '@/core/texto';
 import { formatearFechaHora } from '@/core/tiempo';
 import { SelectorEstado, filtrarPorEstado, type FiltroEstado } from '@/components/selector-estado';
 
@@ -32,8 +33,12 @@ export default function PaginaProductos() {
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [busqueda, setBusqueda] = useState('');
   const [filtroEstado, setFiltroEstado] = useState<FiltroEstado>('activos');
+  const [filtroTipo, setFiltroTipo] = useState<'todos' | TipoProducto>('todos');
+  // Producto tocado: se ve seleccionado y sube el pop-up Editar | Ajustar Stock | Bitácora.
+  const [menuOpcionesId, setMenuOpcionesId] = useState<number | null>(null);
 
   const [nombre, setNombre] = useState('');
+  const [tipo, setTipo] = useState<TipoProducto>('venta_compra');
   const [precioVenta, setPrecioVenta] = useState('');
   const [costo, setCosto] = useState('');
   const [stockActual, setStockActual] = useState('');
@@ -43,6 +48,7 @@ export default function PaginaProductos() {
 
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [nombreEdit, setNombreEdit] = useState('');
+  const [tipoEdit, setTipoEdit] = useState<TipoProducto>('venta_compra');
   const [precioVentaEdit, setPrecioVentaEdit] = useState('');
   const [costoEdit, setCostoEdit] = useState('');
   const [stockMinimoEdit, setStockMinimoEdit] = useState('');
@@ -72,12 +78,14 @@ export default function PaginaProductos() {
   async function guardarProducto() {
     if (!contenedor) return;
     setMensajeError(null);
+    const esInsumo = tipo === 'insumo';
     const precioNum = Number(precioVenta);
     const costoNum = Number(costo);
     // Costo en 0 no se avisa (puede ser un producto sin costo registrado
     // a propósito); solo se pregunta cuando el costo queda MÁS ALTO que
     // el precio de venta, porque eso casi siempre es un error de tipeo.
-    if (costoNum > 0 && costoNum > precioNum) {
+    // Un insumo no tiene precio de venta, así que no aplica.
+    if (!esInsumo && costoNum > 0 && costoNum > precioNum) {
       const confirmar = window.confirm(
         `¿Está seguro de registrar este costo: ${formatearMonto(costoNum, simboloMoneda)} mayor al precio de venta ${formatearMonto(precioNum, simboloMoneda)}?`,
       );
@@ -86,15 +94,17 @@ export default function PaginaProductos() {
     try {
       contenedor.productos.crear({
         nombre: nombre.trim(),
-        precioVenta: Number(precioVenta),
+        precioVenta: esInsumo ? 0 : Number(precioVenta),
         costo: Number(costo),
-        stockActual: Number(stockActual || 0),
-        stockMinimo: Number(stockMinimo || 0),
-        controlaStock,
+        stockActual: esInsumo ? 0 : Number(stockActual || 0),
+        stockMinimo: esInsumo ? 0 : Number(stockMinimo || 0),
+        controlaStock: esInsumo ? false : controlaStock,
         unidadMedida: 'unidad',
+        tipo,
       });
       await contenedor.persistir();
       setNombre('');
+      setTipo('venta_compra');
       setPrecioVenta('');
       setCosto('');
       setStockActual('');
@@ -113,6 +123,7 @@ export default function PaginaProductos() {
     setBitacoraId(null);
     setEditandoId(producto.id);
     setNombreEdit(producto.nombre);
+    setTipoEdit(producto.tipo);
     setPrecioVentaEdit(String(producto.precioVenta));
     setCostoEdit(String(producto.costo));
     setStockMinimoEdit(String(producto.stockMinimo));
@@ -135,6 +146,38 @@ export default function PaginaProductos() {
     setCantidadAjuste('');
     setMotivoAjuste('');
     setMensajeErrorAjuste(null);
+  }
+
+  const productoMenu = productos.find((p) => p.id === menuOpcionesId) ?? null;
+
+  // Al elegir Editar / Ajustar Stock / Bitácora, el panel se abre dentro de la fila del
+  // producto: se lleva la pantalla hasta esa fila para no tener que buscarla.
+  useEffect(() => {
+    const id = editandoId ?? ajustandoId ?? bitacoraId;
+    if (id === null) return;
+    const espera = setTimeout(() => {
+      document.getElementById(`producto-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 60);
+    return () => clearTimeout(espera);
+  }, [editandoId, ajustandoId, bitacoraId]);
+
+  // Botón físico "Atrás" de Android: con el pop-up abierto lo cierra (ver ManejarBotonAtras).
+  useEffect(() => {
+    if (menuOpcionesId === null) return;
+    const cerrar = (e: Event) => {
+      e.preventDefault();
+      setMenuOpcionesId(null);
+    };
+    window.addEventListener('vendefacil:atras', cerrar);
+    return () => window.removeEventListener('vendefacil:atras', cerrar);
+  }, [menuOpcionesId]);
+
+  function cerrarPaneles() {
+    setEditandoId(null);
+    setMensajeErrorEdit(null);
+    setAjustandoId(null);
+    setMensajeErrorAjuste(null);
+    setBitacoraId(null);
   }
 
   function cancelarAjuste() {
@@ -179,7 +222,9 @@ export default function PaginaProductos() {
 
   const productosFiltrados = useMemo(() => {
     const texto = busqueda.trim().toLowerCase();
-    const base = filtrarPorEstado(productos, filtroEstado);
+    const base = filtrarPorEstado(productos, filtroEstado).filter(
+      (p) => filtroTipo === 'todos' || p.tipo === filtroTipo,
+    );
     if (!texto) return base;
     return base.filter((p) => {
       if (p.nombre.toLowerCase().includes(texto)) return true;
@@ -187,20 +232,25 @@ export default function PaginaProductos() {
       if (String(p.precioVenta).includes(texto)) return true;
       return false;
     });
-  }, [productos, busqueda, filtroEstado]);
+  }, [productos, busqueda, filtroEstado, filtroTipo]);
 
   const formularioValido =
-    nombre.trim().length > 0 && Number(precioVenta) >= 0 && Number(costo) >= 0;
+    nombre.trim().length > 0 &&
+    Number(costo) >= 0 &&
+    (tipo === 'insumo' || Number(precioVenta) >= 0);
 
   const formularioEditValido =
-    nombreEdit.trim().length > 0 && Number(precioVentaEdit) >= 0 && Number(costoEdit) >= 0;
+    nombreEdit.trim().length > 0 &&
+    Number(costoEdit) >= 0 &&
+    (tipoEdit === 'insumo' || Number(precioVentaEdit) >= 0);
 
   async function guardarEdicion() {
     if (!contenedor || editandoId === null) return;
     setMensajeErrorEdit(null);
+    const esInsumoEdit = tipoEdit === 'insumo';
     const precioNum = Number(precioVentaEdit);
     const costoNum = Number(costoEdit);
-    if (costoNum > 0 && costoNum > precioNum) {
+    if (!esInsumoEdit && costoNum > 0 && costoNum > precioNum) {
       const confirmar = window.confirm(
         `¿Está seguro de registrar este costo: ${formatearMonto(costoNum, simboloMoneda)} mayor al precio de venta ${formatearMonto(precioNum, simboloMoneda)}?`,
       );
@@ -213,12 +263,13 @@ export default function PaginaProductos() {
         nombre: nombreEdit.trim(),
         categoriaId: producto.categoriaId,
         codigo: producto.codigo,
-        precioVenta: Number(precioVentaEdit),
+        precioVenta: esInsumoEdit ? 0 : Number(precioVentaEdit),
         costo: Number(costoEdit),
-        stockMinimo: Number(stockMinimoEdit || 0),
-        controlaStock: controlaStockEdit,
+        stockMinimo: esInsumoEdit ? 0 : Number(stockMinimoEdit || 0),
+        controlaStock: esInsumoEdit ? false : controlaStockEdit,
         unidadMedida: producto.unidadMedida,
         activo: activoEdit,
+        tipo: tipoEdit,
       });
       await contenedor.persistir();
       setEditandoId(null);
@@ -256,14 +307,27 @@ export default function PaginaProductos() {
             placeholder="Nombre del producto"
             className="uppercase placeholder:normal-case h-11 w-full rounded-lg border border-linea px-3 text-sm"
           />
+          <div>
+            <label className="mb-1 block text-xs text-tinta/50">Sirve para:</label>
+            <select
+              value={tipo}
+              onChange={(e) => setTipo(e.target.value as TipoProducto)}
+              className="h-11 w-full rounded-lg border border-linea bg-white px-3 text-sm"
+            >
+              <option value="venta_compra">Venta y Compra</option>
+              <option value="insumo">Solo Insumo (Compras)</option>
+            </select>
+          </div>
           <div className="flex gap-3">
-            <input
-              value={precioVenta}
-              onChange={(e) => setPrecioVenta(limpiarNumeroEscrito(e.target.value))}
-              inputMode="decimal"
-              placeholder="Precio de venta"
-              className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
-            />
+            {tipo === 'venta_compra' && (
+              <input
+                value={precioVenta}
+                onChange={(e) => setPrecioVenta(limpiarNumeroEscrito(e.target.value))}
+                inputMode="decimal"
+                placeholder="Precio de venta"
+                className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+              />
+            )}
             <input
               value={costo}
               onChange={(e) => setCosto(limpiarNumeroEscrito(e.target.value))}
@@ -272,6 +336,8 @@ export default function PaginaProductos() {
               className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
             />
           </div>
+          {tipo === 'venta_compra' && (
+            <>
           <label className="flex items-center gap-2 text-sm text-tinta">
             <input
               type="checkbox"
@@ -306,6 +372,8 @@ export default function PaginaProductos() {
               className="h-11 w-full rounded-lg border border-linea px-3 text-sm disabled:bg-papel disabled:text-tinta/40"
             />
           </div>
+            </>
+          )}
           {mensajeError && <p className="text-sm text-alerta">{mensajeError}</p>}
           <button
             onClick={guardarProducto}
@@ -318,14 +386,26 @@ export default function PaginaProductos() {
       )}
 
       {productos.length > 0 && (
-        <div className="mt-4 flex gap-2">
-          <input
-            value={busqueda}
-            onChange={(e) => setBusqueda(e.target.value)}
-            placeholder="Buscar por nombre o precio…"
-            className="h-11 min-w-0 flex-1 rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
-          />
-          <SelectorEstado valor={filtroEstado} onCambiar={setFiltroEstado} />
+        <div className="mt-4 space-y-2">
+          <div className="flex gap-2">
+            <input
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar por nombre o precio…"
+              className="h-11 min-w-0 flex-1 rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
+            />
+            <SelectorEstado valor={filtroEstado} onCambiar={setFiltroEstado} />
+          </div>
+          <select
+            value={filtroTipo}
+            onChange={(e) => setFiltroTipo(e.target.value as 'todos' | TipoProducto)}
+            aria-label="Filtrar por tipo de producto"
+            className="h-11 w-full rounded-xl border border-linea bg-white px-3 text-sm outline-none focus:border-bodega"
+          >
+            <option value="todos">Todos los productos</option>
+            <option value="venta_compra">Productos Venta y Compra</option>
+            <option value="insumo">Insumos</option>
+          </select>
         </div>
       )}
 
@@ -350,56 +430,56 @@ export default function PaginaProductos() {
         <ul className="divide-y divide-linea border-y border-linea">
           {productosFiltrados.map((producto) => {
             const stockBajo = producto.controlaStock && producto.stockActual <= producto.stockMinimo;
+            const panelAbierto =
+              editandoId === producto.id || ajustandoId === producto.id || bitacoraId === producto.id;
             return (
-              <li key={producto.id} className="py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-sm text-tinta">
-                      {producto.nombre}
-                      {!producto.activo && (
-                        <span className="ml-2 rounded-full bg-alerta/10 px-2 py-0.5 text-xs font-semibold text-alerta">
-                          Inactivo
+              <li key={producto.id} id={`producto-${producto.id}`} className="scroll-mt-4 py-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (panelAbierto) cerrarPaneles();
+                    else setMenuOpcionesId(producto.id);
+                  }}
+                  aria-haspopup="dialog"
+                  className={`flex w-full items-center justify-between gap-3 rounded-xl px-2 py-2 text-left transition-colors active:bg-bodega/15 ${
+                    menuOpcionesId === producto.id || panelAbierto ? 'bg-bodega/10' : ''
+                  }`}
+                >
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-sm text-tinta">
+                      {partirEnLineas(producto.nombre, 25).map((linea, i, lineas) => (
+                        <span key={i} className="block">
+                          {linea}
+                          {i === lineas.length - 1 && producto.tipo === 'insumo' && (
+                            <span className="ml-2 text-xs font-semibold text-tinta/50">(Insumo)</span>
+                          )}
+                          {i === lineas.length - 1 && !producto.activo && (
+                            <span className="ml-2 rounded-full bg-alerta/10 px-2 py-0.5 text-xs font-semibold text-alerta">
+                              Inactivo
+                            </span>
+                          )}
                         </span>
-                      )}
-                    </p>
-                    {producto.controlaStock ? (
-                      <p className={`text-xs ${stockBajo ? 'text-alerta' : 'text-tinta/50'}`}>
-                        Stock: {producto.stockActual} {stockBajo && '· bajo'}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-tinta/40">No controla stock</p>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <span className="text-sm font-semibold text-tinta">
-                      {formatearMonto(producto.precioVenta, simboloMoneda)}
+                      ))}
                     </span>
-                    {producto.controlaStock && (
-                      <button
-                        onClick={() =>
-                          ajustandoId === producto.id ? cancelarAjuste() : abrirAjuste(producto)
-                        }
-                        className="text-sm font-semibold text-tinta/70"
-                      >
-                        {ajustandoId === producto.id ? 'Cancelar' : 'Ajustar'}
-                      </button>
+                    {producto.tipo === 'insumo' ? null : producto.controlaStock ? (
+                      <span className={`block text-xs ${stockBajo ? 'text-alerta' : 'text-tinta/50'}`}>
+                        Stock: {producto.stockActual} {stockBajo && '· bajo'}
+                      </span>
+                    ) : (
+                      <span className="block text-xs text-tinta/40">No controla stock</span>
                     )}
-                    <button
-                      onClick={() =>
-                        editandoId === producto.id ? cancelarEdicion() : abrirEdicion(producto)
-                      }
-                      className="text-sm font-semibold text-bodega-oscuro"
-                    >
-                      {editandoId === producto.id ? 'Cancelar' : 'Editar'}
-                    </button>
-                    <button
-                      onClick={() => alternarBitacora(producto)}
-                      className="text-sm font-semibold text-tinta/70"
-                    >
-                      {bitacoraId === producto.id ? 'Cerrar' : 'Bitácora'}
-                    </button>
                   </div>
-                </div>
+                  <span className="max-w-[45%] shrink-0 text-right text-sm font-semibold text-tinta">
+                    {producto.tipo === 'insumo' ? (
+                      <>
+                        Costo:{' '}
+                        <span className="whitespace-nowrap">{formatearMonto(producto.costo, simboloMoneda)}</span>
+                      </>
+                    ) : (
+                      <span className="whitespace-nowrap">{formatearMonto(producto.precioVenta, simboloMoneda)}</span>
+                    )}
+                  </span>
+                </button>
 
                 {bitacoraId === producto.id && (
                   <div className="mt-3 space-y-2 rounded-xl border border-linea p-4">
@@ -499,14 +579,32 @@ export default function PaginaProductos() {
                       placeholder="Nombre del producto"
                       className="uppercase placeholder:normal-case h-11 w-full rounded-lg border border-linea px-3 text-sm"
                     />
+                    <div>
+                      <label className="mb-1 block text-xs text-tinta/50">Sirve para:</label>
+                      <select
+                        value={tipoEdit}
+                        onChange={(e) => setTipoEdit(e.target.value as TipoProducto)}
+                        className="h-11 w-full rounded-lg border border-linea bg-white px-3 text-sm"
+                      >
+                        <option value="venta_compra">Venta y Compra</option>
+                        <option value="insumo">Solo Insumo (Compras)</option>
+                      </select>
+                      {tipoEdit === 'insumo' && producto.tipo !== 'insumo' && (
+                        <p className="mt-1 text-xs text-tinta/50">
+                          Para pasar a Insumo el stock debe estar en 0.
+                        </p>
+                      )}
+                    </div>
                     <div className="flex gap-3">
-                      <input
-                        value={precioVentaEdit}
-                        onChange={(e) => setPrecioVentaEdit(limpiarNumeroEscrito(e.target.value))}
-                        inputMode="decimal"
-                        placeholder="Precio de venta"
-                        className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
-                      />
+                      {tipoEdit === 'venta_compra' && (
+                        <input
+                          value={precioVentaEdit}
+                          onChange={(e) => setPrecioVentaEdit(limpiarNumeroEscrito(e.target.value))}
+                          inputMode="decimal"
+                          placeholder="Precio de venta"
+                          className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+                        />
+                      )}
                       <input
                         value={costoEdit}
                         onChange={(e) => setCostoEdit(limpiarNumeroEscrito(e.target.value))}
@@ -515,6 +613,8 @@ export default function PaginaProductos() {
                         className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
                       />
                     </div>
+                    {tipoEdit === 'venta_compra' && (
+                    <>
                     <label className="flex items-center gap-2 text-sm text-tinta">
                       <input
                         type="checkbox"
@@ -536,6 +636,8 @@ export default function PaginaProductos() {
                       placeholder="Stock mínimo"
                       className="h-11 w-full rounded-lg border border-linea px-3 text-sm disabled:bg-papel disabled:text-tinta/40"
                     />
+                    </>
+                    )}
                     <div>
                       <label className="mb-1 block text-xs text-tinta/50">Estado</label>
                       <select
@@ -557,10 +659,75 @@ export default function PaginaProductos() {
                     </button>
                   </div>
                 )}
+              {panelAbierto && (
+                <button
+                  type="button"
+                  onClick={cerrarPaneles}
+                  className="mx-2 mt-3 h-10 w-[calc(100%-1rem)] rounded-xl border border-linea text-sm font-semibold text-tinta/70"
+                >
+                  Cerrar
+                </button>
+              )}
               </li>
             );
           })}
         </ul>
+
+        {productoMenu &&
+          createPortal(
+          // Se dibuja directamente en <body> (no dentro de la pantalla) para que quede
+          // siempre pegado al borde inferior de lo que se VE, sin importar cuánto se
+          // haya desplazado la lista.
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40" onClick={() => setMenuOpcionesId(null)}>
+            <div
+              role="dialog"
+              aria-label={`Opciones de ${productoMenu.nombre}`}
+              onClick={(e) => e.stopPropagation()}
+              className="hoja-inferior w-full max-w-app rounded-t-2xl bg-white px-5 pb-6 pt-4 shadow-lg"
+            >
+              <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-linea" />
+              <p className="break-words text-sm font-extrabold text-bodega-oscuro">{productoMenu.nombre}</p>
+              <div className="mt-3 space-y-2">
+                <button
+                  onClick={() => {
+                    setMenuOpcionesId(null);
+                    abrirEdicion(productoMenu);
+                  }}
+                  className="min-h-12 w-full rounded-xl border border-linea px-4 py-2 text-left text-sm font-semibold text-bodega-oscuro active:bg-papel"
+                >
+                  Editar
+                </button>
+                {productoMenu.tipo !== 'insumo' && productoMenu.controlaStock && (
+                  <button
+                    onClick={() => {
+                      setMenuOpcionesId(null);
+                      abrirAjuste(productoMenu);
+                    }}
+                    className="min-h-12 w-full rounded-xl border border-linea px-4 py-2 text-left text-sm font-semibold text-tinta active:bg-papel"
+                  >
+                    Ajustar Stock
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    setMenuOpcionesId(null);
+                    alternarBitacora(productoMenu);
+                  }}
+                  className="min-h-12 w-full rounded-xl border border-linea px-4 py-2 text-left text-sm font-semibold text-tinta active:bg-papel"
+                >
+                  Bitácora (Historial)
+                </button>
+                <button
+                  onClick={() => setMenuOpcionesId(null)}
+                  className="min-h-12 w-full rounded-xl px-4 py-2 text-center text-sm font-semibold text-tinta/60"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
       </main>
     </div>
   );

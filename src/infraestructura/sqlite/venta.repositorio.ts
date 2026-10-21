@@ -9,6 +9,9 @@ import {
 } from '@/core/reglas-negocio';
 import { calcularEstadoPlan, CLAVE_PLAN_VENCE_EN, LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
 import type {
+  ClienteCompradorItem,
+  GananciaProductoItem,
+  VentaFormaPagoItem,
   LineaVentaMensaje,
   LineaVentaResumen,
   MetodoPagoSinFiado,
@@ -53,7 +56,13 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         );
       }
 
-      const calculada = construirVenta(input.lineas, (id) => this.productos.obtenerPorId(id));
+      const calculada = construirVenta(input.lineas, (id) => {
+        const producto = this.productos.obtenerPorId(id);
+        if (producto.tipo === 'insumo') {
+          throw new ErrorDeNegocio(`"${producto.nombre}" es un insumo: solo sirve para Compras, no se puede vender.`);
+        }
+        return producto;
+      });
 
       this.bd.ejecutar(
         `INSERT INTO venta (fecha_hora, cliente_id, metodo_pago, subtotal, total, ganancia_estimada, telefono_whatsapp)
@@ -570,6 +579,94 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         cantidadVendida: fila.cantidad_vendida,
         totalVendido: fila.total_vendido,
         gananciaTotal: fila.ganancia_total,
+      }));
+  }
+
+  listarGananciaPorProducto(desde: string, hasta: string): GananciaProductoItem[] {
+    return this.bd
+      .consultar<{
+        producto_id: number;
+        nombre: string;
+        cantidad_vendida: number;
+        total_vendido: number;
+        costo_total: number;
+        ganancia_total: number;
+      }>(
+        `SELECT
+           p.id AS producto_id,
+           p.nombre AS nombre,
+           SUM(dv.cantidad) AS cantidad_vendida,
+           SUM(dv.subtotal) AS total_vendido,
+           SUM(dv.costo_unitario * dv.cantidad) AS costo_total,
+           SUM(dv.ganancia_linea) AS ganancia_total
+         FROM detalle_venta dv
+         JOIN venta v ON v.id = dv.venta_id
+         JOIN producto p ON p.id = dv.producto_id
+         WHERE v.anulada = 0
+           AND substr(v.fecha_hora, 1, 10) >= ?
+           AND substr(v.fecha_hora, 1, 10) <= ?
+         GROUP BY p.id, p.nombre
+         ORDER BY ganancia_total DESC, p.nombre`,
+        [desde, hasta],
+      )
+      .map((f) => ({
+        productoId: f.producto_id,
+        nombre: f.nombre,
+        cantidadVendida: f.cantidad_vendida,
+        totalVendido: f.total_vendido,
+        costoTotal: f.costo_total,
+        gananciaTotal: f.ganancia_total,
+        margenPorcentaje: f.total_vendido > 0 ? (f.ganancia_total / f.total_vendido) * 100 : 0,
+      }));
+  }
+
+  listarVentasPorFormaPago(desde: string, hasta: string): VentaFormaPagoItem[] {
+    const filas = this.bd.consultar<{ metodo_pago: string; cantidad: number; total: number }>(
+      `SELECT metodo_pago, COUNT(*) AS cantidad, SUM(total) AS total
+       FROM venta
+       WHERE anulada = 0
+         AND substr(fecha_hora, 1, 10) >= ?
+         AND substr(fecha_hora, 1, 10) <= ?
+       GROUP BY metodo_pago
+       ORDER BY total DESC`,
+      [desde, hasta],
+    );
+    const totalGeneral = filas.reduce((suma, f) => suma + f.total, 0);
+    return filas.map((f) => ({
+      metodoPago: f.metodo_pago,
+      cantidadVentas: f.cantidad,
+      total: f.total,
+      porcentaje: totalGeneral > 0 ? (f.total / totalGeneral) * 100 : 0,
+    }));
+  }
+
+  listarClientesQueMasCompran(desde: string, hasta: string, limite = 50): ClienteCompradorItem[] {
+    return this.bd
+      .consultar<{
+        cliente_id: number;
+        nombre: string;
+        cantidad: number;
+        total: number;
+        ultima: string;
+      }>(
+        `SELECT c.id AS cliente_id, c.nombre AS nombre, COUNT(v.id) AS cantidad,
+                SUM(v.total) AS total, MAX(v.fecha_hora) AS ultima
+         FROM venta v
+         JOIN cliente c ON c.id = v.cliente_id
+         WHERE v.anulada = 0
+           AND substr(v.fecha_hora, 1, 10) >= ?
+           AND substr(v.fecha_hora, 1, 10) <= ?
+         GROUP BY c.id, c.nombre
+         ORDER BY total DESC, c.nombre
+         LIMIT ?`,
+        [desde, hasta, limite],
+      )
+      .map((f) => ({
+        clienteId: f.cliente_id,
+        nombre: f.nombre,
+        cantidadCompras: f.cantidad,
+        totalComprado: f.total,
+        ultimaCompra: f.ultima,
       }));
   }
 

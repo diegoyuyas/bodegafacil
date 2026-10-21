@@ -2,6 +2,7 @@ import type { CajaRepositorio, FiadoRepositorio } from '@/core/repositorios';
 import { ErrorDeNegocio, calcularDeudaNueva, redondear } from '@/core/reglas-negocio';
 import type {
   Cliente,
+  DeudaClienteItem,
   DeudaPendienteDetalle,
   FotoPagoFiado,
   MetodoPagoSinFiado,
@@ -20,6 +21,12 @@ import { ahoraLocalSql } from '@/core/tiempo';
  */
 function claveDeAbono(f: { abono_id: number | null; fecha: string; metodo_pago: string }): string {
   return f.abono_id !== null && f.abono_id !== undefined ? `a${f.abono_id}` : `h|${f.fecha}|${f.metodo_pago}`;
+}
+
+/** 'YYYY-MM-DD…' → milisegundos UTC de esa fecha (solo para contar días entre fechas). */
+function diaUtc(fecha: string): number {
+  const [anio, mes, dia] = fecha.slice(0, 10).split('-').map((n) => Number(n));
+  return Date.UTC(anio ?? 0, (mes ?? 1) - 1, dia ?? 1);
 }
 
 /** Fila cruda de deuda_cliente, con las líneas de la venta resueltas aparte. */
@@ -476,6 +483,58 @@ export class FiadoRepositorioSqlite implements FiadoRepositorio {
         detalle: f.detalle,
         fechaAnulacion: f.fecha_anulacion,
       }));
+  }
+
+  listarDeudasPorAntiguedad(hoy: string): DeudaClienteItem[] {
+    const filas = this.bd.consultar<{
+      cliente_id: number;
+      nombre: string;
+      telefono: string | null;
+      saldo_pendiente: number;
+      fecha: string;
+    }>(
+      `SELECT c.id AS cliente_id, c.nombre AS nombre, c.telefono AS telefono,
+              d.saldo_pendiente AS saldo_pendiente, d.fecha AS fecha
+       FROM deuda_cliente d
+       JOIN cliente c ON c.id = d.cliente_id
+       WHERE d.saldo_pendiente > 0`,
+    );
+
+    const diaHoy = diaUtc(hoy);
+
+    const porCliente = new Map<number, DeudaClienteItem>();
+    for (const f of filas) {
+      const dias = Math.max(0, Math.round((diaHoy - diaUtc(f.fecha)) / 86_400_000));
+      let item = porCliente.get(f.cliente_id);
+      if (!item) {
+        item = {
+          clienteId: f.cliente_id,
+          nombre: f.nombre,
+          telefono: f.telefono,
+          deuda0a7: 0,
+          deuda8a30: 0,
+          deuda31omas: 0,
+          total: 0,
+          cantidadDeudas: 0,
+          diasMasAntigua: 0,
+        };
+        porCliente.set(f.cliente_id, item);
+      }
+      if (dias <= 7) item.deuda0a7 += f.saldo_pendiente;
+      else if (dias <= 30) item.deuda8a30 += f.saldo_pendiente;
+      else item.deuda31omas += f.saldo_pendiente;
+      item.total += f.saldo_pendiente;
+      item.cantidadDeudas += 1;
+      item.diasMasAntigua = Math.max(item.diasMasAntigua, dias);
+    }
+
+    return Array.from(porCliente.values()).map((i) => ({
+      ...i,
+      deuda0a7: redondear(i.deuda0a7),
+      deuda8a30: redondear(i.deuda8a30),
+      deuda31omas: redondear(i.deuda31omas),
+      total: redondear(i.total),
+    }));
   }
 
   actualizarFotoPago(pagoDeudaId: number, fotoRuta: string): void {
