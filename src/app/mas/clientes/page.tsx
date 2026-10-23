@@ -5,13 +5,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { usarSolicitudPin } from '@/hooks/usar-solicitud-pin';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
-import { soloLetrasAlEscribir } from '@/core/texto';
+import { soloAlfanumericoAlEscribir, soloDigitosAlEscribir, soloLetrasAlEscribir } from '@/core/texto';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { CLAVE_PREFIJO_PAIS, obtenerPrefijoPais } from '@/core/paises';
 import type { EstadoPlan } from '@/core/plan';
 import { construirEnlaceChatWhatsApp } from '@/infraestructura/whatsapp/enlace';
 import type { Cliente } from '@/core/tipos';
 import { SelectorEstado, filtrarPorEstado, type FiltroEstado } from '@/components/selector-estado';
+import { EtiquetaCampo, VentanaFormulario } from '@/components/ventana-formulario';
 
 export default function PaginaClientes() {
   const { contenedor, cargando, error } = usarContenedor();
@@ -131,28 +132,30 @@ export default function PaginaClientes() {
         <button
           onClick={() => {
             setEditandoId(null);
-            setMostrarFormulario((v) => !v);
+            setMostrarFormulario(true);
           }}
-          className="text-sm font-semibold text-bodega-oscuro"
+          className="rounded-full bg-green-600 px-4 py-2 text-xs font-bold uppercase tracking-wide text-white active:bg-green-700"
         >
-          {mostrarFormulario ? 'Cancelar' : '+ Agregar'}
+          Nuevo cliente
         </button>
       </header>
 
       {mostrarFormulario && (
-        <section className="mt-4 space-y-3 rounded-xl border border-linea p-4">
-          <input
-            value={nombre}
-            onChange={(e) => setNombre(soloLetrasAlEscribir(e.target.value))}
-            autoCapitalize="characters"
-            placeholder="Nombre completo (solo letras)"
-            className="uppercase placeholder:normal-case h-11 w-full rounded-lg border border-linea px-3 text-sm"
-          />
+        <VentanaFormulario titulo="Nuevo cliente" onCerrar={() => setMostrarFormulario(false)}>
           <div>
+            <EtiquetaCampo>Nombre Completo (solo letras):</EtiquetaCampo>
+            <input
+              value={nombre}
+              onChange={(e) => setNombre(soloLetrasAlEscribir(e.target.value))}
+              autoCapitalize="characters"
+              className="uppercase h-11 w-full rounded-lg border border-linea px-3 text-sm"
+            />
+          </div>
+          <div>
+            <EtiquetaCampo>Documento (hasta 15 caracteres, ej: 12345678):</EtiquetaCampo>
             <input
               value={documento}
-              onChange={(e) => setDocumento(e.target.value)}
-              placeholder="Documento (hasta 15 caracteres, ej: 12345678)"
+              onChange={(e) => setDocumento(soloAlfanumericoAlEscribir(e.target.value))}
               maxLength={15}
               className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
             />
@@ -162,27 +165,106 @@ export default function PaginaClientes() {
               </p>
             )}
           </div>
-          <div className="flex gap-2">
-            <span className="flex h-11 shrink-0 items-center rounded-lg border border-linea bg-papel px-3 text-sm text-tinta/60">
-              +{prefijoPais}
-            </span>
-            <input
-              value={telefono}
-              onChange={(e) => setTelefono(e.target.value)}
-              placeholder="Celular (opcional)"
-              inputMode="numeric"
-              className="h-11 flex-1 rounded-lg border border-linea px-3 text-sm"
-            />
+          <div>
+            <EtiquetaCampo>Celular (opcional):</EtiquetaCampo>
+            <div className="flex gap-2">
+              <span className="flex h-11 shrink-0 items-center rounded-lg border border-linea bg-papel px-3 text-sm text-tinta/60">
+                +{prefijoPais}
+              </span>
+              <input
+                value={telefono}
+                onChange={(e) => setTelefono(soloDigitosAlEscribir(e.target.value))}
+                inputMode="numeric"
+                className="h-11 min-w-0 flex-1 rounded-lg border border-linea px-3 text-sm"
+              />
+            </div>
           </div>
           {mensajeError && <p className="text-sm text-alerta">{mensajeError}</p>}
-          <button
-            onClick={guardarCliente}
-            disabled={!formularioValido}
-            className="h-11 w-full rounded-lg bg-bodega text-sm font-semibold text-white disabled:opacity-40"
-          >
-            Guardar cliente
-          </button>
-        </section>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setMostrarFormulario(false)}
+              className="h-11 flex-1 rounded-lg border border-linea text-sm font-semibold text-tinta/70"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={guardarCliente}
+              disabled={!formularioValido}
+              className="h-11 flex-1 rounded-lg bg-bodega text-sm font-semibold text-white disabled:opacity-40"
+            >
+              Guardar cliente
+            </button>
+          </div>
+        </VentanaFormulario>
+      )}
+
+      {editandoId !== null && (
+        <VentanaFormulario titulo="Editar cliente" onCerrar={cancelarEdicion}>
+          <div>
+            <EtiquetaCampo>Nombre Completo (solo letras):</EtiquetaCampo>
+            <input
+              value={nombreEdit}
+              onChange={(e) => setNombreEdit(soloLetrasAlEscribir(e.target.value))}
+              autoCapitalize="characters"
+              className="uppercase h-11 w-full rounded-lg border border-linea px-3 text-sm"
+            />
+          </div>
+          <div>
+            <EtiquetaCampo>Documento (hasta 15 caracteres, ej: 12345678):</EtiquetaCampo>
+            <input
+              value={documentoEdit}
+              onChange={(e) => setDocumentoEdit(soloAlfanumericoAlEscribir(e.target.value))}
+              maxLength={15}
+              className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+            />
+            {documentoEdit.length > 0 && !documentoEditValido && (
+              <p className="mt-1 text-xs text-alerta">
+                Solo letras y números, hasta 15 caracteres ({documentoEdit.trim().length}/15)
+              </p>
+            )}
+          </div>
+          <div>
+            <EtiquetaCampo>Celular (opcional):</EtiquetaCampo>
+            <div className="flex gap-2">
+              <span className="flex h-11 shrink-0 items-center rounded-lg border border-linea bg-papel px-3 text-sm text-tinta/60">
+                +{prefijoPais}
+              </span>
+              <input
+                value={telefonoEdit}
+                onChange={(e) => setTelefonoEdit(soloDigitosAlEscribir(e.target.value))}
+                inputMode="numeric"
+                className="h-11 min-w-0 flex-1 rounded-lg border border-linea px-3 text-sm"
+              />
+            </div>
+          </div>
+          <div>
+            <EtiquetaCampo>Estado:</EtiquetaCampo>
+            <select
+              value={activoEdit ? 'activo' : 'inactivo'}
+              onChange={(e) => setActivoEdit(e.target.value === 'activo')}
+              className="h-11 w-full rounded-lg border border-linea bg-white px-3 text-sm"
+            >
+              <option value="activo">Activo</option>
+              <option value="inactivo">Inactivo</option>
+            </select>
+          </div>
+          {mensajeErrorEdit && <p className="text-sm text-alerta">{mensajeErrorEdit}</p>}
+          <div className="flex gap-3">
+            <button
+              onClick={cancelarEdicion}
+              className="h-11 flex-1 rounded-lg border border-linea text-sm font-semibold text-tinta/70"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={guardarEdicion}
+              disabled={!formularioEditValido}
+              className="h-11 flex-1 rounded-lg bg-bodega text-sm font-semibold text-white disabled:opacity-40"
+            >
+              Guardar cambios
+            </button>
+          </div>
+        </VentanaFormulario>
       )}
 
       {clientes.length > 0 && (
@@ -248,72 +330,14 @@ export default function PaginaClientes() {
                     </button>
                   )}
                   <button
-                    onClick={() =>
-                      editandoId === cliente.id ? cancelarEdicion() : abrirEdicion(cliente)
-                    }
+                    onClick={() => abrirEdicion(cliente)}
                     className="text-sm font-semibold text-bodega-oscuro"
                   >
-                    {editandoId === cliente.id ? 'Cancelar' : 'Editar'}
+                    Editar
                   </button>
                 </div>
               </div>
 
-              {editandoId === cliente.id && (
-                <div className="mt-3 space-y-3 rounded-xl border border-linea p-4">
-                  <input
-                    value={nombreEdit}
-                    onChange={(e) => setNombreEdit(soloLetrasAlEscribir(e.target.value))}
-                    autoCapitalize="characters"
-                    placeholder="Nombre completo"
-                    className="uppercase placeholder:normal-case h-11 w-full rounded-lg border border-linea px-3 text-sm"
-                  />
-                  <div>
-                    <input
-                      value={documentoEdit}
-                      onChange={(e) => setDocumentoEdit(e.target.value)}
-                      placeholder="Documento (hasta 15 caracteres)"
-                      maxLength={15}
-                      className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
-                    />
-                    {documentoEdit.length > 0 && !documentoEditValido && (
-                      <p className="mt-1 text-xs text-alerta">
-                        Solo letras y números, hasta 15 caracteres ({documentoEdit.trim().length}/15)
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex gap-2">
-                    <span className="flex h-11 shrink-0 items-center rounded-lg border border-linea bg-papel px-3 text-sm text-tinta/60">
-                      +{prefijoPais}
-                    </span>
-                    <input
-                      value={telefonoEdit}
-                      onChange={(e) => setTelefonoEdit(e.target.value)}
-                      placeholder="Celular (opcional)"
-                      inputMode="numeric"
-                      className="h-11 flex-1 rounded-lg border border-linea px-3 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-tinta/50">Estado</label>
-                    <select
-                      value={activoEdit ? 'activo' : 'inactivo'}
-                      onChange={(e) => setActivoEdit(e.target.value === 'activo')}
-                      className="h-11 w-full rounded-lg border border-linea bg-white px-3 text-sm"
-                    >
-                      <option value="activo">Activo</option>
-                      <option value="inactivo">Inactivo</option>
-                    </select>
-                  </div>
-                  {mensajeErrorEdit && <p className="text-sm text-alerta">{mensajeErrorEdit}</p>}
-                  <button
-                    onClick={guardarEdicion}
-                    disabled={!formularioEditValido}
-                    className="h-11 w-full rounded-lg bg-bodega text-sm font-semibold text-white disabled:opacity-40"
-                  >
-                    Guardar cambios
-                  </button>
-                </div>
-              )}
             </li>
           ))}
         </ul>

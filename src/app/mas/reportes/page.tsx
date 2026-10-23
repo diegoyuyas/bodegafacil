@@ -1258,6 +1258,12 @@ export default function PaginaReportes() {
                             <p className="mt-0.5 text-xs text-tinta/40">
                               {new Date(m.fechaHora).toLocaleString('es-PE')} · {m.motivo}
                             </p>
+                            {m.documento && (
+                              <p className="mt-0.5 text-xs text-tinta/60">
+                                {m.documento}
+                                {m.tercero ? ` · ${m.tercero}` : ''}
+                              </p>
+                            )}
                           </li>
                         );
                       })}

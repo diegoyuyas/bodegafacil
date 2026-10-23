@@ -249,8 +249,8 @@ export interface FiadoRepositorio {
    * mensaje de cobranza por WhatsApp.
    */
   listarDeudasPendientesDetalladas(clienteId: number): DeudaPendienteDetalle[];
-  /** Pagos (abonos) del cliente, vigentes y anulados, del más reciente al más antiguo. */
-  listarPagosDeCliente(clienteId: number): PagoFiado[];
+  /** Pagos (abonos) del cliente, vigentes y anulados, del más reciente al más antiguo. Con `desde`/`hasta` ('YYYY-MM-DD') solo los de ese rango. */
+  listarPagosDeCliente(clienteId: number, desde?: string, hasta?: string): PagoFiado[];
   /**
    * Anula un abono COMPLETO: reabre las deudas que había pagado, sube el saldo
    * del cliente, registra un egreso en Caja por el mismo monto/método y deja
@@ -272,7 +272,7 @@ export interface FiadoRepositorio {
    * en Fiados. `saldoPendiente = 0` significa que esa venta ya está
    * pagada por completo.
    */
-  listarHistorialFiado(clienteId: number): DeudaPendienteDetalle[];
+  listarHistorialFiado(clienteId: number, desde?: string, hasta?: string): DeudaPendienteDetalle[];
   /**
    * Fotos de pagos (Yape/Plin) de fiados aplicados a ventas, dentro de
    * un rango de fechas 'YYYY-MM-DD' inclusive — para mostrarlas junto a

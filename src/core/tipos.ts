@@ -71,6 +71,8 @@ export interface Venta {
   telefonoWhatsapp: string | null;
   /** Foto del comprobante de pago (Yape/Plin, Premium, opcional) — ruta del archivo, no la foto en sí. */
   comprobantePagoRuta: string | null;
+  /** Nombre escrito a mano en Nueva venta (cliente sin registrar). Solo tiene valor si `clienteId` es null. */
+  clienteNombreLibre: string | null;
   creadoEn: string;
 }
 
@@ -246,6 +248,8 @@ export interface RegistrarVentaInput {
   clienteId?: number | null;
   /** Número de celular para WhatsApp, si se ingresó uno (independiente de si se marcó "Enviar a WhatsApp"). */
   telefonoWhatsapp?: string | null;
+  /** Nombre escrito a mano (cliente sin registrar). Se ignora si hay `clienteId`. Reemplaza a "Cliente Eventual" solo en esta venta. */
+  clienteNombreLibre?: string | null;
 }
 
 /**
@@ -445,6 +449,10 @@ export interface MovimientoInventarioItem {
   motivo: string;
   /** Stock del producto justo después de este movimiento. */
   stockResultante: number;
+  /** Número del documento que originó el movimiento: 'V-12' (venta) o 'C-5' (compra). Null en ajustes manuales. */
+  documento: string | null;
+  /** Venta: nombre del cliente (o 'Cliente Eventual'). Compra: proveedor, solo si se registró uno. */
+  tercero: string | null;
 }
 
 /** Campo de producto que puede quedar registrado en su bitácora de cambios manuales. */

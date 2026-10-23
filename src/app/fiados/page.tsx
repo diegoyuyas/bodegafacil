@@ -61,6 +61,21 @@ export default function PaginaFiados() {
   }
 
   useEffect(recargar, [contenedor, desde, hasta, rangoInvalido]);
+
+  // Si hay un cliente con el detalle abierto, su historial y sus pagos se vuelven a leer
+  // cada vez que cambia el rango de fechas (antes solo se leían al abrir el detalle).
+  useEffect(() => {
+    if (!contenedor || clienteAbierto === null || rangoInvalido) return;
+    setHistorialCliente(contenedor.fiados.listarHistorialFiado(clienteAbierto, desde || undefined, hasta || undefined));
+    setPagosCliente(contenedor.fiados.listarPagosDeCliente(clienteAbierto, desde || undefined, hasta || undefined));
+  }, [contenedor, clienteAbierto, desde, hasta, rangoInvalido]);
+
+  // Si el cliente abierto ya no entra en el rango elegido, se cierra su detalle.
+  useEffect(() => {
+    if (clienteAbierto !== null && !rangoInvalido && !clientes.some((c) => c.id === clienteAbierto)) {
+      setClienteAbierto(null);
+    }
+  }, [clientes, clienteAbierto, rangoInvalido]);
   useEffect(() => {
     if (!contenedor) return;
     setEstadoPlan(contenedor.plan.obtenerEstado());
@@ -90,8 +105,8 @@ const esPremium = estadoPlan?.tipo === 'premium';
     setMonto(cliente.saldoPendiente > 0 ? cliente.saldoPendiente.toFixed(2) : '');
     setMensajeError(null);
     setFotoPago(null);
-    setHistorialCliente(contenedor ? contenedor.fiados.listarHistorialFiado(cliente.id) : []);
-    setPagosCliente(contenedor ? contenedor.fiados.listarPagosDeCliente(cliente.id) : []);
+    setHistorialCliente(contenedor ? contenedor.fiados.listarHistorialFiado(cliente.id, desde || undefined, hasta || undefined) : []);
+    setPagosCliente(contenedor ? contenedor.fiados.listarPagosDeCliente(cliente.id, desde || undefined, hasta || undefined) : []);
     setAnulandoClave(null);
     setMotivoAnulacion('');
     setErrorAnulacion(null);
@@ -111,8 +126,8 @@ const esPremium = estadoPlan?.tipo === 'premium';
       setAnulandoClave(null);
       setMotivoAnulacion('');
       recargar();
-      setHistorialCliente(contenedor.fiados.listarHistorialFiado(cliente.id));
-      setPagosCliente(contenedor.fiados.listarPagosDeCliente(cliente.id));
+      setHistorialCliente(contenedor.fiados.listarHistorialFiado(cliente.id, desde || undefined, hasta || undefined));
+      setPagosCliente(contenedor.fiados.listarPagosDeCliente(cliente.id, desde || undefined, hasta || undefined));
       const actualizado = contenedor.fiados
         .listarClientesConHistorialFiado(desde || undefined, hasta || undefined)
         .find((c) => c.id === cliente.id);
@@ -180,7 +195,7 @@ const esPremium = estadoPlan?.tipo === 'premium';
 
       <div className="mt-4">
         <p className="text-xs font-semibold text-tinta/70">Rango de fechas (opcional)</p>
-        <p className="mt-0.5 text-xs text-tinta/50">Filtra por cuándo se originó el fiado — incluye a quienes ya lo pagaron todo.</p>
+        <p className="mt-0.5 text-xs text-tinta/50">Muestra solo los fiados y los pagos realizados dentro de ese rango — incluye a quienes ya lo pagaron todo.</p>
         <div className="mt-2 flex gap-2">
           <div className="flex-1">
             <label className="mb-1 block text-xs text-tinta/50">Desde</label>

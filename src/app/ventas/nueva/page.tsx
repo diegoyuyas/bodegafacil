@@ -11,7 +11,7 @@ import { CLAVE_PREFIJO_PAIS, obtenerPrefijoPais } from '@/core/paises';
 import { construirMensajeVenta } from '@/core/whatsapp';
 import { construirEnlaceWhatsApp } from '@/infraestructura/whatsapp/enlace';
 import type { Cliente, MetodoPago, Producto, Venta } from '@/core/tipos';
-import { LIMITE_DESCRIPCION_LINEA, limpiarNumeroEscrito } from '@/core/texto';
+import { LIMITE_DESCRIPCION_LINEA, limpiarNumeroEscrito, mayusculasAlEscribir } from '@/core/texto';
 import { guardarTicketComoImagen } from '@/infraestructura/comprobante-imagen/compartir-ticket';
 import { capturarFotoComprobantePago } from '@/infraestructura/comprobante-pago/capturar-foto';
 import {
@@ -260,8 +260,13 @@ export default function PaginaNuevaVenta() {
     // de fiado, se limpia la selección para no arrastrarla.
     if (valor !== 'fiado') {
       setClienteSeleccionado(null);
-      setBusquedaCliente('');
     }
+  }
+
+  /** Nombre escrito a mano (cliente sin registrar): solo cuenta si no hay cliente elegido y la venta no es al fiado. */
+  function nombreClienteLibre(): string {
+    if (clienteSeleccionado || metodoPago === 'fiado') return '';
+    return busquedaCliente.trim();
   }
 
   function seleccionarCliente(cliente: Cliente) {
@@ -339,6 +344,7 @@ export default function PaginaNuevaVenta() {
         })),
         metodoPago,
         clienteId: clienteSeleccionado?.id ?? null,
+        clienteNombreLibre: nombreClienteLibre() || null,
         telefonoWhatsapp: telefonoFinal || null,
       });
       await contenedor.persistir();
@@ -515,7 +521,7 @@ export default function PaginaNuevaVenta() {
 
         <p className="mt-2 text-sm text-tinta/60">
           Pago: {METODOS_PAGO.find((m) => m.valor === metodoPago)?.etiqueta} ·{' '}
-          {clienteSeleccionado ? clienteSeleccionado.nombre : 'Cliente eventual'}
+          {clienteSeleccionado ? clienteSeleccionado.nombre : nombreClienteLibre().toLocaleUpperCase('es') || 'Cliente eventual'}
         </p>
 
         {enviarWhatsApp && (
@@ -694,7 +700,7 @@ export default function PaginaNuevaVenta() {
 
       {/* Método de pago */}
       <section className="mt-6">
-        <p className="text-sm text-tinta/60">Método de pago</p>
+        <p className="text-sm font-bold text-tinta/60">Método de pago</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {METODOS_PAGO.map((m) => (
             <button
@@ -714,7 +720,7 @@ export default function PaginaNuevaVenta() {
 
       {/* Cliente: opcional siempre, obligatorio solo si es fiado */}
       <section className="mt-4">
-        <p className="text-sm text-tinta/60">
+        <p className="text-sm font-bold text-tinta/60">
           Cliente {metodoPago === 'fiado' ? '(obligatorio para fiado)' : '(opcional)'}
         </p>
 
@@ -736,8 +742,8 @@ export default function PaginaNuevaVenta() {
           <div className="relative mt-2">
             <input
               value={busquedaCliente}
-              onChange={(e) => setBusquedaCliente(e.target.value)}
-              placeholder="Buscar por nombre o documento…"
+              onChange={(e) => setBusquedaCliente(mayusculasAlEscribir(e.target.value).slice(0, 60))}
+              placeholder={metodoPago === 'fiado' ? 'Buscar por nombre o documento…' : 'Buscar o escribir el nombre del cliente…'}
               className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
             />
             {clientesEncontrados.length > 0 && (
@@ -755,22 +761,41 @@ export default function PaginaNuevaVenta() {
                 ))}
               </ul>
             )}
-            <p className="mt-2 text-xs text-tinta/40">
-              Si no seleccionas a nadie, la venta queda como{' '}
-              <span className="font-medium text-tinta/60">Cliente eventual</span>. ¿Cliente nuevo?
-              Créalo en{' '}
-              <Link href="/mas/clientes" className="underline">
-                Más → Clientes
-              </Link>
-              .
-            </p>
+            {metodoPago === 'fiado' ? (
+              <p className="mt-2 text-xs text-tinta/40">
+                El fiado necesita un cliente registrado. ¿Cliente nuevo? Créalo en{' '}
+                <Link href="/mas/clientes" className="underline">
+                  Más → Clientes
+                </Link>
+                .
+              </p>
+            ) : (
+              <p className="mt-2 text-xs text-tinta/40">
+                {nombreClienteLibre() ? (
+                  <>
+                    Esta venta saldrá a nombre de{' '}
+                    <span className="font-medium text-tinta/60">{nombreClienteLibre()}</span> (sin registrarlo).
+                  </>
+                ) : (
+                  <>
+                    Si no seleccionas ni escribes a nadie, la venta queda como{' '}
+                    <span className="font-medium text-tinta/60">Cliente eventual</span>.
+                  </>
+                )}{' '}
+                Para guardarlo, créalo en{' '}
+                <Link href="/mas/clientes" className="underline">
+                  Más → Clientes
+                </Link>
+                .
+              </p>
+            )}
           </div>
         )}
       </section>
 
       {/* Teléfono + WhatsApp */}
       <section className="mt-4">
-        <p className="text-sm text-tinta/60">Número de celular (opcional)</p>
+        <p className="text-sm font-bold text-tinta/60">Número de celular (opcional)</p>
         <div className="mt-2 flex gap-2">
           <span className="flex h-11 shrink-0 items-center rounded-lg border border-linea bg-papel px-3 text-sm text-tinta/60">
             +{prefijoPais}
@@ -791,7 +816,10 @@ export default function PaginaNuevaVenta() {
           <input
             type="checkbox"
             checked={enviarWhatsApp}
-            onChange={(e) => setEnviarWhatsApp(e.target.checked)}
+            onChange={(e) => {
+              setEnviarWhatsApp(e.target.checked);
+              if (e.target.checked) setGuardarTicket(false);
+            }}
             className="h-4 w-4 rounded border-linea"
           />
           Enviar venta a WhatsApp
@@ -803,7 +831,10 @@ export default function PaginaNuevaVenta() {
             type="checkbox"
             checked={guardarTicket}
             disabled={!esPremium}
-            onChange={(e) => setGuardarTicket(e.target.checked)}
+            onChange={(e) => {
+              setGuardarTicket(e.target.checked);
+              if (e.target.checked) setEnviarWhatsApp(false);
+            }}
             className="h-4 w-4 rounded border-linea disabled:opacity-40"
           />
           Guardar ticket como...

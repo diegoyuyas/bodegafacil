@@ -404,10 +404,19 @@ export function desglosarMovimientoInventario(m: MovimientoInventarioItem): {
 export function construirHojaKardex(nombreProducto: string, movimientos: MovimientoInventarioItem[]): HojaExcel {
   return {
     nombre: `Kardex - ${nombreProducto}`.slice(0, 31),
-    encabezados: ['Fecha y hora', 'Tipo', 'Motivo', 'Entrada', 'Salida', 'Saldo'],
+    encabezados: ['Fecha y hora', 'Tipo', 'Motivo', 'Documento', 'Cliente / Proveedor', 'Entrada', 'Salida', 'Saldo'],
     filas: movimientos.map((m) => {
       const { entrada, salida } = desglosarMovimientoInventario(m);
-      return [m.fechaHora, ETIQUETAS_TIPO_MOVIMIENTO[m.tipo], m.motivo, entrada, salida, m.stockResultante];
+      return [
+        m.fechaHora,
+        ETIQUETAS_TIPO_MOVIMIENTO[m.tipo],
+        m.motivo,
+        m.documento ?? '',
+        m.tercero ?? '',
+        entrada,
+        salida,
+        m.stockResultante,
+      ];
     }),
   };
 }

@@ -11,6 +11,7 @@ import { ErrorDeNegocio } from '@/core/reglas-negocio';
 import { limpiarNumeroEscrito, mayusculasAlEscribir, partirEnLineas } from '@/core/texto';
 import { formatearFechaHora } from '@/core/tiempo';
 import { SelectorEstado, filtrarPorEstado, type FiltroEstado } from '@/components/selector-estado';
+import { EtiquetaCampo, VentanaFormulario } from '@/components/ventana-formulario';
 
 const ETIQUETAS_CAMPO_HISTORIAL: Record<HistorialProductoItem['campo'], string> = {
   nombre: 'Nombre',
@@ -149,17 +150,18 @@ export default function PaginaProductos() {
   }
 
   const productoMenu = productos.find((p) => p.id === menuOpcionesId) ?? null;
+  const productoEditando = productos.find((p) => p.id === editandoId) ?? null;
 
   // Al elegir Editar / Ajustar Stock / Bitácora, el panel se abre dentro de la fila del
   // producto: se lleva la pantalla hasta esa fila para no tener que buscarla.
   useEffect(() => {
-    const id = editandoId ?? ajustandoId ?? bitacoraId;
+    const id = ajustandoId ?? bitacoraId;
     if (id === null) return;
     const espera = setTimeout(() => {
       document.getElementById(`producto-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 60);
     return () => clearTimeout(espera);
-  }, [editandoId, ajustandoId, bitacoraId]);
+  }, [ajustandoId, bitacoraId]);
 
   // Botón físico "Atrás" de Android: con el pop-up abierto lo cierra (ver ManejarBotonAtras).
   useEffect(() => {
@@ -290,25 +292,27 @@ export default function PaginaProductos() {
         <button
           onClick={() => {
             setEditandoId(null);
-            setMostrarFormulario((v) => !v);
+            setMostrarFormulario(true);
           }}
-          className="text-sm font-semibold text-bodega-oscuro"
+          className="rounded-full bg-green-600 px-4 py-2 text-xs font-bold uppercase tracking-wide text-white active:bg-green-700"
         >
-          {mostrarFormulario ? 'Cancelar' : '+ Agregar'}
+          Nuevo producto
         </button>
       </header>
 
       {mostrarFormulario && (
-        <section className="mt-4 space-y-3 rounded-xl border border-linea p-4">
-          <input
-            value={nombre}
-            onChange={(e) => setNombre(mayusculasAlEscribir(e.target.value))}
-            autoCapitalize="characters"
-            placeholder="Nombre del producto"
-            className="uppercase placeholder:normal-case h-11 w-full rounded-lg border border-linea px-3 text-sm"
-          />
+        <VentanaFormulario titulo="Nuevo producto" onCerrar={() => setMostrarFormulario(false)}>
           <div>
-            <label className="mb-1 block text-xs text-tinta/50">Sirve para:</label>
+            <EtiquetaCampo>Nombre Producto:</EtiquetaCampo>
+            <input
+              value={nombre}
+              onChange={(e) => setNombre(mayusculasAlEscribir(e.target.value))}
+              autoCapitalize="characters"
+              className="uppercase h-11 w-full rounded-lg border border-linea px-3 text-sm"
+            />
+          </div>
+          <div>
+            <EtiquetaCampo>Sirve Para:</EtiquetaCampo>
             <select
               value={tipo}
               onChange={(e) => setTipo(e.target.value as TipoProducto)}
@@ -318,71 +322,185 @@ export default function PaginaProductos() {
               <option value="insumo">Solo Insumo (Compras)</option>
             </select>
           </div>
-          <div className="flex gap-3">
-            {tipo === 'venta_compra' && (
+          {tipo === 'venta_compra' && (
+            <div>
+              <EtiquetaCampo>Precio de Venta:</EtiquetaCampo>
               <input
                 value={precioVenta}
                 onChange={(e) => setPrecioVenta(limpiarNumeroEscrito(e.target.value))}
                 inputMode="decimal"
-                placeholder="Precio de venta"
                 className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
               />
-            )}
+            </div>
+          )}
+          <div>
+            <EtiquetaCampo>Costo (opcional):</EtiquetaCampo>
             <input
               value={costo}
               onChange={(e) => setCosto(limpiarNumeroEscrito(e.target.value))}
               inputMode="decimal"
-              placeholder="Costo"
               className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
             />
           </div>
           {tipo === 'venta_compra' && (
             <>
-          <label className="flex items-center gap-2 text-sm text-tinta">
-            <input
-              type="checkbox"
-              checked={controlaStock}
-              onChange={(e) => {
-                const marcado = e.target.checked;
-                setControlaStock(marcado);
-                if (!marcado) {
-                  setStockActual('0');
-                  setStockMinimo('0');
-                }
-              }}
-              className="h-4 w-4 rounded border-linea"
-            />
-            Controla stock
-          </label>
-          <div className="flex gap-3">
-            <input
-              value={controlaStock ? stockActual : '0'}
-              onChange={(e) => setStockActual(limpiarNumeroEscrito(e.target.value))}
-              disabled={!controlaStock}
-              inputMode="numeric"
-              placeholder="Stock inicial"
-              className="h-11 w-full rounded-lg border border-linea px-3 text-sm disabled:bg-papel disabled:text-tinta/40"
-            />
-            <input
-              value={controlaStock ? stockMinimo : '0'}
-              onChange={(e) => setStockMinimo(limpiarNumeroEscrito(e.target.value))}
-              disabled={!controlaStock}
-              inputMode="numeric"
-              placeholder="Stock mínimo"
-              className="h-11 w-full rounded-lg border border-linea px-3 text-sm disabled:bg-papel disabled:text-tinta/40"
-            />
-          </div>
+              <label className="flex items-center gap-2 text-sm font-bold text-tinta">
+                <input
+                  type="checkbox"
+                  checked={controlaStock}
+                  onChange={(e) => {
+                    const marcado = e.target.checked;
+                    setControlaStock(marcado);
+                    if (!marcado) {
+                      setStockActual('0');
+                      setStockMinimo('0');
+                    }
+                  }}
+                  className="h-4 w-4 rounded border-linea"
+                />
+                Control Stock
+              </label>
+              <div>
+                <EtiquetaCampo>Stock Inicial (opcional):</EtiquetaCampo>
+                <input
+                  value={controlaStock ? stockActual : '0'}
+                  onChange={(e) => setStockActual(limpiarNumeroEscrito(e.target.value))}
+                  disabled={!controlaStock}
+                  inputMode="numeric"
+                  className="h-11 w-full rounded-lg border border-linea px-3 text-sm disabled:bg-papel disabled:text-tinta/40"
+                />
+              </div>
+              <div>
+                <EtiquetaCampo>Stock Mínimo (opcional):</EtiquetaCampo>
+                <input
+                  value={controlaStock ? stockMinimo : '0'}
+                  onChange={(e) => setStockMinimo(limpiarNumeroEscrito(e.target.value))}
+                  disabled={!controlaStock}
+                  inputMode="numeric"
+                  className="h-11 w-full rounded-lg border border-linea px-3 text-sm disabled:bg-papel disabled:text-tinta/40"
+                />
+              </div>
             </>
           )}
           {mensajeError && <p className="text-sm text-alerta">{mensajeError}</p>}
-          <button
-            onClick={guardarProducto}
-            disabled={!formularioValido}
-            className="h-11 w-full rounded-lg bg-bodega text-sm font-semibold text-white disabled:opacity-40"
-          >
-            Guardar producto
-          </button>
-        </section>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setMostrarFormulario(false)}
+              className="h-11 flex-1 rounded-lg border border-linea text-sm font-semibold text-tinta/70"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={guardarProducto}
+              disabled={!formularioValido}
+              className="h-11 flex-1 rounded-lg bg-bodega text-sm font-semibold text-white disabled:opacity-40"
+            >
+              Guardar producto
+            </button>
+          </div>
+        </VentanaFormulario>
+      )}
+
+      {productoEditando && (
+        <VentanaFormulario titulo="Editar producto" onCerrar={cancelarEdicion}>
+          <div>
+            <EtiquetaCampo>Nombre Producto:</EtiquetaCampo>
+            <input
+              value={nombreEdit}
+              onChange={(e) => setNombreEdit(mayusculasAlEscribir(e.target.value))}
+              autoCapitalize="characters"
+              className="uppercase h-11 w-full rounded-lg border border-linea px-3 text-sm"
+            />
+          </div>
+          <div>
+            <EtiquetaCampo>Sirve Para:</EtiquetaCampo>
+            <select
+              value={tipoEdit}
+              onChange={(e) => setTipoEdit(e.target.value as TipoProducto)}
+              className="h-11 w-full rounded-lg border border-linea bg-white px-3 text-sm"
+            >
+              <option value="venta_compra">Venta y Compra</option>
+              <option value="insumo">Solo Insumo (Compras)</option>
+            </select>
+            {tipoEdit === 'insumo' && productoEditando.tipo !== 'insumo' && (
+              <p className="mt-1 text-xs text-tinta/50">Para pasar a Insumo el stock debe estar en 0.</p>
+            )}
+          </div>
+          {tipoEdit === 'venta_compra' && (
+            <div>
+              <EtiquetaCampo>Precio de Venta:</EtiquetaCampo>
+              <input
+                value={precioVentaEdit}
+                onChange={(e) => setPrecioVentaEdit(limpiarNumeroEscrito(e.target.value))}
+                inputMode="decimal"
+                className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+              />
+            </div>
+          )}
+          <div>
+            <EtiquetaCampo>Costo (opcional):</EtiquetaCampo>
+            <input
+              value={costoEdit}
+              onChange={(e) => setCostoEdit(limpiarNumeroEscrito(e.target.value))}
+              inputMode="decimal"
+              className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+            />
+          </div>
+          {tipoEdit === 'venta_compra' && (
+            <>
+              <label className="flex items-center gap-2 text-sm font-bold text-tinta">
+                <input
+                  type="checkbox"
+                  checked={controlaStockEdit}
+                  onChange={(e) => {
+                    const marcado = e.target.checked;
+                    setControlaStockEdit(marcado);
+                    if (!marcado) setStockMinimoEdit('0');
+                  }}
+                  className="h-4 w-4 rounded border-linea"
+                />
+                Control Stock
+              </label>
+              <div>
+                <EtiquetaCampo>Stock Mínimo (opcional):</EtiquetaCampo>
+                <input
+                  value={controlaStockEdit ? stockMinimoEdit : '0'}
+                  onChange={(e) => setStockMinimoEdit(limpiarNumeroEscrito(e.target.value))}
+                  disabled={!controlaStockEdit}
+                  inputMode="numeric"
+                  className="h-11 w-full rounded-lg border border-linea px-3 text-sm disabled:bg-papel disabled:text-tinta/40"
+                />
+              </div>
+            </>
+          )}
+          <div>
+            <EtiquetaCampo>Estado:</EtiquetaCampo>
+            <select
+              value={activoEdit ? 'activo' : 'inactivo'}
+              onChange={(e) => setActivoEdit(e.target.value === 'activo')}
+              className="h-11 w-full rounded-lg border border-linea bg-white px-3 text-sm"
+            >
+              <option value="activo">Activo</option>
+              <option value="inactivo">Inactivo (no aparece para vender)</option>
+            </select>
+          </div>
+          {mensajeErrorEdit && <p className="text-sm text-alerta">{mensajeErrorEdit}</p>}
+          <div className="flex gap-3">
+            <button
+              onClick={cancelarEdicion}
+              className="h-11 flex-1 rounded-lg border border-linea text-sm font-semibold text-tinta/70"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={guardarEdicion}
+              disabled={!formularioEditValido}
+              className="h-11 flex-1 rounded-lg bg-bodega text-sm font-semibold text-white disabled:opacity-40"
+            >
+              Guardar cambios
+            </button>
+          </div>
+        </VentanaFormulario>
       )}
 
       {productos.length > 0 && (
@@ -431,7 +549,7 @@ export default function PaginaProductos() {
           {productosFiltrados.map((producto) => {
             const stockBajo = producto.controlaStock && producto.stockActual <= producto.stockMinimo;
             const panelAbierto =
-              editandoId === producto.id || ajustandoId === producto.id || bitacoraId === producto.id;
+              ajustandoId === producto.id || bitacoraId === producto.id;
             return (
               <li key={producto.id} id={`producto-${producto.id}`} className="scroll-mt-4 py-1">
                 <button
@@ -570,95 +688,6 @@ export default function PaginaProductos() {
                   </div>
                 )}
 
-                {editandoId === producto.id && (
-                  <div className="mt-3 space-y-3 rounded-xl border border-linea p-4">
-                    <input
-                      value={nombreEdit}
-                      onChange={(e) => setNombreEdit(mayusculasAlEscribir(e.target.value))}
-                      autoCapitalize="characters"
-                      placeholder="Nombre del producto"
-                      className="uppercase placeholder:normal-case h-11 w-full rounded-lg border border-linea px-3 text-sm"
-                    />
-                    <div>
-                      <label className="mb-1 block text-xs text-tinta/50">Sirve para:</label>
-                      <select
-                        value={tipoEdit}
-                        onChange={(e) => setTipoEdit(e.target.value as TipoProducto)}
-                        className="h-11 w-full rounded-lg border border-linea bg-white px-3 text-sm"
-                      >
-                        <option value="venta_compra">Venta y Compra</option>
-                        <option value="insumo">Solo Insumo (Compras)</option>
-                      </select>
-                      {tipoEdit === 'insumo' && producto.tipo !== 'insumo' && (
-                        <p className="mt-1 text-xs text-tinta/50">
-                          Para pasar a Insumo el stock debe estar en 0.
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex gap-3">
-                      {tipoEdit === 'venta_compra' && (
-                        <input
-                          value={precioVentaEdit}
-                          onChange={(e) => setPrecioVentaEdit(limpiarNumeroEscrito(e.target.value))}
-                          inputMode="decimal"
-                          placeholder="Precio de venta"
-                          className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
-                        />
-                      )}
-                      <input
-                        value={costoEdit}
-                        onChange={(e) => setCostoEdit(limpiarNumeroEscrito(e.target.value))}
-                        inputMode="decimal"
-                        placeholder="Costo"
-                        className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
-                      />
-                    </div>
-                    {tipoEdit === 'venta_compra' && (
-                    <>
-                    <label className="flex items-center gap-2 text-sm text-tinta">
-                      <input
-                        type="checkbox"
-                        checked={controlaStockEdit}
-                        onChange={(e) => {
-                          const marcado = e.target.checked;
-                          setControlaStockEdit(marcado);
-                          if (!marcado) setStockMinimoEdit('0');
-                        }}
-                        className="h-4 w-4 rounded border-linea"
-                      />
-                      Controla stock
-                    </label>
-                    <input
-                      value={controlaStockEdit ? stockMinimoEdit : '0'}
-                      onChange={(e) => setStockMinimoEdit(limpiarNumeroEscrito(e.target.value))}
-                      disabled={!controlaStockEdit}
-                      inputMode="numeric"
-                      placeholder="Stock mínimo"
-                      className="h-11 w-full rounded-lg border border-linea px-3 text-sm disabled:bg-papel disabled:text-tinta/40"
-                    />
-                    </>
-                    )}
-                    <div>
-                      <label className="mb-1 block text-xs text-tinta/50">Estado</label>
-                      <select
-                        value={activoEdit ? 'activo' : 'inactivo'}
-                        onChange={(e) => setActivoEdit(e.target.value === 'activo')}
-                        className="h-11 w-full rounded-lg border border-linea bg-white px-3 text-sm"
-                      >
-                        <option value="activo">Activo</option>
-                        <option value="inactivo">Inactivo (no aparece para vender)</option>
-                      </select>
-                    </div>
-                    {mensajeErrorEdit && <p className="text-sm text-alerta">{mensajeErrorEdit}</p>}
-                    <button
-                      onClick={guardarEdicion}
-                      disabled={!formularioEditValido}
-                      className="h-11 w-full rounded-lg bg-bodega text-sm font-semibold text-white disabled:opacity-40"
-                    >
-                      Guardar cambios
-                    </button>
-                  </div>
-                )}
               {panelAbierto && (
                 <button
                   type="button"

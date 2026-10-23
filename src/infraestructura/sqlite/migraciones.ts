@@ -102,6 +102,8 @@ const MIGRACIONES: string[] = [
   // 0014: tipo de producto. 'venta_compra' (todos los productos que ya existían) o
   // 'insumo' (solo sirve para Compras: sin stock ni precio de venta, no sale a vender).
   `ALTER TABLE producto ADD COLUMN tipo TEXT NOT NULL DEFAULT 'venta_compra' CHECK (tipo IN ('venta_compra','insumo'));`,
+  // 0015: nombre de cliente escrito a mano en Nueva venta (sin registrarlo). Reemplaza a "Cliente Eventual" solo en esa venta.
+  `ALTER TABLE venta ADD COLUMN cliente_nombre_libre TEXT;`,
 ];
 
 export function aplicarMigraciones(bd: BaseDatosLocal): void {

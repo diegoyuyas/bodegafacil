@@ -5,9 +5,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { usarSolicitudPin } from '@/hooks/usar-solicitud-pin';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
-import { mayusculasAlEscribir } from '@/core/texto';
+import { mayusculasAlEscribir, soloAlfanumericoAlEscribir, soloDigitosAlEscribir } from '@/core/texto';
 import type { Proveedor } from '@/core/tipos';
 import { SelectorEstado, filtrarPorEstado, type FiltroEstado } from '@/components/selector-estado';
+import { EtiquetaCampo, VentanaFormulario } from '@/components/ventana-formulario';
 import { CLAVE_PREFIJO_PAIS, obtenerPrefijoPais } from '@/core/paises';
 import type { EstadoPlan } from '@/core/plan';
 import { construirEnlaceChatWhatsApp } from '@/infraestructura/whatsapp/enlace';
@@ -130,53 +131,125 @@ export default function PaginaProveedores() {
         <button
           onClick={() => {
             setEditandoId(null);
-            setMostrarFormulario((v) => !v);
+            setMostrarFormulario(true);
           }}
-          className="text-sm font-semibold text-bodega-oscuro"
+          className="rounded-full bg-green-600 px-4 py-2 text-xs font-bold uppercase tracking-wide text-white active:bg-green-700"
         >
-          {mostrarFormulario ? 'Cancelar' : '+ Agregar'}
+          Nuevo proveedor
         </button>
       </header>
 
       {mostrarFormulario && (
-        <section className="mt-4 space-y-3 rounded-xl border border-linea p-4">
-          <input
-            value={nombre}
-            onChange={(e) => setNombre(mayusculasAlEscribir(e.target.value))}
-            autoCapitalize="characters"
-            placeholder="Nombre del proveedor"
-            className="uppercase placeholder:normal-case h-11 w-full rounded-lg border border-linea px-3 text-sm"
-          />
+        <VentanaFormulario titulo="Nuevo proveedor" onCerrar={() => setMostrarFormulario(false)}>
           <div>
+            <EtiquetaCampo>Nombre Proveedor:</EtiquetaCampo>
+            <input
+              value={nombre}
+              onChange={(e) => setNombre(mayusculasAlEscribir(e.target.value))}
+              autoCapitalize="characters"
+              className="uppercase h-11 w-full rounded-lg border border-linea px-3 text-sm"
+            />
+          </div>
+          <div>
+            <EtiquetaCampo>RUC (opcional, hasta 15 caracteres):</EtiquetaCampo>
             <input
               value={ruc}
-              onChange={(e) => setRuc(e.target.value)}
-              placeholder="RUC (opcional, hasta 15 caracteres)"
+              onChange={(e) => setRuc(soloAlfanumericoAlEscribir(e.target.value))}
               maxLength={15}
               className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
             />
             {!rucValido && <p className="mt-1 text-xs text-alerta">Solo letras y números, hasta 15 caracteres.</p>}
           </div>
           <div>
+            <EtiquetaCampo>Celular (opcional):</EtiquetaCampo>
             <input
               value={celular}
-              onChange={(e) => setCelular(e.target.value)}
+              onChange={(e) => setCelular(soloDigitosAlEscribir(e.target.value))}
               inputMode="numeric"
-              placeholder="Celular (opcional)"
               maxLength={12}
               className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
             />
             {!celularValido && <p className="mt-1 text-xs text-alerta">Solo números, entre 6 y 12 dígitos.</p>}
           </div>
           {mensajeError && <p className="text-sm text-alerta">{mensajeError}</p>}
-          <button
-            onClick={guardarProveedor}
-            disabled={!formularioValido}
-            className="h-11 w-full rounded-lg bg-bodega text-sm font-semibold text-white disabled:opacity-40"
-          >
-            Guardar proveedor
-          </button>
-        </section>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setMostrarFormulario(false)}
+              className="h-11 flex-1 rounded-lg border border-linea text-sm font-semibold text-tinta/70"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={guardarProveedor}
+              disabled={!formularioValido}
+              className="h-11 flex-1 rounded-lg bg-bodega text-sm font-semibold text-white disabled:opacity-40"
+            >
+              Guardar proveedor
+            </button>
+          </div>
+        </VentanaFormulario>
+      )}
+
+      {editandoId !== null && (
+        <VentanaFormulario titulo="Editar proveedor" onCerrar={cancelarEdicion}>
+          <div>
+            <EtiquetaCampo>Nombre Proveedor:</EtiquetaCampo>
+            <input
+              value={nombreEdit}
+              onChange={(e) => setNombreEdit(mayusculasAlEscribir(e.target.value))}
+              autoCapitalize="characters"
+              className="uppercase h-11 w-full rounded-lg border border-linea px-3 text-sm"
+            />
+          </div>
+          <div>
+            <EtiquetaCampo>RUC (opcional, hasta 15 caracteres):</EtiquetaCampo>
+            <input
+              value={rucEdit}
+              onChange={(e) => setRucEdit(soloAlfanumericoAlEscribir(e.target.value))}
+              maxLength={15}
+              className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+            />
+            {!rucEditValido && <p className="mt-1 text-xs text-alerta">Solo letras y números, hasta 15 caracteres.</p>}
+          </div>
+          <div>
+            <EtiquetaCampo>Celular (opcional):</EtiquetaCampo>
+            <input
+              value={celularEdit}
+              onChange={(e) => setCelularEdit(soloDigitosAlEscribir(e.target.value))}
+              inputMode="numeric"
+              maxLength={12}
+              className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+            />
+            {!celularEditValido && <p className="mt-1 text-xs text-alerta">Solo números, entre 6 y 12 dígitos.</p>}
+          </div>
+          <div>
+            <EtiquetaCampo>Estado:</EtiquetaCampo>
+            <select
+              value={activoEdit ? 'activo' : 'inactivo'}
+              onChange={(e) => setActivoEdit(e.target.value === 'activo')}
+              className="h-11 w-full rounded-lg border border-linea bg-white px-3 text-sm"
+            >
+              <option value="activo">Activo</option>
+              <option value="inactivo">Inactivo</option>
+            </select>
+          </div>
+          {mensajeErrorEdit && <p className="text-sm text-alerta">{mensajeErrorEdit}</p>}
+          <div className="flex gap-3">
+            <button
+              onClick={cancelarEdicion}
+              className="h-11 flex-1 rounded-lg border border-linea text-sm font-semibold text-tinta/70"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={guardarEdicion}
+              disabled={!formularioEditValido}
+              className="h-11 flex-1 rounded-lg bg-bodega text-sm font-semibold text-white disabled:opacity-40"
+            >
+              Guardar cambios
+            </button>
+          </div>
+        </VentanaFormulario>
       )}
 
       {proveedores.length > 0 && (
@@ -239,71 +312,14 @@ export default function PaginaProveedores() {
                     </button>
                   )}
                   <button
-                    onClick={() =>
-                      editandoId === proveedor.id ? cancelarEdicion() : abrirEdicion(proveedor)
-                    }
+                    onClick={() => abrirEdicion(proveedor)}
                     className="text-sm font-semibold text-bodega-oscuro"
                   >
-                    {editandoId === proveedor.id ? 'Cancelar' : 'Editar'}
+                    Editar
                   </button>
                 </div>
               </div>
 
-              {editandoId === proveedor.id && (
-                <div className="mt-3 space-y-3 rounded-xl border border-linea p-4">
-                  <input
-                    value={nombreEdit}
-                    onChange={(e) => setNombreEdit(mayusculasAlEscribir(e.target.value))}
-                    autoCapitalize="characters"
-                    placeholder="Nombre del proveedor"
-                    className="uppercase placeholder:normal-case h-11 w-full rounded-lg border border-linea px-3 text-sm"
-                  />
-                  <div>
-                    <input
-                      value={rucEdit}
-                      onChange={(e) => setRucEdit(e.target.value)}
-                      placeholder="RUC (opcional, hasta 15 caracteres)"
-                      maxLength={15}
-                      className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
-                    />
-                    {!rucEditValido && (
-                      <p className="mt-1 text-xs text-alerta">Solo letras y números, hasta 15 caracteres.</p>
-                    )}
-                  </div>
-                  <div>
-                    <input
-                      value={celularEdit}
-                      onChange={(e) => setCelularEdit(e.target.value)}
-                      inputMode="numeric"
-                      placeholder="Celular (opcional)"
-                      maxLength={12}
-                      className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
-                    />
-                    {!celularEditValido && (
-                      <p className="mt-1 text-xs text-alerta">Solo números, entre 6 y 12 dígitos.</p>
-                    )}
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs text-tinta/50">Estado</label>
-                    <select
-                      value={activoEdit ? 'activo' : 'inactivo'}
-                      onChange={(e) => setActivoEdit(e.target.value === 'activo')}
-                      className="h-11 w-full rounded-lg border border-linea bg-white px-3 text-sm"
-                    >
-                      <option value="activo">Activo</option>
-                      <option value="inactivo">Inactivo</option>
-                    </select>
-                  </div>
-                  {mensajeErrorEdit && <p className="text-sm text-alerta">{mensajeErrorEdit}</p>}
-                  <button
-                    onClick={guardarEdicion}
-                    disabled={!formularioEditValido}
-                    className="h-11 w-full rounded-lg bg-bodega text-sm font-semibold text-white disabled:opacity-40"
-                  >
-                    Guardar cambios
-                  </button>
-                </div>
-              )}
             </li>
           ))}
         </ul>

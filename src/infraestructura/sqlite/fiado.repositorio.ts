@@ -108,13 +108,27 @@ export class FiadoRepositorioSqlite implements FiadoRepositorio {
     }
     const clausula = condicionesFecha.length ? `AND ${condicionesFecha.join(' AND ')}` : '';
 
+    // Con rango: entran los clientes que tienen un fiado O un pago dentro de esas fechas.
+    const condicionesFechaPago = condicionesFecha.map((c) => c.replace('d.fecha', 'pd.fecha'));
+    if (condicionesFecha.length === 0) {
+      return this.bd
+        .consultar<FilaCliente>(
+          `SELECT DISTINCT c.* FROM cliente c
+           JOIN deuda_cliente d ON d.cliente_id = c.id
+           WHERE c.activo = 1
+           ORDER BY c.saldo_pendiente DESC, c.nombre ASC`,
+        )
+        .map(mapearCliente);
+    }
     return this.bd
       .consultar<FilaCliente>(
-        `SELECT DISTINCT c.* FROM cliente c
-         JOIN deuda_cliente d ON d.cliente_id = c.id
-         WHERE c.activo = 1 ${clausula}
+        `SELECT c.* FROM cliente c
+         WHERE c.activo = 1 AND (
+           EXISTS (SELECT 1 FROM deuda_cliente d WHERE d.cliente_id = c.id ${clausula})
+           OR EXISTS (SELECT 1 FROM pago_deuda pd WHERE pd.cliente_id = c.id AND ${condicionesFechaPago.join(' AND ')})
+         )
          ORDER BY c.saldo_pendiente DESC, c.nombre ASC`,
-        parametros,
+        [...parametros, ...parametros],
       )
       .map(mapearCliente);
   }
@@ -237,7 +251,17 @@ export class FiadoRepositorioSqlite implements FiadoRepositorio {
     return deudas.map((d) => mapearDeudaConLineas(this.bd, d));
   }
 
-  listarHistorialFiado(clienteId: number): DeudaPendienteDetalle[] {
+  listarHistorialFiado(clienteId: number, desde?: string, hasta?: string): DeudaPendienteDetalle[] {
+    const condiciones: string[] = [];
+    const parametros: (string | number)[] = [clienteId];
+    if (desde) {
+      condiciones.push('AND substr(fecha, 1, 10) >= ?');
+      parametros.push(desde);
+    }
+    if (hasta) {
+      condiciones.push('AND substr(fecha, 1, 10) <= ?');
+      parametros.push(hasta);
+    }
     const deudas = this.bd.consultar<{
       venta_id: number | null;
       fecha: string;
@@ -245,9 +269,9 @@ export class FiadoRepositorioSqlite implements FiadoRepositorio {
       saldo_pendiente: number;
     }>(
       `SELECT venta_id, fecha, monto, saldo_pendiente FROM deuda_cliente
-       WHERE cliente_id = ?
+       WHERE cliente_id = ? ${condiciones.join(' ')}
        ORDER BY fecha DESC, id DESC`,
-      [clienteId],
+      parametros,
     );
     return deudas.map((d) => mapearDeudaConLineas(this.bd, d));
   }
@@ -276,7 +300,17 @@ export class FiadoRepositorioSqlite implements FiadoRepositorio {
     }));
   }
 
-  listarPagosDeCliente(clienteId: number): PagoFiado[] {
+  listarPagosDeCliente(clienteId: number, desde?: string, hasta?: string): PagoFiado[] {
+    const condiciones: string[] = [];
+    const parametros: (string | number)[] = [clienteId];
+    if (desde) {
+      condiciones.push('AND substr(pd.fecha, 1, 10) >= ?');
+      parametros.push(desde);
+    }
+    if (hasta) {
+      condiciones.push('AND substr(pd.fecha, 1, 10) <= ?');
+      parametros.push(hasta);
+    }
     const filas = this.bd.consultar<{
       abono_id: number | null;
       monto: number;
@@ -294,9 +328,9 @@ export class FiadoRepositorioSqlite implements FiadoRepositorio {
               dc.venta_id AS venta_id
        FROM pago_deuda pd
        LEFT JOIN deuda_cliente dc ON dc.id = pd.deuda_id
-       WHERE pd.cliente_id = ?
+       WHERE pd.cliente_id = ? ${condiciones.join(' ')}
        ORDER BY pd.fecha DESC, pd.id DESC`,
-      [clienteId],
+      parametros,
     );
 
     const porClave = new Map<string, PagoFiado>();

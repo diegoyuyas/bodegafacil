@@ -68,6 +68,22 @@ export function soloLetrasAlEscribir(texto: string): string {
 }
 
 /**
+ * Para el `onChange` de campos de documento / RUC: deja solo letras (A-Z) y números,
+ * sin espacios ni caracteres especiales (también limpia lo que se pegue).
+ */
+export function soloAlfanumericoAlEscribir(texto: string): string {
+  return texto.replace(/[^A-Za-z0-9]/g, '');
+}
+
+/**
+ * Para el `onChange` de campos de celular: deja solo números, sin espacios ni
+ * caracteres especiales (también limpia lo que se pegue).
+ */
+export function soloDigitosAlEscribir(texto: string): string {
+  return texto.replace(/\D/g, '');
+}
+
+/**
  * Parte un texto en líneas de hasta `maximo` caracteres sin cortar palabras:
  * una palabra que no entra completa pasa entera a la línea siguiente.
  * Ej. con 25: "LAPTOP LENOVO NEGRA CPU CORE I7" → ["LAPTOP LENOVO NEGRA CPU", "CORE I7"].

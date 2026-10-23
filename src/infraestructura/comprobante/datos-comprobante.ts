@@ -37,7 +37,7 @@ export function construirDatosComprobanteDeVenta(
     fecha,
     hora,
     nombreVendedor: c.obtenerValor(CLAVE_TIENDA_VENDEDOR),
-    clienteNombre: cliente?.nombre ?? 'Cliente Eventual',
+    clienteNombre: cliente?.nombre ?? venta.clienteNombreLibre ?? 'Cliente Eventual',
     clienteDocumento: cliente?.documento ?? null,
     lineas: lineas.map((l) => ({
       descripcion: l.producto,

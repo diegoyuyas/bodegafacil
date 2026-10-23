@@ -1,4 +1,4 @@
-import { normalizarDescripcionLinea } from '@/core/texto';
+import { aMayusculas, normalizarDescripcionLinea } from '@/core/texto';
 import type { CajaRepositorio, ConfiguracionRepositorio, ProductoRepositorio, VentaRepositorio } from '@/core/repositorios';
 import {
   ErrorDeNegocio,
@@ -65,8 +65,8 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
       });
 
       this.bd.ejecutar(
-        `INSERT INTO venta (fecha_hora, cliente_id, metodo_pago, subtotal, total, ganancia_estimada, telefono_whatsapp)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO venta (fecha_hora, cliente_id, metodo_pago, subtotal, total, ganancia_estimada, telefono_whatsapp, cliente_nombre_libre)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           ahoraLocalSql(),
           input.clienteId ?? null,
@@ -75,6 +75,8 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
           calculada.total,
           calculada.gananciaEstimada,
           input.telefonoWhatsapp ?? null,
+          // Nombre escrito a mano: solo si no hay cliente registrado (en mayúsculas, como todos los nombres).
+          input.clienteId ? null : aMayusculas(input.clienteNombreLibre ?? '').slice(0, 60) || null,
         ],
       );
       const ventaId = this.bd.ultimoIdInsertado();
@@ -151,7 +153,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         anulada: number;
       }>(
         `SELECT v.id AS id, v.fecha_hora AS fecha_hora, v.metodo_pago AS metodo_pago,
-                v.total AS total, c.nombre AS cliente, v.anulada AS anulada
+                v.total AS total, COALESCE(c.nombre, NULLIF(TRIM(v.cliente_nombre_libre), '')) AS cliente, v.anulada AS anulada
          FROM venta v
          LEFT JOIN cliente c ON c.id = v.cliente_id
          WHERE substr(v.fecha_hora, 1, 10) = ?
@@ -179,7 +181,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         anulada: number;
       }>(
         `SELECT v.id AS id, v.fecha_hora AS fecha_hora, v.metodo_pago AS metodo_pago,
-                v.total AS total, c.nombre AS cliente, v.anulada AS anulada
+                v.total AS total, COALESCE(c.nombre, NULLIF(TRIM(v.cliente_nombre_libre), '')) AS cliente, v.anulada AS anulada
          FROM venta v
          LEFT JOIN cliente c ON c.id = v.cliente_id
          WHERE substr(v.fecha_hora, 1, 10) >= ? AND substr(v.fecha_hora, 1, 10) <= ?
@@ -209,14 +211,14 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         anulada: number;
       }>(
         `SELECT v.id AS id, v.fecha_hora AS fecha_hora, v.metodo_pago AS metodo_pago,
-                v.total AS total, c.nombre AS cliente, c.documento AS documento, v.anulada AS anulada
+                v.total AS total, COALESCE(c.nombre, NULLIF(TRIM(v.cliente_nombre_libre), '')) AS cliente, c.documento AS documento, v.anulada AS anulada
          FROM venta v
          LEFT JOIN cliente c ON c.id = v.cliente_id
          WHERE date(v.fecha_hora) BETWEEN ? AND ?
            AND (
              ? = '' OR
              ('V-' || v.id) LIKE '%' || ? || '%' OR
-             c.nombre LIKE '%' || ? || '%' OR
+             COALESCE(c.nombre, v.cliente_nombre_libre) LIKE '%' || ? || '%' OR
              c.documento LIKE '%' || ? || '%' OR
              CAST(v.total AS TEXT) LIKE '%' || ? || '%'
            )
@@ -514,7 +516,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
            dv.subtotal AS subtotal,
            dv.descripcion AS descripcion,
            v.metodo_pago AS metodo_pago,
-           c.nombre AS cliente,
+           COALESCE(c.nombre, NULLIF(TRIM(v.cliente_nombre_libre), '')) AS cliente,
            v.comprobante_pago_ruta AS comprobante_pago_ruta
          FROM detalle_venta dv
          JOIN venta v ON v.id = dv.venta_id

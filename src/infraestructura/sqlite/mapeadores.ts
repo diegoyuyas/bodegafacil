@@ -112,6 +112,7 @@ export interface FilaVenta {
   motivo_anulacion: string | null;
   telefono_whatsapp: string | null;
   comprobante_pago_ruta: string | null;
+  cliente_nombre_libre: string | null;
   creado_en: string;
 }
 
@@ -128,6 +129,7 @@ export function mapearVenta(fila: FilaVenta): Venta {
     motivoAnulacion: fila.motivo_anulacion,
     telefonoWhatsapp: fila.telefono_whatsapp,
     comprobantePagoRuta: fila.comprobante_pago_ruta,
+    clienteNombreLibre: fila.cliente_nombre_libre ?? null,
     creadoEn: fila.creado_en,
   };
 }
@@ -205,6 +207,8 @@ export interface FilaMovimientoInventario {
   cantidad: number;
   motivo: string;
   stock_resultante: number;
+  documento: string | null;
+  tercero: string | null;
 }
 
 export function mapearMovimientoInventario(fila: FilaMovimientoInventario): MovimientoInventarioItem {
@@ -215,5 +219,7 @@ export function mapearMovimientoInventario(fila: FilaMovimientoInventario): Movi
     cantidad: fila.cantidad,
     motivo: fila.motivo,
     stockResultante: fila.stock_resultante,
+    documento: fila.documento ?? null,
+    tercero: fila.tercero ?? null,
   };
 }

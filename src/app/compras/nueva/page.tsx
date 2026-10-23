@@ -296,7 +296,7 @@ export default function PaginaCompras() {
 
       {/* Proveedor: buscar uno guardado, o escribir cualquier nombre */}
       <section className="mt-6">
-        <p className="text-sm text-tinta/60">Proveedor (opcional)</p>
+        <p className="text-sm font-bold text-tinta/60">Proveedor (opcional)</p>
 
         {proveedorSeleccionado ? (
           <div className="mt-2 flex items-center justify-between rounded-xl border border-linea bg-white px-4 py-3">
@@ -364,7 +364,7 @@ export default function PaginaCompras() {
 
       {/* Comprobante (opcional) */}
       <section className="mt-6">
-        <p className="text-sm text-tinta/60">Comprobante (opcional)</p>
+        <p className="text-sm font-bold text-tinta/60">Comprobante (opcional)</p>
         <input
           value={comprobante}
           onChange={(e) => setComprobante(e.target.value)}
@@ -376,7 +376,7 @@ export default function PaginaCompras() {
 
       {/* Método de pago */}
       <section className="mt-6">
-        <p className="text-sm text-tinta/60">Pagada con</p>
+        <p className="text-sm font-bold text-tinta/60">Pagada con</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {METODOS.map((m) => (
             <button

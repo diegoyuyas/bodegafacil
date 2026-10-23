@@ -268,9 +268,23 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
   listarMovimientosInventario(productoId: number, desde: string, hasta: string): MovimientoInventarioItem[] {
     return this.bd
       .consultar<FilaMovimientoInventario>(
-        `SELECT * FROM movimiento_inventario
-         WHERE producto_id = ? AND date(fecha_hora) BETWEEN ? AND ?
-         ORDER BY fecha_hora ASC, id ASC`,
+        `SELECT m.id AS id, m.fecha_hora AS fecha_hora, m.tipo AS tipo, m.cantidad AS cantidad,
+                m.motivo AS motivo, m.stock_resultante AS stock_resultante,
+                CASE WHEN m.venta_id IS NOT NULL THEN 'V-' || m.venta_id
+                     WHEN m.compra_id IS NOT NULL THEN 'C-' || m.compra_id
+                END AS documento,
+                CASE WHEN m.venta_id IS NOT NULL
+                       THEN COALESCE(NULLIF(TRIM(cli.nombre), ''), NULLIF(TRIM(v.cliente_nombre_libre), ''), 'Cliente Eventual')
+                     WHEN m.compra_id IS NOT NULL
+                       THEN COALESCE(NULLIF(TRIM(prov.nombre), ''), NULLIF(TRIM(co.proveedor_nombre_libre), ''))
+                END AS tercero
+         FROM movimiento_inventario m
+         LEFT JOIN venta v ON v.id = m.venta_id
+         LEFT JOIN cliente cli ON cli.id = v.cliente_id
+         LEFT JOIN compra co ON co.id = m.compra_id
+         LEFT JOIN proveedor prov ON prov.id = co.proveedor_id
+         WHERE m.producto_id = ? AND date(m.fecha_hora) BETWEEN ? AND ?
+         ORDER BY m.fecha_hora ASC, m.id ASC`,
         [productoId, desde, hasta],
       )
       .map(mapearMovimientoInventario);

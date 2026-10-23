@@ -99,6 +99,7 @@ CREATE TABLE venta (
     motivo_anulacion    TEXT,
     telefono_whatsapp   TEXT,   -- número usado para WhatsApp en esta venta (clave para reenviar a clientes eventuales, que no tienen registro propio)
     comprobante_pago_ruta TEXT, -- foto del pago (Yape/Plin, Premium, opcional) — solo la ruta del archivo, la foto en sí nunca vive en esta base
+    cliente_nombre_libre TEXT,  -- nombre escrito a mano en la venta (cliente sin registrar); solo aplica si cliente_id es NULL
     creado_en           TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
