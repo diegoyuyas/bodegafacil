@@ -16,6 +16,7 @@ export interface FilaProducto {
   controla_stock: number;
   tipo: Producto['tipo'];
   unidad_medida: string;
+  alias: string | null;
   activo: number;
   creado_en: string;
   actualizado_en: string;
@@ -34,6 +35,7 @@ export function mapearProducto(fila: FilaProducto): Producto {
     controlaStock: fila.controla_stock === 1,
     tipo: fila.tipo === 'insumo' ? 'insumo' : 'venta_compra',
     unidadMedida: fila.unidad_medida,
+    alias: fila.alias ?? null,
     activo: fila.activo === 1,
     creadoEn: fila.creado_en,
     actualizadoEn: fila.actualizado_en,
@@ -80,6 +82,9 @@ export interface FilaMovimientoCaja {
   anulado: number;
   monto_anulado: number;
   referencia: string;
+  usuario_nombre: string | null;
+  usuario_anulacion_nombre: string | null;
+  fecha_anulacion: string | null;
 }
 
 export function mapearMovimientoCaja(fila: FilaMovimientoCaja): MovimientoCaja {
@@ -98,6 +103,15 @@ export function mapearMovimientoCaja(fila: FilaMovimientoCaja): MovimientoCaja {
     anulado: fila.anulado === 1 || (fila.monto_anulado > 0 && fila.monto_anulado >= fila.monto - 0.005),
     montoAnulado: fila.monto_anulado ?? 0,
     referencia: fila.referencia,
+    usuarioNombre: fila.usuario_nombre ?? null,
+    auditoria: {
+      usuarioCreacion: fila.usuario_nombre ?? null,
+      usuarioAnulacion: fila.usuario_anulacion_nombre ?? null,
+      usuarioModificacion: null, // los movimientos de caja no se modifican
+      fechaCreacion: fila.fecha_hora,
+      fechaAnulacion: fila.fecha_anulacion ?? null,
+      fechaModificacion: null,
+    },
   };
 }
 export interface FilaVenta {
@@ -113,6 +127,7 @@ export interface FilaVenta {
   telefono_whatsapp: string | null;
   comprobante_pago_ruta: string | null;
   cliente_nombre_libre: string | null;
+  usuario_id: number | null;
   creado_en: string;
 }
 
@@ -130,6 +145,7 @@ export function mapearVenta(fila: FilaVenta): Venta {
     telefonoWhatsapp: fila.telefono_whatsapp,
     comprobantePagoRuta: fila.comprobante_pago_ruta,
     clienteNombreLibre: fila.cliente_nombre_libre ?? null,
+    usuarioId: fila.usuario_id ?? null,
     creadoEn: fila.creado_en,
   };
 }

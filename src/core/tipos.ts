@@ -40,6 +40,8 @@ export interface Producto {
   /** 'insumo' = solo para Compras: controlaStock=false, precioVenta=0, stock en 0. */
   tipo: TipoProducto;
   unidadMedida: string;
+  /** Otros nombres del producto para la venta por voz: MAYÚSCULAS separadas por coma, o null si no tiene. Ver partirAlias. */
+  alias: string | null;
   activo: boolean;
   creadoEn: string;
   actualizadoEn: string;
@@ -73,7 +75,23 @@ export interface Venta {
   comprobantePagoRuta: string | null;
   /** Nombre escrito a mano en Nueva venta (cliente sin registrar). Solo tiene valor si `clienteId` es null. */
   clienteNombreLibre: string | null;
+  /** Usuario que la registró (control de usuarios). null = se hizo sin control de usuarios. */
+  usuarioId: number | null;
   creadoEn: string;
+}
+
+/**
+ * Quién y cuándo creó, anuló o modificó una transacción (venta, compra, movimiento de caja).
+ * Las fechas se guardan siempre que se conocen; el usuario solo cuando rige el control de usuarios.
+ * Lo hecho antes de existir estos datos queda vacío (no se inventa nada).
+ */
+export interface AuditoriaTransaccion {
+  usuarioCreacion: string | null;
+  usuarioAnulacion: string | null;
+  usuarioModificacion: string | null;
+  fechaCreacion: string | null;
+  fechaAnulacion: string | null;
+  fechaModificacion: string | null;
 }
 
 export interface DetalleVenta {
@@ -150,6 +168,10 @@ export interface MovimientoCaja {
   montoAnulado: number;
   /** Cliente de la venta/cobro, proveedor de la compra, o "Ajuste Manual" si no aplica ninguno. */
   referencia: string;
+  /** Usuario que registró el movimiento (control de usuarios). null = sin control de usuarios. */
+  usuarioNombre: string | null;
+  /** Quién y cuándo lo creó y, si la venta, compra o cobro de donde viene fue anulado, quién y cuándo lo anuló. */
+  auditoria: AuditoriaTransaccion;
 }
 
 export interface Proveedor {
@@ -273,6 +295,8 @@ export interface VentaListaItem {
   total: number;
   clienteNombre: string | null;
   anulada: boolean;
+  /** Quién la registró (control de usuarios). null = sin control de usuarios. */
+  usuarioNombre: string | null;
 }
 
 /** Una línea de producto dentro de una venta, para el preview al expandir. */
@@ -371,6 +395,7 @@ export interface CompraListaItem {
   metodoPago: MetodoPagoSinFiado | null;
   /** Nombres de los productos de esta compra, separados por coma — solo para poder buscar por producto en el listado. */
   productos: string;
+  auditoria: AuditoriaTransaccion;
 }
 
 /** Una fila del reporte "productos más vendidos" por rango de fechas. */

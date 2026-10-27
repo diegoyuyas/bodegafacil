@@ -122,3 +122,47 @@ export function normalizarDescripcionLinea(texto: string | null | undefined): st
     .trim();
   return limpio === '' ? null : limpio;
 }
+
+// ------------------------------------------------------------
+// Alias de producto (venta por voz)
+// ------------------------------------------------------------
+
+/**
+ * Forma "comparable" de un texto: minúsculas, sin tildes, espacios colapsados y
+ * recortados. Toda comparación de alias/nombres para la venta por voz se hace con
+ * esto (lo que dicta el micrófono no trae mayúsculas ni tildes confiables).
+ * Ej.: "  Cobertura  Bítter " → "cobertura bitter".
+ */
+export function normalizarParaBusqueda(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLocaleLowerCase('es')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Parte el texto de alias (separado por comas) en una lista limpia: cada alias en
+ * MAYÚSCULAS, sin espacios sobrantes, sin vacíos y sin repetidos (un repetido se
+ * detecta ignorando tildes y mayúsculas; se conserva el primero).
+ * Ej.: "cobertura, Bitter,, COBERTURA , winter" → ["COBERTURA", "BITTER", "WINTER"].
+ */
+export function partirAlias(texto: string | null | undefined): string[] {
+  const vistos = new Set<string>();
+  const lista: string[] = [];
+  for (const crudo of (texto ?? '').split(',')) {
+    const alias = aMayusculas(crudo.replace(/\s+/g, ' '));
+    if (alias === '') continue;
+    const clave = normalizarParaBusqueda(alias);
+    if (vistos.has(clave)) continue;
+    vistos.add(clave);
+    lista.push(alias);
+  }
+  return lista;
+}
+
+/** Une una lista de alias al texto que se guarda en la base (null si no hay ninguno). */
+export function unirAlias(lista: string[]): string | null {
+  return lista.length === 0 ? null : lista.join(',');
+}

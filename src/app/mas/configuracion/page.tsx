@@ -3,63 +3,13 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
-import {
-  CLAVE_DESCRIPCION_LINEAS,
-  CLAVE_NOTIFICAR_STOCK_BAJO,
-  CLAVE_PRECIO_EDITABLE_VENTA,
-  estaActivado,
-  valorParaGuardar,
-} from '@/core/configuracion';
 import { CLAVE_MONEDA, MONEDAS_DISPONIBLES, obtenerMoneda } from '@/core/moneda';
 import { CLAVE_PREFIJO_PAIS, PAISES_AMERICA, obtenerPrefijoPais } from '@/core/paises';
-import type { EstadoPlan } from '@/core/plan';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
-import { solicitarPermisoNotificaciones } from '@/infraestructura/notificaciones/notificaciones-navegador';
-
-/**
- * Interruptor ON/OFF con la misma identidad visual que el resto de
- * la app (verde toldo cuando está activo). No hay un componente
- * <Switch> compartido todavía en el proyecto, así que este botón se
- * arma con Tailwind puro, igual que el resto de las pantallas.
- */
-function Interruptor({
-  activado,
-  onChange,
-  disabled,
-}: {
-  activado: boolean;
-  onChange: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={activado}
-      disabled={disabled}
-      onClick={onChange}
-      className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-40 ${
-        activado ? 'bg-bodega' : 'bg-linea'
-      }`}
-    >
-      <span
-        className={`absolute left-0.5 top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform duration-150 ${
-          activado ? 'translate-x-5' : 'translate-x-0'
-        }`}
-      />
-    </button>
-  );
-}
 
 export default function PaginaConfiguracion() {
   const { contenedor, cargando, error } = usarContenedor();
 
-  const [estadoPlan, setEstadoPlan] = useState<EstadoPlan | null>(null);
-  const [precioEditable, setPrecioEditable] = useState(false);
-  const [notificarStockBajo, setNotificarStockBajo] = useState(false);
-  const [mensajePermiso, setMensajePermiso] = useState<string | null>(null);
-
-  const [descripcionLineas, setDescripcionLineas] = useState(false);
   const [codigoMoneda, setCodigoMoneda] = useState(obtenerMoneda(null).codigo);
   const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
 
@@ -72,12 +22,6 @@ export default function PaginaConfiguracion() {
 
   useEffect(() => {
     if (!contenedor) return;
-    setEstadoPlan(contenedor.plan.obtenerEstado());
-    setPrecioEditable(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_PRECIO_EDITABLE_VENTA)));
-    setNotificarStockBajo(
-      estaActivado(contenedor.configuracion.obtenerValor(CLAVE_NOTIFICAR_STOCK_BAJO)),
-    );
-    setDescripcionLineas(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_DESCRIPCION_LINEAS)));
     setCodigoMoneda(obtenerMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)).codigo);
     setPrefijoPais(obtenerPrefijoPais(contenedor.configuracion.obtenerValor(CLAVE_PREFIJO_PAIS)));
 
@@ -89,48 +33,6 @@ export default function PaginaConfiguracion() {
     // vez, invalidando los códigos ya pedidos para este dispositivo.
     contenedor.persistir().catch(() => {});
   }, [contenedor]);
-
-  const esPremium = estadoPlan?.tipo === 'premium';
-
-  async function alternarPrecioEditable() {
-    if (!contenedor) return;
-    const nuevoValor = !precioEditable;
-    setPrecioEditable(nuevoValor);
-    contenedor.configuracion.establecerValor(CLAVE_PRECIO_EDITABLE_VENTA, valorParaGuardar(nuevoValor));
-    await contenedor.persistir();
-  }
-
-  async function alternarNotificarStockBajo() {
-    if (!contenedor || !esPremium) return;
-    setMensajePermiso(null);
-
-    const nuevoValor = !notificarStockBajo;
-
-    // Al activarlo (no al desactivarlo) se pide permiso al navegador.
-    // Si el bodeguero lo rechaza, no tiene sentido guardar el switch
-    // en ON: no habría forma de mostrar nada.
-    if (nuevoValor) {
-      const permiso = await solicitarPermisoNotificaciones();
-      if (permiso !== 'granted') {
-        setMensajePermiso(
-          'Activa los permisos de notificaciones de este navegador para poder avisarte.',
-        );
-        return;
-      }
-    }
-
-    setNotificarStockBajo(nuevoValor);
-    contenedor.configuracion.establecerValor(CLAVE_NOTIFICAR_STOCK_BAJO, valorParaGuardar(nuevoValor));
-    await contenedor.persistir();
-  }
-
-  async function alternarDescripcionLineas() {
-    if (!contenedor) return;
-    const nuevoValor = !descripcionLineas;
-    setDescripcionLineas(nuevoValor);
-    contenedor.configuracion.establecerValor(CLAVE_DESCRIPCION_LINEAS, valorParaGuardar(nuevoValor));
-    await contenedor.persistir();
-  }
 
   async function cambiarMoneda(nuevoCodigo: string) {
     if (!contenedor) return;
@@ -157,7 +59,6 @@ export default function PaginaConfiguracion() {
       await contenedor.persistir();
       setCodigoActivacion('');
       setMensajeCodigo('¡Código aceptado! Premium activado.');
-      setEstadoPlan(contenedor.plan.obtenerEstado());
     } catch (e) {
       setMensajeCodigoEsError(true);
       setMensajeCodigo(e instanceof ErrorDeNegocio ? e.message : 'No se pudo activar con ese código.');
@@ -179,43 +80,16 @@ export default function PaginaConfiguracion() {
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       <ul className="mt-6 divide-y divide-linea border-y border-linea">
-        <li className="flex items-center justify-between gap-4 py-4">
-          <div>
-            <p className="text-sm font-semibold text-tinta">Precio editable al vender</p>
-            <p className="mt-0.5 text-xs text-tinta/50">
-              Permite cambiar el precio de un producto al momento de registrar la venta.
-            </p>
-          </div>
-          <Interruptor activado={precioEditable} onChange={alternarPrecioEditable} disabled={!contenedor} />
-        </li>
-
-        <li className="py-4">
-          <div className="flex items-center justify-between gap-4">
+        <li>
+          <Link href="/mas/configuracion/configuracion-venta" className="flex items-center justify-between gap-4 py-4">
             <div>
-              <p className="text-sm font-semibold text-tinta">Notificación de stock bajo</p>
+              <p className="text-sm font-semibold text-tinta">Configuración de Venta</p>
               <p className="mt-0.5 text-xs text-tinta/50">
-                Avisa cuando algún producto llega a su stock mínimo.
+                Precio editable, stock bajo, descripciones, venta por voz
               </p>
-              {!esPremium && <p className="mt-1 text-xs font-semibold text-acento-oscuro">Función Premium</p>}
             </div>
-            <Interruptor
-              activado={notificarStockBajo}
-              onChange={alternarNotificarStockBajo}
-              disabled={!contenedor || !esPremium}
-            />
-          </div>
-          {mensajePermiso && <p className="mt-2 text-xs text-alerta">{mensajePermiso}</p>}
-        </li>
-
-        <li className="flex items-center justify-between gap-4 py-4">
-          <div>
-            <p className="text-sm font-semibold text-tinta">Añadir descripción en Venta/Compra</p>
-            <p className="mt-0.5 text-xs text-tinta/50">
-              Permite escribir una nota corta (hasta 100 caracteres) debajo de cada producto. Sale en la nota de venta,
-              los pedidos y los reportes.
-            </p>
-          </div>
-          <Interruptor activado={descripcionLineas} onChange={alternarDescripcionLineas} disabled={!contenedor} />
+            <span className="text-tinta/40">›</span>
+          </Link>
         </li>
 
         <li>
@@ -223,6 +97,20 @@ export default function PaginaConfiguracion() {
             <div>
               <p className="text-sm font-semibold text-tinta">Configurar PIN</p>
               <p className="mt-0.5 text-xs text-tinta/50">Pide un PIN de 4 dígitos para abrir la app.</p>
+              <p className="mt-1 text-xs font-semibold text-acento-oscuro">Función Premium</p>
+            </div>
+            <span className="text-tinta/40">›</span>
+          </Link>
+        </li>
+
+        <li>
+          <Link
+            href="/mas/configuracion/administracion-usuarios"
+            className="flex items-center justify-between gap-4 py-4"
+          >
+            <div>
+              <p className="text-sm font-semibold text-tinta">Administración de Usuarios</p>
+              <p className="mt-0.5 text-xs text-tinta/50">Usuarios con contraseña: administrador y estándar.</p>
               <p className="mt-1 text-xs font-semibold text-acento-oscuro">Función Premium</p>
             </div>
             <span className="text-tinta/40">›</span>

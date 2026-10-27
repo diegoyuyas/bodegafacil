@@ -104,6 +104,52 @@ const MIGRACIONES: string[] = [
   `ALTER TABLE producto ADD COLUMN tipo TEXT NOT NULL DEFAULT 'venta_compra' CHECK (tipo IN ('venta_compra','insumo'));`,
   // 0015: nombre de cliente escrito a mano en Nueva venta (sin registrarlo). Reemplaza a "Cliente Eventual" solo en esa venta.
   `ALTER TABLE venta ADD COLUMN cliente_nombre_libre TEXT;`,
+  // 0016: alias del producto (otros nombres con que se le conoce), separados por coma. Para la venta por voz.
+  // No se registra en producto_historial (su CHECK tiene una lista fija de campos).
+  `ALTER TABLE producto ADD COLUMN alias TEXT;`,
+  // 0017: usuarios (control de usuarios, Premium). La contraseña nunca se guarda: solo su huella PBKDF2 con sal.
+  `CREATE TABLE IF NOT EXISTS usuario (
+      id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+      nombre              TEXT NOT NULL,
+      nombre_clave        TEXT NOT NULL UNIQUE,
+      rol                 TEXT NOT NULL DEFAULT 'estandar'
+                              CHECK (rol IN ('administrador','estandar')),
+      clave_hash          TEXT NOT NULL,
+      clave_sal           TEXT NOT NULL,
+      clave_iteraciones   INTEGER NOT NULL,
+      activo              INTEGER NOT NULL DEFAULT 1,
+      intentos_fallidos   INTEGER NOT NULL DEFAULT 0,
+      bloqueado_hasta     INTEGER,
+      ultimo_acceso       TEXT,
+      creado_en           TEXT NOT NULL DEFAULT (datetime('now')),
+      actualizado_en      TEXT NOT NULL DEFAULT (datetime('now'))
+  );`,
+  // 0018 a 0021: quién registró cada venta, compra, cobro de fiado y movimiento de caja (control de usuarios).
+  // NULL = hecho antes de que existiera el control o sin él.
+  `ALTER TABLE venta ADD COLUMN usuario_id INTEGER;`,
+  `ALTER TABLE compra ADD COLUMN usuario_id INTEGER;`,
+  `ALTER TABLE movimiento_caja ADD COLUMN usuario_id INTEGER;`,
+  `ALTER TABLE pago_deuda ADD COLUMN usuario_id INTEGER;`,
+  // 0022 y 0023: actividad de usuarios (quién hizo cada acción delicada y quién la autorizó).
+  `CREATE TABLE IF NOT EXISTS actividad_usuario (
+      id              INTEGER PRIMARY KEY AUTOINCREMENT,
+      fecha_hora      TEXT NOT NULL,
+      usuario_id      INTEGER NOT NULL REFERENCES usuario(id),
+      accion          TEXT NOT NULL,
+      entidad         TEXT NOT NULL,
+      entidad_id      INTEGER,
+      detalle         TEXT,
+      autorizado_por  INTEGER REFERENCES usuario(id)
+  );`,
+  `CREATE INDEX IF NOT EXISTS idx_actividad_usuario_fecha ON actividad_usuario(fecha_hora);`,
+  // 0024 a 0030: quién y cuándo anuló o modificó cada transacción (columnas de usuario y fecha de los Excel).
+  `ALTER TABLE venta ADD COLUMN anulada_por INTEGER;`,
+  `ALTER TABLE venta ADD COLUMN fecha_anulacion TEXT;`,
+  `ALTER TABLE compra ADD COLUMN anulada_por INTEGER;`,
+  `ALTER TABLE compra ADD COLUMN fecha_anulacion TEXT;`,
+  `ALTER TABLE compra ADD COLUMN modificada_por INTEGER;`,
+  `ALTER TABLE compra ADD COLUMN fecha_modificacion TEXT;`,
+  `ALTER TABLE pago_deuda ADD COLUMN anulado_por INTEGER;`,
 ];
 
 export function aplicarMigraciones(bd: BaseDatosLocal): void {

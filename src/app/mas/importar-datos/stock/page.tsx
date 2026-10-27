@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
-import { usarSolicitudPin } from '@/hooks/usar-solicitud-pin';
+import { usarPermisos } from '@/hooks/usar-permisos';
 import type { EstadoPlan } from '@/core/plan';
 import {
   construirPlantillaImportarStock,
@@ -21,7 +21,7 @@ interface Resultado {
 
 export default function PaginaImportarStock() {
   const { contenedor, cargando, error } = usarContenedor();
-  const { pedirPin, modalPin } = usarSolicitudPin(contenedor);
+  const { pedirPermiso, modalPermiso } = usarPermisos(contenedor);
   const [estadoPlan, setEstadoPlan] = useState<EstadoPlan | null>(null);
   const inputArchivoRef = useRef<HTMLInputElement>(null);
 
@@ -77,7 +77,7 @@ export default function PaginaImportarStock() {
 
   async function importar() {
     if (!contenedor || !esPremium) return;
-    if (!(await pedirPin('modificar', 'importar el ajuste de stock'))) return;
+    if (!(await pedirPermiso('importar_datos', 'importar el ajuste de stock'))) return;
     setImportando(true);
     let actualizados = 0;
     let conError = 0;
@@ -109,7 +109,7 @@ export default function PaginaImportarStock() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
-      {modalPin}
+      {modalPermiso}
       <header className="flex items-center gap-3">
         <Link href="/mas/importar-datos" className="text-xl text-tinta/60" aria-label="Volver">
           ←

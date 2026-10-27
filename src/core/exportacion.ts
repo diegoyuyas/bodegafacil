@@ -8,6 +8,7 @@
  */
 
 import { etiquetaDeMovimientoCaja } from './reglas-negocio';
+import { partirAlias } from './texto';
 import type {
   Cliente,
   ClienteCompradorItem,
@@ -21,6 +22,7 @@ import type {
   ProductoMasVendidoItem,
   Proveedor,
   VentaFormaPagoItem,
+  AuditoriaTransaccion,
 } from './tipos';
 
 export interface FilaVentaDetallada {
@@ -38,6 +40,25 @@ export interface FilaVentaDetallada {
   descripcion?: string | null;
   /** URI de la foto del pago (Yape/Plin), si el bodeguero adjuntó una. Solo para verla en pantalla; no va a Excel/CSV. */
   comprobanteRuta?: string | null;
+  /** Quién y cuándo la creó o anuló. Solo va a Excel (el CSV no lo incluye). */
+  auditoria: AuditoriaTransaccion;
+}
+
+/**
+ * Columnas que el dueño ve al final de cada hoja de Excel donde interviene un usuario: quién y cuándo
+ * creó, anuló o modificó cada transacción. Los nombres van tal cual, en este orden.
+ */
+export const ENCABEZADOS_AUDITORIA = [
+  'usuario_creacion',
+  'usuario_anulacion',
+  'usuario_modificacion',
+  'fecha_creacion',
+  'fecha_anulacion',
+  'fecha_modificacion',
+];
+
+export function columnasAuditoria(a: AuditoriaTransaccion): (string | null)[] {
+  return [a.usuarioCreacion, a.usuarioAnulacion, a.usuarioModificacion, a.fechaCreacion, a.fechaAnulacion, a.fechaModificacion];
 }
 
 function escaparCsv(valor: string | number | null | undefined): string {
@@ -133,6 +154,7 @@ export function construirHojaCaja(movimientos: MovimientoCaja[]): HojaExcel {
       'Método de pago',
       'Monto',
       'Saldo resultante',
+      ...ENCABEZADOS_AUDITORIA,
     ],
     filas: movimientos.map((m) => [
       m.fechaHora,
@@ -143,6 +165,7 @@ export function construirHojaCaja(movimientos: MovimientoCaja[]): HojaExcel {
       m.metodoPago,
       m.monto,
       m.saldoResultante,
+      ...columnasAuditoria(m.auditoria),
     ]),
   };
 }
@@ -150,13 +173,14 @@ export function construirHojaCaja(movimientos: MovimientoCaja[]): HojaExcel {
 export function construirHojaCompras(compras: CompraListaItem[]): HojaExcel {
   return {
     nombre: 'Compras',
-    encabezados: ['Fecha', 'Proveedor', 'Comprobante', 'Total', 'Estado'],
+    encabezados: ['Fecha', 'Proveedor', 'Comprobante', 'Total', 'Estado', ...ENCABEZADOS_AUDITORIA],
     filas: compras.map((c) => [
       c.fecha,
       c.proveedorNombre ?? 'Sin especificar',
       c.comprobante,
       c.total,
       c.estado,
+      ...columnasAuditoria(c.auditoria),
     ]),
   };
 }
@@ -180,6 +204,7 @@ export interface FilaCompraDetallada {
   estado: string;
   /** Descripción corta que se añadió al producto en esa compra (si la hay). */
   descripcion?: string | null;
+  auditoria: AuditoriaTransaccion;
 }
 
 export function construirHojaComprasDetallado(filas: FilaCompraDetallada[]): HojaExcel {
@@ -198,6 +223,7 @@ export function construirHojaComprasDetallado(filas: FilaCompraDetallada[]): Hoj
       'Total de la compra',
       'Comprobante',
       'Estado',
+      ...ENCABEZADOS_AUDITORIA,
     ],
     filas: filas.map((f) => [
       f.compra,
@@ -211,6 +237,7 @@ export function construirHojaComprasDetallado(filas: FilaCompraDetallada[]): Hoj
       f.totalCompra,
       f.comprobante,
       f.estado,
+      ...columnasAuditoria(f.auditoria),
     ]),
   };
 }
@@ -286,10 +313,11 @@ export function construirHojaMayoresDeudores(items: DeudaClienteItem[]): HojaExc
   };
 }
 
-export function construirHojaVentas(filas: FilaVentaDetallada[]): HojaExcel {
+/** `nombre` permite armar también la hoja «Ventas anuladas» con las mismas columnas. */
+export function construirHojaVentas(filas: FilaVentaDetallada[], nombre = 'Ventas'): HojaExcel {
   const conDescripcion = filas.some((f) => f.descripcion);
   return {
-    nombre: 'Ventas',
+    nombre,
     encabezados: [
       'Nombre vendedor',
       'Nro. Documento vendedor',
@@ -302,6 +330,7 @@ export function construirHojaVentas(filas: FilaVentaDetallada[]): HojaExcel {
       'Subtotal',
       'Método de pago',
       'Cliente',
+      ...ENCABEZADOS_AUDITORIA,
     ],
     filas: filas.map((f) => [
       f.nombreVendedor,
@@ -315,6 +344,7 @@ export function construirHojaVentas(filas: FilaVentaDetallada[]): HojaExcel {
       f.subtotal,
       f.metodoPago,
       f.cliente,
+      ...columnasAuditoria(f.auditoria),
     ]),
   };
 }
@@ -322,7 +352,7 @@ export function construirHojaVentas(filas: FilaVentaDetallada[]): HojaExcel {
 export function construirHojaProductos(productos: Producto[]): HojaExcel {
   return {
     nombre: 'Productos',
-    encabezados: ['Nombre', 'Precio de venta', 'Costo', 'Stock actual', 'Stock mínimo', 'Unidad', 'Activo'],
+    encabezados: ['Nombre', 'Precio de venta', 'Costo', 'Stock actual', 'Stock mínimo', 'Unidad', 'Activo', 'Alias'],
     filas: productos.map((p) => [
       p.nombre,
       p.precioVenta,
@@ -331,6 +361,7 @@ export function construirHojaProductos(productos: Producto[]): HojaExcel {
       p.stockMinimo,
       p.unidadMedida,
       p.activo ? 'Sí' : 'No',
+      p.alias ? partirAlias(p.alias).join(', ') : '',
     ]),
   };
 }

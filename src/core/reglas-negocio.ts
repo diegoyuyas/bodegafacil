@@ -11,6 +11,7 @@
  * del documento maestro.
  */
 
+import { normalizarParaBusqueda, partirAlias } from './texto';
 import type { DetalleVenta, LineaVentaEntrada, Producto, VentaCalculada } from './tipos';
 
 // ------------------------------------------------------------
@@ -371,4 +372,70 @@ export function resumirComprasModificadas(
     if (final !== original.monto) montos.set(original.id, { original: original.monto, final });
   });
   return { montos, ajustesFusionados };
+}
+
+// ------------------------------------------------------------
+// Alias de producto (venta por voz)
+// ------------------------------------------------------------
+
+export const MAXIMO_ALIAS_POR_PRODUCTO = 10;
+export const MAXIMO_CARACTERES_ALIAS = 30;
+
+const PATRON_ALIAS = /^[\p{L}\p{M}\p{N}]+(?: [\p{L}\p{M}\p{N}]+)*$/u;
+
+/**
+ * Palabras que la venta por voz usará como comandos, formas de pago o cantidades:
+ * un alias igual a una de ellas haría que el analizador se confunda. Ya normalizadas
+ * (sin tildes, minúsculas), como las deja normalizarParaBusqueda.
+ */
+const ALIAS_RESERVADOS = new Set([
+  'guardar', 'venta', 'cancelar', 'borrar', 'efectivo', 'yape', 'plin', 'tarjeta', 'fiado', 'cliente',
+  'uno', 'una', 'dos', 'tres', 'cuatro', 'cinco', 'seis', 'siete', 'ocho', 'nueve', 'diez', 'once',
+  'doce', 'trece', 'catorce', 'quince', 'veinte', 'treinta', 'cuarenta', 'cincuenta', 'cien',
+  'medio', 'media', 'docena', 'media docena',
+]);
+
+export function esAliasReservado(aliasNormalizado: string): boolean {
+  return ALIAS_RESERVADOS.has(aliasNormalizado);
+}
+
+/**
+ * Valida una lista de alias ya partida (ver partirAlias). Un producto puede no tener
+ * alias (lista vacía = válido). Lanza ErrorDeNegocio con un mensaje claro.
+ * Un alias repetido en OTRO producto NO se valida acá: eso es solo un aviso en pantalla.
+ */
+export function validarAlias(lista: string[]): void {
+  if (lista.length > MAXIMO_ALIAS_POR_PRODUCTO) {
+    throw new ErrorDeNegocio(`Un producto puede tener hasta ${MAXIMO_ALIAS_POR_PRODUCTO} alias.`);
+  }
+  for (const alias of lista) {
+    if (alias.length > MAXIMO_CARACTERES_ALIAS) {
+      throw new ErrorDeNegocio(`El alias "${alias}" supera los ${MAXIMO_CARACTERES_ALIAS} caracteres.`);
+    }
+    if (!PATRON_ALIAS.test(alias)) {
+      throw new ErrorDeNegocio(`El alias "${alias}" solo puede tener letras, números y espacios.`);
+    }
+    if (esAliasReservado(normalizarParaBusqueda(alias))) {
+      throw new ErrorDeNegocio(
+        `"${alias}" no se puede usar como alias: es una palabra que la venta por voz usa como comando, forma de pago o cantidad.`,
+      );
+    }
+  }
+}
+
+/**
+ * Productos ACTIVOS (distintos de `excluirId`) que ya tienen este alias, comparando sin
+ * tildes ni mayúsculas. Solo sirve para AVISAR en pantalla: un alias repetido nunca se
+ * bloquea (en la venta por voz una coincidencia ambigua mostrará opciones para tocar).
+ */
+export function productosConMismoAlias(alias: string, productos: Producto[], excluirId?: number): Producto[] {
+  const clave = normalizarParaBusqueda(alias);
+  if (clave === '') return [];
+  return productos.filter(
+    (p) =>
+      p.id !== excluirId &&
+      p.activo &&
+      p.alias !== null &&
+      partirAlias(p.alias).some((a) => normalizarParaBusqueda(a) === clave),
+  );
 }

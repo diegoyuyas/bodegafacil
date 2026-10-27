@@ -5,7 +5,7 @@
  * para no armar esto dos veces.
  */
 import type { ContenedorRepositorios } from '../sqlite/contenedor';
-import { CLAVE_NOMBRE_TIENDA, obtenerNombreTienda } from '@/core/configuracion';
+import { CLAVE_CONTROL_USUARIOS, CLAVE_NOMBRE_TIENDA, controlUsuariosVigente, obtenerNombreTienda } from '@/core/configuracion';
 import {
   CLAVE_TIENDA_CONTACTO,
   CLAVE_TIENDA_DOCUMENTO,
@@ -22,6 +22,27 @@ function fechaHoraLegibles(fechaHoraSql: string): { fecha: string; hora: string 
   return { fecha: `${dia}/${mes}/${anio}`, hora: hora.slice(0, 5) };
 }
 
+/**
+ * Quién figura como vendedor en el ticket (impreso y en imagen):
+ *  - con el control de usuarios rigiendo y la venta hecha por un usuario: el nombre de ESE usuario;
+ *  - en cualquier otro caso (sin control de usuarios, o venta hecha antes del control): el nombre de
+ *    vendedor de Más > Configuración > Información del Negocio.
+ */
+function nombreDelVendedor(contenedor: ContenedorRepositorios, usuarioIdDeLaVenta: number | null): string | null {
+  const configurado = contenedor.configuracion.obtenerValor(CLAVE_TIENDA_VENDEDOR);
+  if (usuarioIdDeLaVenta === null) return configurado;
+  const rige = controlUsuariosVigente(
+    contenedor.configuracion.obtenerValor(CLAVE_CONTROL_USUARIOS),
+    contenedor.plan.obtenerEstado().tipo === 'premium',
+  );
+  if (!rige) return configurado;
+  try {
+    return contenedor.usuarios.obtenerPorId(usuarioIdDeLaVenta).nombre;
+  } catch {
+    return configurado;
+  }
+}
+
 export function construirDatosComprobanteDeVenta(
   contenedor: ContenedorRepositorios,
   ventaId: number,
@@ -36,7 +57,7 @@ export function construirDatosComprobanteDeVenta(
     numeroComprobante: `V-${venta.id}`,
     fecha,
     hora,
-    nombreVendedor: c.obtenerValor(CLAVE_TIENDA_VENDEDOR),
+    nombreVendedor: nombreDelVendedor(contenedor, venta.usuarioId),
     clienteNombre: cliente?.nombre ?? venta.clienteNombreLibre ?? 'Cliente Eventual',
     clienteDocumento: cliente?.documento ?? null,
     lineas: lineas.map((l) => ({

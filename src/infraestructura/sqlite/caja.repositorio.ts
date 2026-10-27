@@ -1,3 +1,4 @@
+import type { RegistroActividad } from '@/core/actividad';
 import type { CajaRepositorio } from '@/core/repositorios';
 import { calcularSaldoCaja } from '@/core/reglas-negocio';
 import type { MetodoPagoSinFiado, MovimientoCaja, ReferenciaCajaMovimiento } from '@/core/tipos';
@@ -15,6 +16,9 @@ const SELECT_CON_REFERENCIA = `
     mc.id AS id, mc.tipo AS tipo, mc.monto AS monto, mc.concepto AS concepto,
     mc.metodo_pago AS metodo_pago, mc.venta_id AS venta_id,
     mc.saldo_resultante AS saldo_resultante, mc.fecha_hora AS fecha_hora, mc.clase AS clase, mc.compra_id AS compra_id,
+    usr.nombre AS usuario_nombre,
+    uan.nombre AS usuario_anulacion_nombre,
+    COALESCE(v.fecha_anulacion, co.fecha_anulacion, pa.fecha_anulacion) AS fecha_anulacion,
     COALESCE((
       SELECT SUM(pd.monto)
       FROM pago_deuda pd
@@ -40,10 +44,19 @@ const SELECT_CON_REFERENCIA = `
   LEFT JOIN cliente cli_d ON cli_d.id = mc.cliente_id
   LEFT JOIN compra co ON co.id = mc.compra_id
   LEFT JOIN proveedor prov ON prov.id = co.proveedor_id
+  LEFT JOIN usuario usr ON usr.id = mc.usuario_id
+  LEFT JOIN (
+    SELECT abono_id, MAX(anulado_por) AS anulado_por, MAX(fecha_anulacion) AS fecha_anulacion
+    FROM pago_deuda WHERE anulado = 1 AND abono_id IS NOT NULL GROUP BY abono_id
+  ) pa ON pa.abono_id = mc.abono_id
+  LEFT JOIN usuario uan ON uan.id = COALESCE(v.anulada_por, co.anulada_por, pa.anulado_por)
 `;
 
 export class CajaRepositorioSqlite implements CajaRepositorio {
-  constructor(private readonly bd: BaseDatosLocal) {}
+  constructor(
+    private readonly bd: BaseDatosLocal,
+    private readonly actividad?: RegistroActividad,
+  ) {}
 
   obtenerSaldoActual(): number {
     const fila = this.bd.consultar<{ saldo_resultante: number }>(
@@ -61,8 +74,8 @@ export class CajaRepositorioSqlite implements CajaRepositorio {
     const saldoNuevo = calcularSaldoCaja(this.obtenerSaldoActual(), monto, 0);
     this.bd.ejecutar(
       `INSERT INTO movimiento_caja
-         (tipo, monto, concepto, metodo_pago, venta_id, compra_id, cliente_id, saldo_resultante, fecha_hora, clase, abono_id)
-       VALUES ('ingreso', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (tipo, monto, concepto, metodo_pago, venta_id, compra_id, cliente_id, saldo_resultante, fecha_hora, clase, abono_id, usuario_id)
+       VALUES ('ingreso', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         monto,
         concepto,
@@ -74,8 +87,13 @@ export class CajaRepositorioSqlite implements CajaRepositorio {
         ahoraLocalSql(),
         referencia?.clase ?? 'normal',
         referencia?.abonoId ?? null,
+        this.actividad?.usuarioActualId() ?? null,
       ],
     );
+    // Un movimiento sin referencia es manual (desde Caja): queda en la actividad de usuarios.
+    if (!referencia) {
+      this.actividad?.registrar({ accion: 'caja_ingreso', entidad: 'caja', detalle: `${concepto} (${monto.toFixed(2)})`, permiso: 'movimiento_caja' });
+    }
   }
 
   registrarEgreso(
@@ -87,8 +105,8 @@ export class CajaRepositorioSqlite implements CajaRepositorio {
     const saldoNuevo = calcularSaldoCaja(this.obtenerSaldoActual(), 0, monto);
     this.bd.ejecutar(
       `INSERT INTO movimiento_caja
-         (tipo, monto, concepto, metodo_pago, venta_id, compra_id, cliente_id, saldo_resultante, fecha_hora, clase, abono_id)
-       VALUES ('egreso', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         (tipo, monto, concepto, metodo_pago, venta_id, compra_id, cliente_id, saldo_resultante, fecha_hora, clase, abono_id, usuario_id)
+       VALUES ('egreso', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         monto,
         concepto,
@@ -100,8 +118,12 @@ export class CajaRepositorioSqlite implements CajaRepositorio {
         ahoraLocalSql(),
         referencia?.clase ?? 'normal',
         referencia?.abonoId ?? null,
+        this.actividad?.usuarioActualId() ?? null,
       ],
     );
+    if (!referencia) {
+      this.actividad?.registrar({ accion: 'caja_egreso', entidad: 'caja', detalle: `${concepto} (${monto.toFixed(2)})`, permiso: 'movimiento_caja' });
+    }
   }
 
   listarMovimientosDeHoy(): MovimientoCaja[] {

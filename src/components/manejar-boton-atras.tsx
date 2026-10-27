@@ -10,13 +10,14 @@ import { App } from '@capacitor/app';
  * NO da la pantalla "padre" correcta, porque esa ruta intermedia no
  * existe como pantalla propia, o porque la pantalla se abre desde
  * Más aunque su carpeta esté en la raíz:
- *  - Ventas: no hay ningún `/ventas` a secas, solo `/ventas/nueva` —
+ *  - Ventas: no hay ningún `/ventas` a secas, solo `/ventas/nueva` y `/ventas/voz` —
  *    su padre lógico es Inicio, no "/ventas".
  *  - Caja y Compras viven en `/caja` y `/compras`, pero solo se entra
  *    a ellas desde Más; el botón atrás debe volver a Más, no saltar a Inicio.
  */
 const PADRES_ESPECIALES: Record<string, string> = {
   '/ventas/nueva': '/',
+  '/ventas/voz': '/',
   '/caja': '/mas',
   '/compras': '/mas',
 };

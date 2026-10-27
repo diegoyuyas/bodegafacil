@@ -1,3 +1,4 @@
+import type { RegistroActividad } from '@/core/actividad';
 import type { ClienteRepositorio, ConfiguracionRepositorio, DatosActualizarCliente } from '@/core/repositorios';
 import { ErrorDeNegocio, validarDocumentoIdentidad } from '@/core/reglas-negocio';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
@@ -9,6 +10,7 @@ export class ClienteRepositorioSqlite implements ClienteRepositorio {
   constructor(
     private readonly bd: BaseDatosLocal,
     private readonly configuracion: ConfiguracionRepositorio,
+    private readonly actividad?: RegistroActividad,
   ) {}
 
   listarActivos(): Cliente[] {
@@ -91,6 +93,7 @@ export class ClienteRepositorioSqlite implements ClienteRepositorio {
       'UPDATE cliente SET nombre = ?, documento = ?, telefono = ?, activo = ? WHERE id = ?',
       [datos.nombre.trim(), documento, datos.telefono?.trim() || null, datos.activo ? 1 : 0, id],
     );
+    this.actividad?.registrar({ accion: 'cliente_modificado', entidad: 'cliente', entidadId: id, detalle: datos.nombre.trim(), permiso: 'modificar_cliente' });
     return this.obtenerPorId(id);
   }
 }

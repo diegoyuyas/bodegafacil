@@ -26,6 +26,7 @@ import type { FilaVentaDetallada } from '@/core/exportacion';
 import { CLAVE_TIENDA_VENDEDOR, CLAVE_TIENDA_VENDEDOR_DOCUMENTO } from '@/core/informacion-tienda';
 import { ahoraLocalSql, hoyLocalSql } from '@/core/tiempo';
 import type { BaseDatosLocal } from './base-datos';
+import type { RegistroActividad } from '@/core/actividad';
 import { mapearVenta, type FilaVenta } from './mapeadores';
 
 export class VentaRepositorioSqlite implements VentaRepositorio {
@@ -34,6 +35,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
     private readonly productos: ProductoRepositorio,
     private readonly caja: CajaRepositorio,
     private readonly configuracion: ConfiguracionRepositorio,
+    private readonly actividad?: RegistroActividad,
   ) {}
 
   /**
@@ -65,8 +67,8 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
       });
 
       this.bd.ejecutar(
-        `INSERT INTO venta (fecha_hora, cliente_id, metodo_pago, subtotal, total, ganancia_estimada, telefono_whatsapp, cliente_nombre_libre)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO venta (fecha_hora, cliente_id, metodo_pago, subtotal, total, ganancia_estimada, telefono_whatsapp, cliente_nombre_libre, usuario_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           ahoraLocalSql(),
           input.clienteId ?? null,
@@ -77,6 +79,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
           input.telefonoWhatsapp ?? null,
           // Nombre escrito a mano: solo si no hay cliente registrado (en mayúsculas, como todos los nombres).
           input.clienteId ? null : aMayusculas(input.clienteNombreLibre ?? '').slice(0, 60) || null,
+          this.actividad?.usuarioActualId() ?? null,
         ],
       );
       const ventaId = this.bd.ultimoIdInsertado();
@@ -151,11 +154,14 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         total: number;
         cliente: string | null;
         anulada: number;
+        usuario: string | null;
       }>(
         `SELECT v.id AS id, v.fecha_hora AS fecha_hora, v.metodo_pago AS metodo_pago,
-                v.total AS total, COALESCE(c.nombre, NULLIF(TRIM(v.cliente_nombre_libre), '')) AS cliente, v.anulada AS anulada
+                v.total AS total, COALESCE(c.nombre, NULLIF(TRIM(v.cliente_nombre_libre), '')) AS cliente, v.anulada AS anulada,
+                us.nombre AS usuario
          FROM venta v
          LEFT JOIN cliente c ON c.id = v.cliente_id
+         LEFT JOIN usuario us ON us.id = v.usuario_id
          WHERE substr(v.fecha_hora, 1, 10) = ?
          ORDER BY v.id DESC`,
         [hoyLocalSql()],
@@ -167,6 +173,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         total: fila.total,
         clienteNombre: fila.cliente,
         anulada: fila.anulada === 1,
+        usuarioNombre: fila.usuario,
       }));
   }
 
@@ -179,11 +186,14 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         total: number;
         cliente: string | null;
         anulada: number;
+        usuario: string | null;
       }>(
         `SELECT v.id AS id, v.fecha_hora AS fecha_hora, v.metodo_pago AS metodo_pago,
-                v.total AS total, COALESCE(c.nombre, NULLIF(TRIM(v.cliente_nombre_libre), '')) AS cliente, v.anulada AS anulada
+                v.total AS total, COALESCE(c.nombre, NULLIF(TRIM(v.cliente_nombre_libre), '')) AS cliente, v.anulada AS anulada,
+                us.nombre AS usuario
          FROM venta v
          LEFT JOIN cliente c ON c.id = v.cliente_id
+         LEFT JOIN usuario us ON us.id = v.usuario_id
          WHERE substr(v.fecha_hora, 1, 10) >= ? AND substr(v.fecha_hora, 1, 10) <= ?
          ORDER BY v.id DESC`,
         [desde, hasta],
@@ -195,6 +205,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         total: fila.total,
         clienteNombre: fila.cliente,
         anulada: fila.anulada === 1,
+        usuarioNombre: fila.usuario,
       }));
   }
 
@@ -386,10 +397,13 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         this.caja.registrarEgreso(venta.total, `Anulación de V-${id}`, venta.metodoPago, { ventaId: id, clase: 'anulacion' });
       }
 
-      this.bd.ejecutar('UPDATE venta SET anulada = 1, motivo_anulacion = ? WHERE id = ?', [
+      this.bd.ejecutar('UPDATE venta SET anulada = 1, motivo_anulacion = ?, anulada_por = ?, fecha_anulacion = ? WHERE id = ?', [
         (motivo ?? 'Anulada desde Inicio') + notaCobrado,
+        this.actividad?.usuarioActualId() ?? null,
+        ahoraLocalSql(),
         id,
       ]);
+      this.actividad?.registrar({ accion: 'venta_anulada', entidad: 'venta', entidadId: id, detalle: `V-${id}`, permiso: 'anular_venta' });
     });
   }
 
@@ -482,6 +496,15 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
   }
 
   listarDetalleParaExportar(desde?: string, hasta?: string): FilaVentaDetallada[] {
+    return this.detalleParaExportar(false, desde, hasta);
+  }
+
+  /** Las ventas ANULADAS del periodo, con quién y cuándo las anuló (hoja «Ventas anuladas» de los Excel). */
+  listarAnuladasParaExportar(desde?: string, hasta?: string): FilaVentaDetallada[] {
+    return this.detalleParaExportar(true, desde, hasta);
+  }
+
+  private detalleParaExportar(anuladas: boolean, desde?: string, hasta?: string): FilaVentaDetallada[] {
     const condicionesFecha: string[] = [];
     const parametros: string[] = [];
     if (desde) {
@@ -506,6 +529,9 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         metodo_pago: string;
         cliente: string | null;
         comprobante_pago_ruta: string | null;
+        usuario_creacion: string | null;
+        usuario_anulacion: string | null;
+        fecha_anulacion: string | null;
       }>(
         `SELECT
            v.id AS id,
@@ -517,12 +543,17 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
            dv.descripcion AS descripcion,
            v.metodo_pago AS metodo_pago,
            COALESCE(c.nombre, NULLIF(TRIM(v.cliente_nombre_libre), '')) AS cliente,
-           v.comprobante_pago_ruta AS comprobante_pago_ruta
+           v.comprobante_pago_ruta AS comprobante_pago_ruta,
+           ucr.nombre AS usuario_creacion,
+           uan.nombre AS usuario_anulacion,
+           v.fecha_anulacion AS fecha_anulacion
          FROM detalle_venta dv
          JOIN venta v ON v.id = dv.venta_id
          JOIN producto p ON p.id = dv.producto_id
          LEFT JOIN cliente c ON c.id = v.cliente_id
-         WHERE v.anulada = 0${clausulaFecha}
+         LEFT JOIN usuario ucr ON ucr.id = v.usuario_id
+         LEFT JOIN usuario uan ON uan.id = v.anulada_por
+         WHERE v.anulada = ${anuladas ? 1 : 0}${clausulaFecha}
          ORDER BY v.fecha_hora DESC`,
         parametros,
       )
@@ -542,6 +573,14 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         metodoPago: fila.metodo_pago,
         cliente: fila.cliente ?? 'Cliente Eventual',
         comprobanteRuta: fila.comprobante_pago_ruta,
+        auditoria: {
+          usuarioCreacion: fila.usuario_creacion,
+          usuarioAnulacion: fila.usuario_anulacion,
+          usuarioModificacion: null, // las ventas no se modifican: solo se anulan
+          fechaCreacion: fila.fecha_hora,
+          fechaAnulacion: fila.fecha_anulacion,
+          fechaModificacion: null,
+        },
       }));
   }
 

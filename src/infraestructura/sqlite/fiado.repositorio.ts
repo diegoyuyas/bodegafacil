@@ -1,3 +1,4 @@
+import type { RegistroActividad } from '@/core/actividad';
 import type { CajaRepositorio, FiadoRepositorio } from '@/core/repositorios';
 import { ErrorDeNegocio, calcularDeudaNueva, redondear } from '@/core/reglas-negocio';
 import type {
@@ -56,6 +57,7 @@ export class FiadoRepositorioSqlite implements FiadoRepositorio {
   constructor(
     private readonly bd: BaseDatosLocal,
     private readonly caja: CajaRepositorio,
+    private readonly actividad?: RegistroActividad,
   ) {}
 
   listarClientesConDeuda(desde?: string, hasta?: string): Cliente[] {
@@ -199,9 +201,9 @@ export class FiadoRepositorioSqlite implements FiadoRepositorio {
         const saldoDeuda = redondear(deuda.saldo_pendiente - aplicado);
 
         this.bd.ejecutar(
-          `INSERT INTO pago_deuda (cliente_id, deuda_id, monto, metodo_pago, foto_ruta, fecha, abono_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [clienteId, deuda.id, aplicado, metodoPago, fotoRuta || null, ahora, abonoId],
+          `INSERT INTO pago_deuda (cliente_id, deuda_id, monto, metodo_pago, foto_ruta, fecha, abono_id, usuario_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [clienteId, deuda.id, aplicado, metodoPago, fotoRuta || null, ahora, abonoId, this.actividad?.usuarioActualId() ?? null],
         );
         this.bd.ejecutar(`UPDATE deuda_cliente SET saldo_pendiente = ?, estado = ? WHERE id = ?`, [
           saldoDeuda,
@@ -217,9 +219,9 @@ export class FiadoRepositorioSqlite implements FiadoRepositorio {
       // deuda asociada) para no perder nunca el registro del dinero cobrado.
       if (restante > 0) {
         this.bd.ejecutar(
-          `INSERT INTO pago_deuda (cliente_id, deuda_id, monto, metodo_pago, foto_ruta, fecha, abono_id)
-           VALUES (?, NULL, ?, ?, ?, ?, ?)`,
-          [clienteId, restante, metodoPago, fotoRuta || null, ahora, abonoId],
+          `INSERT INTO pago_deuda (cliente_id, deuda_id, monto, metodo_pago, foto_ruta, fecha, abono_id, usuario_id)
+           VALUES (?, NULL, ?, ?, ?, ?, ?, ?)`,
+          [clienteId, restante, metodoPago, fotoRuta || null, ahora, abonoId, this.actividad?.usuarioActualId() ?? null],
         );
       }
 
@@ -440,8 +442,8 @@ export class FiadoRepositorioSqlite implements FiadoRepositorio {
       // El pago no se borra: se marca como anulado (conserva incluso la foto).
       for (const f of filas) {
         this.bd.ejecutar(
-          'UPDATE pago_deuda SET anulado = 1, motivo_anulacion = ?, fecha_anulacion = ? WHERE id = ?',
-          [motivoLimpio, ahora, f.id],
+          'UPDATE pago_deuda SET anulado = 1, motivo_anulacion = ?, fecha_anulacion = ?, anulado_por = ? WHERE id = ?',
+          [motivoLimpio, ahora, this.actividad?.usuarioActualId() ?? null, f.id],
         );
       }
 
@@ -484,6 +486,13 @@ export class FiadoRepositorioSqlite implements FiadoRepositorio {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [clienteId, cliente.nombre, total, metodo, fechaPago, motivoLimpio, detalle.join('; '), ahora],
       );
+      this.actividad?.registrar({
+        accion: 'pago_fiado_anulado',
+        entidad: 'cliente',
+        entidadId: clienteId,
+        detalle: cliente.nombre,
+        permiso: 'anular_pago_fiado',
+      });
     });
   }
 

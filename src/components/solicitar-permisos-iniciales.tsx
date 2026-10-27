@@ -11,6 +11,7 @@ const CLAVE_YA_PEDIDOS = 'vf_permisos_iniciales_pedidos';
 const PERMISOS = [
   { icono: '📷', texto: 'Cámara y galería — para la foto del comprobante de pago (Yape/Plin)' },
   { icono: '🔔', texto: 'Notificaciones — para avisos de stock bajo y de Backup Automático' },
+  { icono: '🎤', texto: 'Micrófono — para registrar ventas hablando (Venta por Voz, Premium)' },
 ] as const;
 
 /**
@@ -20,6 +21,9 @@ const PERMISOS = [
  * sin stock, etc.) — solo aparece la primera vez que se abre la app en
  * un celular (`contenedor.esInstalacionNueva`), y solo dentro del APK
  * (Capacitor.isNativePlatform()); en navegador/PWA no aparece.
+ *
+ * El micrófono (venta por voz, Premium) se pide junto con los demás: si se
+ * niega, la pantalla de Venta por Voz vuelve a explicar cómo habilitarlo.
  *
  * El permiso de Bluetooth (para impresión térmica, Premium) queda
  * fuera a propósito: se pide recién cuando el bodeguero activa
@@ -71,6 +75,13 @@ export function SolicitarPermisosIniciales() {
       await solicitarPermisoNotificaciones();
     } catch {
       // Mismo caso: sin notificaciones, la app sigue funcionando igual.
+    }
+    try {
+      // Micrófono para la venta por voz (Premium). El plugin pide el permiso de grabar audio de Android.
+      const { SpeechRecognition } = await import('@capacitor-community/speech-recognition');
+      await SpeechRecognition.requestPermissions();
+    } catch {
+      // Mismo caso: sin micrófono, la venta por voz avisa cómo habilitarlo y se puede seguir vendiendo tocando.
     }
     marcarComoPedidos();
   }

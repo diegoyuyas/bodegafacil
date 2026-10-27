@@ -1,3 +1,4 @@
+import type { RegistroActividad } from '@/core/actividad';
 import { normalizarDescripcionLinea } from '@/core/texto';
 import type {
   CajaRepositorio,
@@ -18,6 +19,7 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
     private readonly bd: BaseDatosLocal,
     private readonly productos: ProductoRepositorio,
     private readonly caja: CajaRepositorio,
+    private readonly actividad?: RegistroActividad,
   ) {}
 
   /**
@@ -46,8 +48,8 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
       );
 
       this.bd.ejecutar(
-        `INSERT INTO compra (fecha, proveedor_id, proveedor_nombre_libre, comprobante, total, estado, metodo_pago)
-         VALUES (?, ?, ?, ?, ?, 'recibida', ?)`,
+        `INSERT INTO compra (fecha, proveedor_id, proveedor_nombre_libre, comprobante, total, estado, metodo_pago, usuario_id)
+         VALUES (?, ?, ?, ?, ?, 'recibida', ?, ?)`,
         [
           ahoraLocalSql(),
           input.proveedorId ?? null,
@@ -55,9 +57,11 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
           input.comprobante || null,
           total,
           input.metodoPago,
+          this.actividad?.usuarioActualId() ?? null,
         ],
       );
       const compraId = this.bd.ultimoIdInsertado();
+      this.actividad?.registrar({ accion: 'compra_registrada', entidad: 'compra', entidadId: compraId, detalle: `C-${compraId}`, permiso: 'registrar_compra' });
 
       for (const linea of input.lineas) {
         this.aplicarLineaDeCompra(compraId, linea, 'compra');
@@ -106,6 +110,11 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
         estado: Compra['estado'];
         metodo_pago: MetodoPagoSinFiado | null;
         productos: string | null;
+        usuario_creacion: string | null;
+        usuario_anulacion: string | null;
+        usuario_modificacion: string | null;
+        fecha_anulacion: string | null;
+        fecha_modificacion: string | null;
       }>(
         `SELECT c.id AS id, c.fecha AS fecha,
                 c.proveedor_nombre_libre AS proveedor_nombre_libre,
@@ -114,9 +123,14 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
                 c.metodo_pago AS metodo_pago,
                 (SELECT GROUP_CONCAT(p.nombre, ', ') FROM detalle_compra dc
                    JOIN producto p ON p.id = dc.producto_id
-                  WHERE dc.compra_id = c.id) AS productos
+                  WHERE dc.compra_id = c.id) AS productos,
+                ucr.nombre AS usuario_creacion, uan.nombre AS usuario_anulacion, umo.nombre AS usuario_modificacion,
+                c.fecha_anulacion AS fecha_anulacion, c.fecha_modificacion AS fecha_modificacion
          FROM compra c
          LEFT JOIN proveedor pv ON pv.id = c.proveedor_id
+         LEFT JOIN usuario ucr ON ucr.id = c.usuario_id
+         LEFT JOIN usuario uan ON uan.id = c.anulada_por
+         LEFT JOIN usuario umo ON umo.id = c.modificada_por
          ${clausulaFecha}
          ORDER BY c.id DESC`,
         parametros,
@@ -130,6 +144,14 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
         estado: fila.estado,
         metodoPago: fila.metodo_pago,
         productos: fila.productos ?? '',
+        auditoria: {
+          usuarioCreacion: fila.usuario_creacion,
+          usuarioAnulacion: fila.usuario_anulacion,
+          usuarioModificacion: fila.usuario_modificacion,
+          fechaCreacion: fila.fecha,
+          fechaAnulacion: fila.fecha_anulacion,
+          fechaModificacion: fila.fecha_modificacion,
+        },
       }));
   }
 
@@ -160,6 +182,11 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
         total_compra: number;
         comprobante: string | null;
         estado: Compra['estado'];
+        usuario_creacion: string | null;
+        usuario_anulacion: string | null;
+        usuario_modificacion: string | null;
+        fecha_anulacion: string | null;
+        fecha_modificacion: string | null;
       }>(
         `SELECT
            c.id AS id,
@@ -173,11 +200,19 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
            dc.descripcion AS descripcion,
            c.total AS total_compra,
            c.comprobante AS comprobante,
-           c.estado AS estado
+           c.estado AS estado,
+           ucr.nombre AS usuario_creacion,
+           uan.nombre AS usuario_anulacion,
+           umo.nombre AS usuario_modificacion,
+           c.fecha_anulacion AS fecha_anulacion,
+           c.fecha_modificacion AS fecha_modificacion
          FROM detalle_compra dc
          JOIN compra c ON c.id = dc.compra_id
          JOIN producto p ON p.id = dc.producto_id
          LEFT JOIN proveedor pv ON pv.id = c.proveedor_id
+         LEFT JOIN usuario ucr ON ucr.id = c.usuario_id
+         LEFT JOIN usuario uan ON uan.id = c.anulada_por
+         LEFT JOIN usuario umo ON umo.id = c.modificada_por
          WHERE 1 = 1${clausulaFecha}
          ORDER BY c.fecha DESC`,
         parametros,
@@ -194,6 +229,14 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
         totalCompra: fila.total_compra,
         comprobante: fila.comprobante,
         estado: fila.estado,
+        auditoria: {
+          usuarioCreacion: fila.usuario_creacion,
+          usuarioAnulacion: fila.usuario_anulacion,
+          usuarioModificacion: fila.usuario_modificacion,
+          fechaCreacion: fila.fecha,
+          fechaAnulacion: fila.fecha_anulacion,
+          fechaModificacion: fila.fecha_modificacion,
+        },
       }));
   }
 
@@ -326,14 +369,17 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
           ]);
         });
         this.bd.ejecutar(
-          'UPDATE compra SET proveedor_id = ?, proveedor_nombre_libre = ?, comprobante = ? WHERE id = ?',
+          'UPDATE compra SET proveedor_id = ?, proveedor_nombre_libre = ?, comprobante = ?, modificada_por = ?, fecha_modificacion = ? WHERE id = ?',
           [
             input.proveedorId ?? null,
             input.proveedorId ? null : input.proveedorNombreLibre || null,
             input.comprobante || null,
+            this.actividad?.usuarioActualId() ?? null,
+            ahoraLocalSql(),
             id,
           ],
         );
+        this.actividad?.registrar({ accion: 'compra_modificada', entidad: 'compra', entidadId: id, detalle: `C-${id}`, permiso: 'modificar_compra' });
         return this.obtenerPorId(id);
       }
 
@@ -410,7 +456,8 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
 
       this.bd.ejecutar(
         `UPDATE compra
-            SET proveedor_id = ?, proveedor_nombre_libre = ?, comprobante = ?, total = ?, metodo_pago = ?
+            SET proveedor_id = ?, proveedor_nombre_libre = ?, comprobante = ?, total = ?, metodo_pago = ?,
+                modificada_por = ?, fecha_modificacion = ?
           WHERE id = ?`,
         [
           input.proveedorId ?? null,
@@ -418,9 +465,12 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
           input.comprobante || null,
           total,
           input.metodoPago,
+          this.actividad?.usuarioActualId() ?? null,
+          ahoraLocalSql(),
           id,
         ],
       );
+      this.actividad?.registrar({ accion: 'compra_modificada', entidad: 'compra', entidadId: id, detalle: `C-${id}`, permiso: 'modificar_compra' });
 
       return this.obtenerPorId(id);
     });
@@ -454,11 +504,14 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
       { compraId: id, clase: 'anulacion' },
     );
 
-      this.bd.ejecutar('UPDATE compra SET estado = ?, motivo_anulacion = ? WHERE id = ?', [
+      this.bd.ejecutar('UPDATE compra SET estado = ?, motivo_anulacion = ?, anulada_por = ?, fecha_anulacion = ? WHERE id = ?', [
         'anulada',
         motivo ?? 'Anulada desde Más > Compras',
+        this.actividad?.usuarioActualId() ?? null,
+        ahoraLocalSql(),
         id,
       ]);
+      this.actividad?.registrar({ accion: 'compra_anulada', entidad: 'compra', entidadId: id, detalle: `C-${id}`, permiso: 'anular_compra' });
     });
   }
 

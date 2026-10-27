@@ -230,12 +230,16 @@ async function main() {
     csvProductos.startsWith('Nombre,Precio de venta,Costo,Stock actual,Stock mínimo,Unidad'),
     'El CSV de productos tiene el encabezado correcto',
   );
-  afirmar(csvProductos.includes('Inca Kola 500 ml'), 'El CSV de productos incluye el producto de prueba');
+  // Los nombres se guardan en MAYÚSCULAS, así que se compara sin distinguir mayúsculas.
+  afirmar(csvProductos.toUpperCase().includes('INCA KOLA 500 ML'), 'El CSV de productos incluye el producto de prueba');
 
   const csvVentas = exportarVentasACsv(ventas.listarDetalleParaExportar());
+  // La cabecera ahora empieza con los datos del vendedor y sigue con el pedido (correlativo V-N).
   afirmar(
-    csvVentas.startsWith('Pedido,Fecha,Producto,Cantidad,Precio unitario,Subtotal,Método de pago,Cliente'),
-    'El CSV de ventas tiene la cabecera "Pedido" (correlativo V-N)',
+    csvVentas.startsWith(
+      'Nombre vendedor,Nro. Documento vendedor,Pedido,Fecha,Producto,Cantidad,Precio unitario,Subtotal,Método de pago,Cliente',
+    ),
+    'El CSV de ventas tiene la cabecera "Pedido" (correlativo V-N) precedida por los datos del vendedor',
   );
   afirmar(csvVentas.includes(`V-${venta1.id}`), `El CSV incluye el correlativo V-${venta1.id}`);
   afirmar(

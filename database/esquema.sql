@@ -33,6 +33,7 @@ CREATE TABLE producto (
     tipo            TEXT NOT NULL DEFAULT 'venta_compra'
                         CHECK (tipo IN ('venta_compra','insumo')),  -- 'insumo' = solo sirve para Compras: sin stock, sin precio de venta, no sale a vender
     unidad_medida   TEXT NOT NULL DEFAULT 'unidad',   -- unidad, kg, litro, paquete, etc.
+    alias           TEXT,                             -- otros nombres del producto para la venta por voz, separados por coma (opcional)
     activo          INTEGER NOT NULL DEFAULT 1,       -- eliminación lógica
     creado_en       TEXT NOT NULL DEFAULT (datetime('now')),
     actualizado_en  TEXT NOT NULL DEFAULT (datetime('now'))
@@ -100,6 +101,9 @@ CREATE TABLE venta (
     telefono_whatsapp   TEXT,   -- número usado para WhatsApp en esta venta (clave para reenviar a clientes eventuales, que no tienen registro propio)
     comprobante_pago_ruta TEXT, -- foto del pago (Yape/Plin, Premium, opcional) — solo la ruta del archivo, la foto en sí nunca vive en esta base
     cliente_nombre_libre TEXT,  -- nombre escrito a mano en la venta (cliente sin registrar); solo aplica si cliente_id es NULL
+    usuario_id          INTEGER,                      -- quién la registró (control de usuarios); NULL = hecha sin control de usuarios
+    anulada_por         INTEGER,                      -- quién la anuló (control de usuarios)
+    fecha_anulacion     TEXT,                         -- cuándo se anuló
     creado_en           TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -156,6 +160,8 @@ CREATE TABLE pago_deuda (
     anulado             INTEGER NOT NULL DEFAULT 0,
     motivo_anulacion    TEXT,
     fecha_anulacion     TEXT,
+    usuario_id          INTEGER,                      -- quién registró el cobro (control de usuarios)
+    anulado_por         INTEGER,                      -- quién anuló el cobro (control de usuarios)
     fecha               TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -193,6 +199,7 @@ CREATE TABLE movimiento_caja (
     clase               TEXT NOT NULL DEFAULT 'normal', -- 'normal' | 'anulacion' | 'ajuste' (reversas: no cuentan como ingreso/egreso real en los totales)
     compra_id           INTEGER,                       -- a qué compra corresponde (si aplica)
     cliente_id          INTEGER,                       -- a qué cliente corresponde (cobro de fiado)
+    usuario_id          INTEGER,                       -- quién lo registró (control de usuarios)
     saldo_resultante    REAL NOT NULL,                 -- saldo de caja después de este movimiento
     fecha_hora          TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -225,7 +232,12 @@ CREATE TABLE compra (
                                     CHECK (estado IN ('pendiente','recibida','anulada')),
     nota                        TEXT,
     metodo_pago                 TEXT CHECK (metodo_pago IN ('efectivo','yape','plin','tarjeta')),
-    motivo_anulacion            TEXT
+    motivo_anulacion            TEXT,
+    usuario_id                  INTEGER,   -- quién la registró (control de usuarios); NULL = hecha sin control de usuarios
+    anulada_por                 INTEGER,   -- quién la anuló
+    fecha_anulacion             TEXT,      -- cuándo se anuló
+    modificada_por              INTEGER,   -- quién la modificó por última vez
+    fecha_modificacion          TEXT       -- cuándo se modificó por última vez
 );
 
 CREATE INDEX idx_compra_proveedor ON compra(proveedor_id);
@@ -278,3 +290,44 @@ CREATE TABLE metadato_respaldo (
     estado          TEXT NOT NULL DEFAULT 'completado'
                         CHECK (estado IN ('completado','fallido'))
 );
+
+-- ------------------------------------------------------------
+-- 8. Usuarios (control de usuarios, solo Premium)
+-- ------------------------------------------------------------
+-- La contraseña NUNCA se guarda: solo su huella PBKDF2-SHA256 con sal propia.
+
+CREATE TABLE usuario (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    nombre              TEXT NOT NULL,                  -- como se ve en el recuadro de acceso (ej. "Diego")
+    nombre_clave        TEXT NOT NULL UNIQUE,           -- sin tildes ni mayúsculas: no puede haber dos iguales
+    rol                 TEXT NOT NULL DEFAULT 'estandar'
+                            CHECK (rol IN ('administrador','estandar')),
+    clave_hash          TEXT NOT NULL,
+    clave_sal           TEXT NOT NULL,
+    clave_iteraciones   INTEGER NOT NULL,
+    activo              INTEGER NOT NULL DEFAULT 1,     -- 0 = desactivado (conserva su historial)
+    intentos_fallidos   INTEGER NOT NULL DEFAULT 0,
+    bloqueado_hasta     INTEGER,                        -- milisegundos desde 1970; NULL = sin bloqueo
+    ultimo_acceso       TEXT,
+    creado_en           TEXT NOT NULL DEFAULT (datetime('now')),
+    actualizado_en      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- ------------------------------------------------------------
+-- 9. Actividad de usuarios (trazabilidad, solo con control de usuarios)
+-- ------------------------------------------------------------
+-- Quién hizo cada acción delicada (anular, modificar, caja...), cuándo, y si la autorizó
+-- un administrador, quién fue. Nunca guarda contraseñas.
+
+CREATE TABLE actividad_usuario (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha_hora      TEXT NOT NULL,
+    usuario_id      INTEGER NOT NULL REFERENCES usuario(id),
+    accion          TEXT NOT NULL,
+    entidad         TEXT NOT NULL,
+    entidad_id      INTEGER,
+    detalle         TEXT,
+    autorizado_por  INTEGER REFERENCES usuario(id)
+);
+
+CREATE INDEX idx_actividad_usuario_fecha ON actividad_usuario(fecha_hora);

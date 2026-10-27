@@ -12,6 +12,8 @@
 
 import type { HojaExcel } from './exportacion';
 import type { DatosNuevoProducto } from './repositorios';
+import { ErrorDeNegocio, validarAlias } from './reglas-negocio';
+import { partirAlias, unirAlias } from './texto';
 
 export const ENCABEZADOS_IMPORTAR_PRODUCTOS = [
   'nombre_producto',
@@ -20,6 +22,8 @@ export const ENCABEZADOS_IMPORTAR_PRODUCTOS = [
   'stock_inicial',
   'stock_minimo',
   'control_stock',
+  // Opcional: otros nombres del producto separados por coma (para la venta por voz).
+  'alias',
 ];
 
 /** Plantilla descargable: encabezados + una fila de ejemplo de cada caso (con y sin control de stock). */
@@ -28,8 +32,8 @@ export function construirPlantillaImportarProductos(): HojaExcel {
     nombre: 'Productos',
     encabezados: ENCABEZADOS_IMPORTAR_PRODUCTOS,
     filas: [
-      ['Inca Kola 500 ml', 4.0, 2.8, 24, 6, 'SI'],
-      ['Recarga Claro S/5', 5, 4.5, '', '', 'NO'],
+      ['Inca Kola 500 ml', 4.0, 2.8, 24, 6, 'SI', 'inca, gaseosa amarilla'],
+      ['Recarga Claro S/5', 5, 4.5, '', '', 'NO', ''],
     ],
   };
 }
@@ -68,9 +72,11 @@ export function filaEstaVacia(valores: unknown[]): boolean {
  * - control_stock: "SI"/"NO" (sin distinguir mayúsculas); vacío → "SI".
  * - Si control_stock es "NO", stock_inicial y stock_minimo quedan en 0
  *   SIEMPRE, aunque el usuario haya escrito números.
+ * - alias (opcional, 7.ª columna): separados por coma; vacío o ausente no es error.
+ *   Pasan por las mismas reglas que el campo Alias de la pantalla.
  */
 export function parsearFilaImportacion(valores: unknown[], numeroFila: number): FilaImportadaProducto {
-  const [nombreCrudo, precioCrudo, costoCrudo, stockInicialCrudo, stockMinimoCrudo, controlCrudo] = valores;
+  const [nombreCrudo, precioCrudo, costoCrudo, stockInicialCrudo, stockMinimoCrudo, controlCrudo, aliasCrudo] = valores;
   const errores: string[] = [];
 
   const nombre = celdaVacia(nombreCrudo) ? '' : String(nombreCrudo).trim();
@@ -109,6 +115,13 @@ export function parsearFilaImportacion(valores: unknown[], numeroFila: number): 
     stockMinimo = 0;
   }
 
+  const listaAlias = celdaVacia(aliasCrudo) ? [] : partirAlias(String(aliasCrudo));
+  try {
+    validarAlias(listaAlias);
+  } catch (e) {
+    errores.push(e instanceof ErrorDeNegocio ? e.message : 'El alias no es válido.');
+  }
+
   if (errores.length > 0) {
     return { numeroFila, datos: null, errores };
   }
@@ -124,6 +137,7 @@ export function parsearFilaImportacion(valores: unknown[], numeroFila: number): 
       stockMinimo,
       controlaStock,
       unidadMedida: 'unidad',
+      alias: unirAlias(listaAlias),
     },
   };
 }

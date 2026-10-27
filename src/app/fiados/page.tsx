@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
-import { usarSolicitudPin } from '@/hooks/usar-solicitud-pin';
+import { usarPermisos } from '@/hooks/usar-permisos';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
 import type { Cliente, DeudaPendienteDetalle, MetodoPagoSinFiado, PagoFiado } from '@/core/tipos';
 import type { EstadoPlan } from '@/core/plan';
@@ -24,7 +24,7 @@ const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
 
 export default function PaginaFiados() {
   const { contenedor, cargando, error } = usarContenedor();
-  const { pedirPin, modalPin } = usarSolicitudPin(contenedor);
+  const { pedirPermiso, modalPermiso } = usarPermisos(contenedor);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [estadoPlan, setEstadoPlan] = useState<EstadoPlan | null>(null);
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
@@ -119,7 +119,7 @@ const esPremium = estadoPlan?.tipo === 'premium';
       setErrorAnulacion('Escribe el motivo de la anulación.');
       return;
     }
-    if (!(await pedirPin('anular', 'anular este pago de fiado'))) return;
+    if (!(await pedirPermiso('anular_pago_fiado', 'anular este pago de fiado'))) return;
     try {
       contenedor.fiados.anularPago(cliente.id, pago.clave, motivoAnulacion);
       await contenedor.persistir();
@@ -153,7 +153,7 @@ const esPremium = estadoPlan?.tipo === 'premium';
   async function confirmarPago(clienteId: number) {
     if (!contenedor) return;
     setMensajeError(null);
-    if (!(await pedirPin('modificar', 'registrar el pago del fiado'))) return;
+    if (!(await pedirPermiso('registrar_pago_fiado', 'registrar el pago del fiado'))) return;
     try {
       contenedor.fiados.registrarPago(clienteId, Number(monto), metodo, fotoPago);
       await contenedor.persistir();
@@ -178,7 +178,7 @@ const esPremium = estadoPlan?.tipo === 'premium';
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
-      {modalPin}
+      {modalPermiso}
       <header className="flex items-center gap-3">
         <Link href="/" className="text-xl text-tinta/60" aria-label="Volver a inicio">
           ←

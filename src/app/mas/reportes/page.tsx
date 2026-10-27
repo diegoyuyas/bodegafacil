@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
+import { usarSesion } from '@/components/sesion-usuario';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import type { EstadoPlan } from '@/core/plan';
 import type { FotoPagoFiado, RegistroBitacoraAnulacionPago } from '@/core/tipos';
@@ -78,6 +79,8 @@ interface CompraAgrupada {
 
 export default function PaginaReportes() {
   const { contenedor, cargando, error } = usarContenedor();
+  // Ver los reportes lo puede hacer cualquiera; descargarlos en Excel, solo quien tiene permiso de exportar.
+  const puedeExportar = usarSesion().puede('exportar');
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
 
   useEffect(() => {
@@ -112,6 +115,8 @@ export default function PaginaReportes() {
   const rangoInvalido = Boolean(desde && hasta && desde > hasta);
 
   const [detalleVentas, setDetalleVentas] = useState<FilaVentaDetallada[]>([]);
+  // Solo para el Excel: las ventas anuladas del periodo (con quién y cuándo las anuló) van en su propia hoja.
+  const [detalleVentasAnuladas, setDetalleVentasAnuladas] = useState<FilaVentaDetallada[]>([]);
   const [movimientosCaja, setMovimientosCaja] = useState<MovimientoCaja[]>([]);
   const [detalleCompras, setDetalleCompras] = useState<FilaCompraDetallada[]>([]);
   const [masVendidos, setMasVendidos] = useState<ProductoMasVendidoItem[]>([]);
@@ -167,6 +172,7 @@ export default function PaginaReportes() {
   function consultar() {
     if (!contenedor || rangoInvalido || !desde || !hasta) return;
     setDetalleVentas(contenedor.ventas.listarDetalleParaExportar(desde, hasta));
+    setDetalleVentasAnuladas(contenedor.ventas.listarAnuladasParaExportar(desde, hasta));
     setMovimientosCaja(contenedor.caja.listarMovimientosPorRango(desde, hasta));
     setDetalleCompras(contenedor.compras.listarDetalleParaExportar(desde, hasta));
     setMasVendidos(contenedor.ventas.listarProductosMasVendidos(desde, hasta));
@@ -408,7 +414,18 @@ export default function PaginaReportes() {
       return;
     }
     if (pestana === 'ventas') {
-      const libro = generarLibroExcel([construirHojaVentas(ventasFiltradas.flatMap((v) => v.lineas))]);
+      const hojas = [construirHojaVentas(ventasFiltradas.flatMap((v) => v.lineas))];
+      // Las anuladas van aparte, con el mismo filtro de búsqueda, para ver quién las anuló y cuándo.
+      const texto = busquedaVentas.trim().toLowerCase();
+      const anuladas = detalleVentasAnuladas.filter(
+        (f) =>
+          !texto ||
+          f.cliente.toLowerCase().includes(texto) ||
+          (ETIQUETAS_METODO_PAGO_REPORTE[f.metodoPago] ?? f.metodoPago).toLowerCase().includes(texto) ||
+          f.producto.toLowerCase().includes(texto),
+      );
+      if (anuladas.length > 0) hojas.push(construirHojaVentas(anuladas, 'Ventas anuladas'));
+      const libro = generarLibroExcel(hojas);
       await descargarExcel(`reporte-ventas-${desde}-a-${hasta}.xlsx`, libro);
       return;
     }
@@ -517,7 +534,7 @@ export default function PaginaReportes() {
             </div>
           )}
 
-          {pestana !== 'costos' && (
+          {puedeExportar && pestana !== 'costos' && (
             <button
               onClick={descargarExcelDelReporte}
               disabled={botonExcelDeshabilitado}
@@ -1145,13 +1162,15 @@ export default function PaginaReportes() {
 
                   {productoElegido && (
                     <>
-                      <button
-                        onClick={descargarExcelDelReporte}
-                        disabled={botonExcelDeshabilitado}
-                        className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-bodega text-sm font-semibold text-white active:bg-bodega-oscuro disabled:opacity-40"
-                      >
-                        Descargar Excel ↓
-                      </button>
+                      {puedeExportar && (
+                        <button
+                          onClick={descargarExcelDelReporte}
+                          disabled={botonExcelDeshabilitado}
+                          className="mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-bodega text-sm font-semibold text-white active:bg-bodega-oscuro disabled:opacity-40"
+                        >
+                          Descargar Excel ↓
+                        </button>
+                      )}
 
                       {historialCostos.length === 0 ? (
                         <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">

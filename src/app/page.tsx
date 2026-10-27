@@ -3,13 +3,15 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { usarContenedor } from '@/hooks/usar-contenedor';
-import { usarSolicitudPin } from '@/hooks/usar-solicitud-pin';
+import { usarPermisos } from '@/hooks/usar-permisos';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import type { LineaVentaResumen, ResumenDia, VentaListaItem } from '@/core/tipos';
 import { LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
 import type { EstadoPlan } from '@/core/plan';
 import {
+  CLAVE_MODO_VENTA_VOZ,
   CLAVE_NOMBRE_TIENDA,
+  modoVentaVozDisponible,
   obtenerNombreTienda,
 } from '@/core/configuracion';
 import { CLAVE_PREFIJO_PAIS, obtenerPrefijoPais } from '@/core/paises';
@@ -39,13 +41,15 @@ const ETIQUETAS_METODO_PAGO: Record<string, string> = {
 export default function PaginaInicio() {
   const router = useRouter();
   const { contenedor, error, cargando } = usarContenedor();
-  const { pedirPin, modalPin } = usarSolicitudPin(contenedor);
+  const { pedirPermiso, modalPermiso } = usarPermisos(contenedor);
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
   const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
   const [imprimiendoVentaId, setImprimiendoVentaId] = useState<number | null>(null);
   const [mensajeImpresion, setMensajeImpresion] = useState<string | null>(null);
   const [ventaMenuTicket, setVentaMenuTicket] = useState<VentaListaItem | null>(null);
   const [impresoraActiva, setImpresoraActiva] = useState(false);
+  // El botón "Nueva Venta por Voz" solo aparece con el modo voz en ON y plan Premium.
+  const [modoVoz, setModoVoz] = useState(false);
 
   useEffect(() => {
     if (!contenedor) return;
@@ -90,7 +94,9 @@ export default function PaginaInicio() {
     setResumen(resumenDelDia);
     setPedidosDelRango(contenedor.ventas.listarPorRangoConDetalle(desdePedidos, hastaPedidos));
     setTotalHistorico(contenedor.ventas.contarTotalHistorico());
-    setEstadoPlan(contenedor.plan.obtenerEstado());
+    const estado = contenedor.plan.obtenerEstado();
+    setEstadoPlan(estado);
+    setModoVoz(modoVentaVozDisponible(contenedor.configuracion.obtenerValor(CLAVE_MODO_VENTA_VOZ), estado.tipo === 'premium'));
     setImpresoraActiva(contenedor.configuracion.obtenerValor(CLAVE_IMPRESORA_ACTIVA) === '1');
     setNombreTienda(obtenerNombreTienda(contenedor.configuracion.obtenerValor(CLAVE_NOMBRE_TIENDA)));
   }
@@ -160,7 +166,7 @@ export default function PaginaInicio() {
         : `¿Eliminar el pedido V-${venta.id}?`,
     );
     if (!confirmar) return;
-    if (!(await pedirPin('anular', `anular el pedido V-${venta.id}`))) return;
+    if (!(await pedirPermiso('anular_venta', `anular el pedido V-${venta.id}`))) return;
 
     let devolverCobrado = false;
     if (cobrado > 0) {
@@ -262,7 +268,7 @@ export default function PaginaInicio() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col">
-      {modalPin}
+      {modalPermiso}
       <header className="flex items-baseline justify-between px-5 pt-6">
         <h1
           onClick={tocarTitulo}
@@ -483,6 +489,7 @@ export default function PaginaInicio() {
                               <div>
                                 <p className="text-xs text-tinta/40">
                                   V-{venta.id} · {formatearFechaHora(venta.fechaHora)}
+                                  {venta.usuarioNombre && ` · ${venta.usuarioNombre}`}
                                 </p>
                                 <p className="text-sm text-tinta/80">
                                   {ETIQUETAS_METODO_PAGO[venta.metodoPago] ?? venta.metodoPago} —{' '}
@@ -567,13 +574,26 @@ export default function PaginaInicio() {
       </main>
 
       {/* Acción principal, alcanzable con el pulgar (diseño a una mano) */}
-      <div className="fixed inset-x-0 bottom-[calc(4rem+var(--area-segura-abajo))] z-30 mx-auto max-w-app px-5">
+      <div className="fixed inset-x-0 bottom-[calc(4rem+var(--area-segura-abajo))] z-30 mx-auto flex max-w-app gap-3 px-5">
         <Link
           href="/ventas/nueva"
-          className="flex h-14 items-center justify-center rounded-full bg-bodega text-base font-semibold text-white shadow-sm active:bg-bodega-oscuro"
+          className="flex h-14 flex-1 items-center justify-center rounded-full bg-bodega text-base font-semibold text-white shadow-sm active:bg-bodega-oscuro"
         >
           Nueva venta
         </Link>
+        {modoVoz && (
+          <Link
+            href="/ventas/voz"
+            className="flex h-14 flex-1 items-center justify-center gap-2 rounded-full border-2 border-bodega bg-white px-2 text-center text-sm font-semibold leading-tight text-bodega-oscuro shadow-sm active:bg-bodega-claro"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
+              <rect x="9" y="2" width="6" height="12" rx="3" />
+              <path d="M5 11a7 7 0 0 0 14 0" />
+              <path d="M12 18v4" />
+            </svg>
+            <span>Nueva Venta por Voz</span>
+          </Link>
+        )}
       </div>
 
       <BarraNavegacion />

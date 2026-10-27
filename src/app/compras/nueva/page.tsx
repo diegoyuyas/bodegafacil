@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
+import { usarPermisos } from '@/hooks/usar-permisos';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
 import { CLAVE_DESCRIPCION_LINEAS, estaActivado } from '@/core/configuracion';
@@ -25,6 +26,7 @@ const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
 
 export default function PaginaCompras() {
   const { contenedor, cargando, error } = usarContenedor();
+  const { pedirPermiso, modalPermiso } = usarPermisos(contenedor);
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
   const [descripcionActiva, setDescripcionActiva] = useState(false);
 
@@ -117,6 +119,7 @@ export default function PaginaCompras() {
 
   async function confirmarCompra() {
     if (!contenedor || carrito.length === 0) return;
+    if (!(await pedirPermiso('registrar_compra', 'registrar la compra', { sinPin: true }))) return;
     setMensajeError(null);
     setGuardando(true);
     try {
@@ -405,6 +408,8 @@ export default function PaginaCompras() {
           </button>
         </div>
       )}
+
+      {modalPermiso}
     </div>
   );
 }

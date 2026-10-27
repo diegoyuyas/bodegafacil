@@ -4,14 +4,16 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usarContenedor } from '@/hooks/usar-contenedor';
-import { usarSolicitudPin } from '@/hooks/usar-solicitud-pin';
+import { usarPermisos } from '@/hooks/usar-permisos';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import type { HistorialProductoItem, Producto, TipoProducto } from '@/core/tipos';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
-import { limpiarNumeroEscrito, mayusculasAlEscribir, partirEnLineas } from '@/core/texto';
+import { limpiarNumeroEscrito, mayusculasAlEscribir, partirAlias, partirEnLineas, unirAlias } from '@/core/texto';
+import { CLAVE_MODO_VENTA_VOZ, modoVentaVozDisponible } from '@/core/configuracion';
 import { formatearFechaHora } from '@/core/tiempo';
 import { SelectorEstado, filtrarPorEstado, type FiltroEstado } from '@/components/selector-estado';
 import { EtiquetaCampo, VentanaFormulario } from '@/components/ventana-formulario';
+import { CampoAlias } from '@/components/campo-alias';
 
 const ETIQUETAS_CAMPO_HISTORIAL: Record<HistorialProductoItem['campo'], string> = {
   nombre: 'Nombre',
@@ -23,12 +25,20 @@ const ETIQUETAS_CAMPO_HISTORIAL: Record<HistorialProductoItem['campo'], string> 
 
 export default function PaginaProductos() {
   const { contenedor, cargando, error } = usarContenedor();
-  const { pedirPin, modalPin } = usarSolicitudPin(contenedor);
+  const { pedirPermiso, modalPermiso } = usarPermisos(contenedor);
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
+  // El campo Alias solo se ve con el modo venta por voz en ON y plan Premium (ver modoVentaVozDisponible).
+  const [modoVoz, setModoVoz] = useState(false);
 
   useEffect(() => {
     if (!contenedor) return;
     setSimboloMoneda(obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)));
+    setModoVoz(
+      modoVentaVozDisponible(
+        contenedor.configuracion.obtenerValor(CLAVE_MODO_VENTA_VOZ),
+        contenedor.plan.obtenerEstado().tipo === 'premium',
+      ),
+    );
   }, [contenedor]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
@@ -45,6 +55,8 @@ export default function PaginaProductos() {
   const [stockActual, setStockActual] = useState('');
   const [stockMinimo, setStockMinimo] = useState('');
   const [controlaStock, setControlaStock] = useState(true);
+  const [alias, setAlias] = useState<string[]>([]);
+  const [aliasTexto, setAliasTexto] = useState('');
   const [mensajeError, setMensajeError] = useState<string | null>(null);
 
   const [editandoId, setEditandoId] = useState<number | null>(null);
@@ -55,6 +67,8 @@ export default function PaginaProductos() {
   const [stockMinimoEdit, setStockMinimoEdit] = useState('');
   const [controlaStockEdit, setControlaStockEdit] = useState(true);
   const [activoEdit, setActivoEdit] = useState(true);
+  const [aliasEdit, setAliasEdit] = useState<string[]>([]);
+  const [aliasTextoEdit, setAliasTextoEdit] = useState('');
   const [mensajeErrorEdit, setMensajeErrorEdit] = useState<string | null>(null);
 
   // Ajuste manual de stock (conteo físico, merma, corrección) — no pasa
@@ -92,6 +106,7 @@ export default function PaginaProductos() {
       );
       if (!confirmar) return;
     }
+    if (!(await pedirPermiso('gestionar_productos', 'crear el producto', { sinPin: true }))) return;
     try {
       contenedor.productos.crear({
         nombre: nombre.trim(),
@@ -102,6 +117,7 @@ export default function PaginaProductos() {
         controlaStock: esInsumo ? false : controlaStock,
         unidadMedida: 'unidad',
         tipo,
+        alias: modoVoz && !esInsumo ? unirAlias(partirAlias([...alias, aliasTexto].join(','))) : null,
       });
       await contenedor.persistir();
       setNombre('');
@@ -111,6 +127,8 @@ export default function PaginaProductos() {
       setStockActual('');
       setStockMinimo('');
       setControlaStock(true);
+      setAlias([]);
+      setAliasTexto('');
       setMostrarFormulario(false);
       recargar();
     } catch (e) {
@@ -130,6 +148,8 @@ export default function PaginaProductos() {
     setStockMinimoEdit(String(producto.stockMinimo));
     setControlaStockEdit(producto.controlaStock);
     setActivoEdit(producto.activo);
+    setAliasEdit(partirAlias(producto.alias));
+    setAliasTextoEdit('');
     setMensajeErrorEdit(null);
   }
 
@@ -210,7 +230,7 @@ export default function PaginaProductos() {
   async function confirmarAjuste() {
     if (!contenedor || ajustandoId === null) return;
     setMensajeErrorAjuste(null);
-    if (!(await pedirPin('modificar', 'ajustar el stock'))) return;
+    if (!(await pedirPermiso('gestionar_productos', 'ajustar el stock'))) return;
     try {
       const delta = tipoAjuste === 'sumar' ? Number(cantidadAjuste) : -Number(cantidadAjuste);
       contenedor.productos.ajustarStock(ajustandoId, delta, motivoAjuste.trim());
@@ -258,7 +278,7 @@ export default function PaginaProductos() {
       );
       if (!confirmar) return;
     }
-    if (!(await pedirPin('modificar', 'guardar los cambios del producto'))) return;
+    if (!(await pedirPermiso('gestionar_productos', 'guardar los cambios del producto'))) return;
     try {
       const producto = contenedor.productos.obtenerPorId(editandoId);
       contenedor.productos.actualizar(editandoId, {
@@ -272,6 +292,8 @@ export default function PaginaProductos() {
         unidadMedida: producto.unidadMedida,
         activo: activoEdit,
         tipo: tipoEdit,
+        // Con el modo voz en OFF no se manda alias: así los ya guardados se conservan intactos.
+        alias: modoVoz && !esInsumoEdit ? unirAlias(partirAlias([...aliasEdit, aliasTextoEdit].join(','))) : undefined,
       });
       await contenedor.persistir();
       setEditandoId(null);
@@ -283,7 +305,7 @@ export default function PaginaProductos() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
-      {modalPin}
+      {modalPermiso}
       <header className="flex items-center gap-3">
         <Link href="/" className="text-xl text-tinta/60" aria-label="Volver a inicio">
           ←
@@ -381,6 +403,18 @@ export default function PaginaProductos() {
                 />
               </div>
             </>
+          )}
+          {modoVoz && tipo === 'venta_compra' && (
+            <div>
+              <EtiquetaCampo>Alias:</EtiquetaCampo>
+              <CampoAlias
+                alias={alias}
+                onCambiarAlias={setAlias}
+                texto={aliasTexto}
+                onCambiarTexto={setAliasTexto}
+                productos={productos}
+              />
+            </div>
           )}
           {mensajeError && <p className="text-sm text-alerta">{mensajeError}</p>}
           <div className="flex gap-3">
@@ -484,6 +518,19 @@ export default function PaginaProductos() {
               <option value="inactivo">Inactivo (no aparece para vender)</option>
             </select>
           </div>
+          {modoVoz && tipoEdit === 'venta_compra' && (
+            <div>
+              <EtiquetaCampo>Alias:</EtiquetaCampo>
+              <CampoAlias
+                alias={aliasEdit}
+                onCambiarAlias={setAliasEdit}
+                texto={aliasTextoEdit}
+                onCambiarTexto={setAliasTextoEdit}
+                productos={productos}
+                excluirProductoId={editandoId ?? undefined}
+              />
+            </div>
+          )}
           {mensajeErrorEdit && <p className="text-sm text-alerta">{mensajeErrorEdit}</p>}
           <div className="flex gap-3">
             <button

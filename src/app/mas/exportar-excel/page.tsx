@@ -36,6 +36,7 @@ export default function PaginaExportarExcel() {
     const hoy = hoyLocalSql();
     const libro = generarLibroExcel([
       construirHojaVentas(contenedor.ventas.listarDetalleParaExportar()),
+      construirHojaVentas(contenedor.ventas.listarAnuladasParaExportar(), 'Ventas anuladas'),
       construirHojaCaja(contenedor.caja.listarMovimientosPorRango('0001-01-01', hoy)),
       construirHojaComprasDetallado(contenedor.compras.listarDetalleParaExportar()),
       construirHojaProductos(contenedor.productos.listarTodos()),

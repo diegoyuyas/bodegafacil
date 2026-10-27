@@ -9,6 +9,9 @@ import { CompraRepositorioSqlite } from './compra.repositorio';
 import { ConfiguracionRepositorioSqlite } from './configuracion.repositorio';
 import { PlanRepositorioSqlite } from './plan.repositorio';
 import { BloqueoPinRepositorioSqlite } from './bloqueo-pin.repositorio';
+import { UsuarioRepositorioSqlite } from './usuario.repositorio';
+import { ActividadUsuarioRepositorioSqlite } from './actividad-usuario.repositorio';
+import { ContextoActor } from './contexto-actor';
 import { RespaldoRepositorioSqlite } from './respaldo.repositorio';
 import { cargarBinario, guardarBinario } from '../persistencia/almacen-indexeddb';
 import { CLAVE_PLAN_FECHA_MAXIMA_VISTA, CLAVE_PLAN_VENCE_EN } from '@/core/plan';
@@ -30,6 +33,12 @@ export interface ContenedorRepositorios {
   plan: PlanRepositorioSqlite;
   /** PIN para abrir la app (Más > Configuración > Configurar PIN) — independiente del PIN admin de `plan`. */
   bloqueoPin: BloqueoPinRepositorioSqlite;
+  /** Usuarios y contraseñas del control de usuarios (Premium) — Más > Configuración > Administración de Usuarios. */
+  usuarios: UsuarioRepositorioSqlite;
+  /** Quién está usando la app y quién autorizó la última acción (lo llena la sesión). */
+  actor: ContextoActor;
+  /** Bitácora de quién hizo qué (control de usuarios). */
+  actividad: ActividadUsuarioRepositorioSqlite;
   /** Registro de respaldos (tabla metadato_respaldo), usado por el Backup Automático. */
   respaldos: RespaldoRepositorioSqlite;
   /** Acceso crudo clave-valor, usado por la pantalla Más > Configuración para sus switches. */
@@ -71,15 +80,18 @@ async function inicializar(): Promise<ContenedorRepositorios> {
   });
 
   const configuracion = new ConfiguracionRepositorioSqlite(bd);
-  const productos = new ProductoRepositorioSqlite(bd);
-  const clientes = new ClienteRepositorioSqlite(bd, configuracion);
-  const caja = new CajaRepositorioSqlite(bd);
-  const ventas = new VentaRepositorioSqlite(bd, productos, caja, configuracion);
-  const fiados = new FiadoRepositorioSqlite(bd, caja);
-  const proveedores = new ProveedorRepositorioSqlite(bd);
-  const compras = new CompraRepositorioSqlite(bd, productos, caja);
+  const actor = new ContextoActor();
+  const actividad = new ActividadUsuarioRepositorioSqlite(bd, actor);
+  const productos = new ProductoRepositorioSqlite(bd, actividad);
+  const clientes = new ClienteRepositorioSqlite(bd, configuracion, actividad);
+  const caja = new CajaRepositorioSqlite(bd, actividad);
+  const ventas = new VentaRepositorioSqlite(bd, productos, caja, configuracion, actividad);
+  const fiados = new FiadoRepositorioSqlite(bd, caja, actividad);
+  const proveedores = new ProveedorRepositorioSqlite(bd, actividad);
+  const compras = new CompraRepositorioSqlite(bd, productos, caja, actividad);
   const plan = new PlanRepositorioSqlite(configuracion);
   const bloqueoPin = new BloqueoPinRepositorioSqlite(configuracion);
+  const usuarios = new UsuarioRepositorioSqlite(bd, configuracion, undefined, actividad);
   const respaldos = new RespaldoRepositorioSqlite(bd);
 
   const persistir = () => guardarBinario(CLAVE_PERSISTENCIA, bd.exportar());
@@ -109,6 +121,9 @@ async function inicializar(): Promise<ContenedorRepositorios> {
     compras,
     plan,
     bloqueoPin,
+    usuarios,
+    actor,
+    actividad,
     respaldos,
     configuracion,
     persistir,

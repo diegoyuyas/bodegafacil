@@ -1,6 +1,7 @@
 import type { DatosActualizarProducto, DatosNuevoProducto, ProductoRepositorio } from '@/core/repositorios';
-import { ErrorDeNegocio, calcularStockNuevo } from '@/core/reglas-negocio';
-import { aMayusculas } from '@/core/texto';
+import { ErrorDeNegocio, calcularStockNuevo, validarAlias } from '@/core/reglas-negocio';
+import type { RegistroActividad } from '@/core/actividad';
+import { aMayusculas, partirAlias, unirAlias } from '@/core/texto';
 import type {
   CampoHistorialProducto,
   HistorialProductoItem,
@@ -12,7 +13,10 @@ import type { BaseDatosLocal } from './base-datos';
 import { mapearMovimientoInventario, mapearProducto, type FilaMovimientoInventario, type FilaProducto } from './mapeadores';
 
 export class ProductoRepositorioSqlite implements ProductoRepositorio {
-  constructor(private readonly bd: BaseDatosLocal) {}
+  constructor(
+    private readonly bd: BaseDatosLocal,
+    private readonly actividad?: RegistroActividad,
+  ) {}
 
   listarActivos(): Producto[] {
     return this.bd
@@ -64,6 +68,8 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
     if (esInsumo && datos.costo < 0) {
       throw new ErrorDeNegocio('El costo no puede ser negativo.');
     }
+    // Un insumo no se vende, así que nunca lleva alias.
+    const alias = esInsumo ? null : this.prepararAlias(datos.alias);
 
     return this.bd.transaccion(() => {
       // Un insumo nunca lleva stock ni precio de venta: solo sirve para registrar compras.
@@ -74,8 +80,8 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
 
       this.bd.ejecutar(
         `INSERT INTO producto
-           (nombre, categoria_id, codigo, precio_venta, costo, stock_actual, stock_minimo, controla_stock, unidad_medida, tipo)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (nombre, categoria_id, codigo, precio_venta, costo, stock_actual, stock_minimo, controla_stock, unidad_medida, tipo, alias)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           nombreNormalizado,
           datos.categoriaId ?? null,
@@ -87,6 +93,7 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
           controlaStock ? 1 : 0,
           datos.unidadMedida,
           esInsumo ? 'insumo' : 'venta_compra',
+          alias,
         ],
       );
       const id = this.bd.ultimoIdInsertado();
@@ -98,9 +105,17 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
       this.registrarHistorial(id, 'costo', null, String(datos.costo));
       this.registrarHistorial(id, 'stock', null, String(stockInicial));
       this.registrarHistorial(id, 'stock_minimo', null, String(stockMinimoInicial));
+      this.actividad?.registrar({ accion: 'producto_creado', entidad: 'producto', entidadId: id, detalle: nombreNormalizado, permiso: 'gestionar_productos' });
 
       return this.obtenerPorId(id);
     });
+  }
+
+  /** Parte, normaliza (MAYÚSCULAS, sin repetidos) y valida los alias; devuelve el texto a guardar. */
+  private prepararAlias(texto: string | null | undefined): string | null {
+    const lista = partirAlias(texto);
+    validarAlias(lista);
+    return unirAlias(lista);
   }
 
   actualizarStock(id: number, nuevoStock: number): void {
@@ -125,6 +140,8 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
 
     const tipoNuevo = datos.tipo ?? actual.tipo;
     const esInsumo = tipoNuevo === 'insumo';
+    // Alias: si no se indica, o es un insumo, se conserva lo que ya había (nunca se pierde por accidente).
+    const aliasNuevo = esInsumo || datos.alias === undefined ? actual.alias : this.prepararAlias(datos.alias);
     // Un producto de Venta y Compra solo puede pasar a Insumo si no tiene stock:
     // si no, ese stock quedaría "colgado" sin forma de venderse ni de ajustarse.
     if (esInsumo && actual.tipo !== 'insumo' && actual.stockActual !== 0) {
@@ -141,7 +158,7 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
       this.bd.ejecutar(
         `UPDATE producto
            SET nombre = ?, categoria_id = ?, codigo = ?, precio_venta = ?, costo = ?,
-               stock_minimo = ?, controla_stock = ?, unidad_medida = ?, activo = ?, tipo = ?,
+               stock_minimo = ?, controla_stock = ?, unidad_medida = ?, activo = ?, tipo = ?, alias = ?,
                actualizado_en = datetime('now')
          WHERE id = ?`,
         [
@@ -155,6 +172,7 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
           datos.unidadMedida,
           datos.activo ? 1 : 0,
           tipoNuevo,
+          aliasNuevo,
           id,
         ],
       );
@@ -181,6 +199,7 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
       if (actual.stockActual !== stockNuevo) {
         this.registrarHistorial(id, 'stock', String(actual.stockActual), String(stockNuevo));
       }
+      this.actividad?.registrar({ accion: 'producto_modificado', entidad: 'producto', entidadId: id, detalle: nombreNormalizado, permiso: 'gestionar_productos' });
 
       return this.obtenerPorId(id);
     });
@@ -212,6 +231,13 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
         [id, delta, motivo.trim(), stockNuevo, ahoraLocalSql()],
       );
       this.registrarHistorial(id, 'stock', String(producto.stockActual), String(stockNuevo), motivo.trim());
+      this.actividad?.registrar({
+        accion: 'stock_ajustado',
+        entidad: 'producto',
+        entidadId: id,
+        detalle: `${producto.nombre} (${delta > 0 ? '+' : ''}${delta})`,
+        permiso: 'gestionar_productos',
+      });
       return this.obtenerPorId(id);
     });
   }

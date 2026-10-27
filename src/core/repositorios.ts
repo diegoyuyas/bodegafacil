@@ -8,6 +8,8 @@
  * reemplazar (ej. por el plugin nativo de Capacitor) sin tocar la UI.
  */
 
+import type { ActividadUsuario, RegistroActividad, ResumenVentasUsuario } from './actividad';
+import type { ResultadoAcceso, RolUsuario, Usuario } from './usuarios';
 import type {
   Cliente,
   Compra,
@@ -89,6 +91,8 @@ export interface DatosNuevoProducto {
   unidadMedida: string;
   /** Por defecto 'venta_compra'. Si es 'insumo' se guarda sin stock ni precio de venta. */
   tipo?: TipoProducto;
+  /** Alias separados por coma (opcional). Se normalizan y validan al guardar; un insumo nunca lleva alias. */
+  alias?: string | null;
 }
 
 export interface DatosActualizarProducto {
@@ -103,6 +107,11 @@ export interface DatosActualizarProducto {
   activo: boolean;
   /** Si no se indica, conserva el tipo actual. Pasar a 'insumo' exige stock 0. */
   tipo?: TipoProducto;
+  /**
+   * Alias separados por coma. Si NO se indica (undefined) se conservan los guardados
+   * (así no se pierden con el modo voz en OFF); null o '' los borra.
+   */
+  alias?: string | null;
 }
 
 export interface ClienteRepositorio {
@@ -428,4 +437,57 @@ export interface RespaldoRepositorio {
   ): void;
   /** El último backup AUTOMÁTICO completado con éxito, o null si nunca hubo uno. */
   obtenerUltimoAutomaticoExitoso(): MetadatoRespaldo | null;
+}
+
+/**
+ * Usuarios y contraseñas del control de usuarios (Premium). La contraseña nunca se guarda,
+ * solo su huella. Quién puede llamar a cada método lo decide la pantalla con core/permisos.ts.
+ */
+export interface UsuarioRepositorio {
+  hayUsuarios(): boolean;
+  /** Todos, activos y desactivados (administradores primero). Para Administración de Usuarios. */
+  listarTodos(): Usuario[];
+  /** Solo los activos: los recuadros de la pantalla de acceso. */
+  listarActivos(): Usuario[];
+  listarAdministradoresActivos(): Usuario[];
+  obtenerPorId(id: number): Usuario;
+  /** Lanza ErrorDeNegocio si el nombre o la contraseña no son válidos o el nombre ya existe. */
+  crear(datos: { nombre: string; clave: string; rol: RolUsuario }): Promise<Usuario>;
+  /** Lanza ErrorDeNegocio si dejaría al sistema sin administrador activo. */
+  actualizar(id: number, cambios: { nombre?: string; rol?: RolUsuario; activo?: boolean }): Usuario;
+  /** Cambia la contraseña de cualquier usuario y le quita el bloqueo (lo hace un administrador). */
+  cambiarClave(id: number, claveNueva: string): Promise<void>;
+  /** Cambia la contraseña propia: exige la actual. */
+  cambiarClavePropia(id: number, claveActual: string, claveNueva: string): Promise<ResultadoAcceso>;
+  /** Acceso (o comprobación) con contraseña; cuenta los intentos fallidos y bloquea tras 5 seguidos. */
+  verificarAcceso(id: number, clave: string, opciones?: { soloAdministrador?: boolean }): Promise<ResultadoAcceso>;
+  /** Autorización puntual: un administrador escribe su contraseña para permitir UNA acción a otro usuario. */
+  autorizarComoAdministrador(adminId: number, clave: string): Promise<ResultadoAcceso>;
+  controlActivadoEnConfiguracion(): boolean;
+  /** Enciende el control (exige al menos un administrador activo). */
+  activarControl(): void;
+  /** Apaga el control sin borrar usuarios. */
+  desactivarControl(): void;
+  /** Asistente de la primera vez: crea al primer administrador, enciende el control y devuelve la clave de recuperación. */
+  crearPrimerAdministrador(datos: { nombre: string; clave: string }): Promise<{ usuario: Usuario; claveRecuperacion: string }>;
+  tieneClaveRecuperacion(): boolean;
+  /** Clave de recuperación nueva (la anterior deja de servir). Se muestra una sola vez. */
+  generarClaveRecuperacion(): Promise<string>;
+  /** Olvidé mi contraseña de administrador: pone una nueva con la clave de recuperación. */
+  restablecerConClaveRecuperacion(
+    adminId: number,
+    claveRecuperacion: string,
+    claveNueva: string,
+  ): Promise<{ ok: true; nuevaClaveRecuperacion: string } | { ok: false }>;
+}
+
+/**
+ * Bitácora de quién hizo qué (control de usuarios). `registrar` solo guarda cuando hay un usuario
+ * dentro; sin control de usuarios no hace nada.
+ */
+export interface ActividadUsuarioRepositorio extends RegistroActividad {
+  /** Más recientes primero. `usuarioId` filtra por quién lo hizo. */
+  listar(filtros: { desde: string; hasta: string; usuarioId?: number | null; limite?: number }): ActividadUsuario[];
+  /** Ventas por usuario en el periodo (las anteriores al control salen como «Sin usuario»). */
+  resumenVentasPorUsuario(desde: string, hasta: string): ResumenVentasUsuario[];
 }

@@ -33,6 +33,9 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Venta por voz (Premium): micrófono. El plugin de voz también lo declara; se deja explícito. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <!-- Impresión Bluetooth (Más > Configuración de Impresoras) -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
@@ -48,4 +51,14 @@
     -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+
+    <!--
+      Android 11+: sin esto la app no "ve" el servicio de reconocimiento de voz del
+      celular (Google) y la venta por voz diría que no está disponible.
+    -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
 </manifest>

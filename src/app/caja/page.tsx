@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
-import { usarSolicitudPin } from '@/hooks/usar-solicitud-pin';
+import { usarPermisos } from '@/hooks/usar-permisos';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { limpiarNumeroEscrito } from '@/core/texto';
 import {
@@ -32,7 +32,7 @@ type Vista = (typeof VISTAS)[number]['valor'];
 
 export default function PaginaCaja() {
   const { contenedor, cargando, error } = usarContenedor();
-  const { pedirPin, modalPin } = usarSolicitudPin(contenedor);
+  const { pedirPermiso, modalPermiso } = usarPermisos(contenedor);
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
 
   useEffect(() => {
@@ -101,7 +101,7 @@ export default function PaginaCaja() {
 
   async function confirmarMovimiento() {
     if (!contenedor || !mostrarFormulario || !monto || !concepto.trim()) return;
-    if (!(await pedirPin('modificar', mostrarFormulario === 'ingreso' ? 'registrar el ingreso' : 'registrar el egreso'))) return;
+    if (!(await pedirPermiso('movimiento_caja', mostrarFormulario === 'ingreso' ? 'registrar el ingreso' : 'registrar el egreso'))) return;
     if (mostrarFormulario === 'ingreso') {
       contenedor.caja.registrarIngreso(Number(monto), concepto.trim(), metodo);
     } else {
@@ -116,7 +116,7 @@ export default function PaginaCaja() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
-      {modalPin}
+      {modalPermiso}
       <header className="flex items-center gap-3">
         <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver">
           ←
@@ -278,7 +278,10 @@ export default function PaginaCaja() {
                     {mov.referencia}
                     <span className="text-tinta/40"> — {mov.concepto}</span>
                   </p>
-                  <p className="mt-0.5 text-xs text-tinta/40">{formatearFechaHora(mov.fechaHora)}</p>
+                  <p className="mt-0.5 text-xs text-tinta/40">
+                    {formatearFechaHora(mov.fechaHora)}
+                    {mov.usuarioNombre && ` · ${mov.usuarioNombre}`}
+                  </p>
                   {vista !== 'todo' && comprasModificadas.montos.has(mov.id) && (
                     <p className="mt-0.5 text-xs text-tinta/50">
                       Modificada: de {formatearMonto(comprasModificadas.montos.get(mov.id)!.original, simboloMoneda)} a{' '}

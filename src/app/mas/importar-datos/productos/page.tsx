@@ -136,7 +136,7 @@ export default function PaginaImportarProductos() {
             <p className="text-sm font-semibold text-tinta">1. Descarga la plantilla</p>
             <p className="mt-1 text-xs text-tinta/50">
               Columnas: nombre_producto, precio_venta, costo, stock_inicial, stock_minimo,
-              control_stock (SI o NO). Solo el nombre es obligatorio.
+              control_stock (SI o NO) y alias (opcional, separados por coma). Solo el nombre es obligatorio.
             </p>
             <button
               onClick={descargarPlantilla}

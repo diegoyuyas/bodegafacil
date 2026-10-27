@@ -3,6 +3,7 @@ import { RegistrarServiceWorker } from '@/components/registrar-service-worker';
 import { PantallaSplash } from '@/components/pantalla-splash';
 import { ManejarBotonAtras } from '@/components/manejar-boton-atras';
 import { BloqueoPinAcceso } from '@/components/bloqueo-pin-acceso';
+import { ProveedorSesion } from '@/components/sesion-usuario';
 import { RevisarBackupAutomatico } from '@/components/revisar-backup-automatico';
 import { SolicitarPermisosIniciales } from '@/components/solicitar-permisos-iniciales';
 import './globals.css';
@@ -35,11 +36,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="es">
       <body className="font-sans">
         <PantallaSplash>
-          <BloqueoPinAcceso>
-            {children}
-            <RevisarBackupAutomatico />
-            <SolicitarPermisosIniciales />
-          </BloqueoPinAcceso>
+          <ProveedorSesion>
+            <BloqueoPinAcceso>
+              {children}
+              <RevisarBackupAutomatico />
+              <SolicitarPermisosIniciales />
+            </BloqueoPinAcceso>
+          </ProveedorSesion>
         </PantallaSplash>
         <RegistrarServiceWorker />
         <ManejarBotonAtras />

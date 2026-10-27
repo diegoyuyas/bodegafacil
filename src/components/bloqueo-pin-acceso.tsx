@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
 import { usarContenedor } from '@/hooks/usar-contenedor';
+import { CLAVE_CONTROL_USUARIOS, controlUsuariosVigente } from '@/core/configuracion';
 
 /**
  * Gate de acceso: si Más > Configuración > Configurar PIN está
@@ -30,7 +31,12 @@ export function BloqueoPinAcceso({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!contenedor) return;
-    setRequierePin(contenedor.bloqueoPin.requiereParaDestino('ingresar'));
+    // Con el control de usuarios rigiendo, entrar con usuario y contraseña reemplaza al PIN de ingreso.
+    const controlDeUsuarios = controlUsuariosVigente(
+      contenedor.configuracion.obtenerValor(CLAVE_CONTROL_USUARIOS),
+      contenedor.plan.obtenerEstado().tipo === 'premium',
+    );
+    setRequierePin(contenedor.bloqueoPin.requiereParaDestino('ingresar') && !controlDeUsuarios);
   }, [contenedor]);
 
   useEffect(() => {

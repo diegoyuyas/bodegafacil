@@ -1,3 +1,4 @@
+import type { RegistroActividad } from '@/core/actividad';
 import type { DatosActualizarProveedor, ProveedorRepositorio } from '@/core/repositorios';
 import { ErrorDeNegocio, validarCelular, validarRuc } from '@/core/reglas-negocio';
 import type { Proveedor } from '@/core/tipos';
@@ -7,7 +8,10 @@ import { mapearProveedor, type FilaProveedor } from './mapeadores';
 const COLUMNAS = 'id, nombre, ruc, telefono, activo';
 
 export class ProveedorRepositorioSqlite implements ProveedorRepositorio {
-  constructor(private readonly bd: BaseDatosLocal) {}
+  constructor(
+    private readonly bd: BaseDatosLocal,
+    private readonly actividad?: RegistroActividad,
+  ) {}
 
   listarActivos(): Proveedor[] {
     return this.bd
@@ -56,7 +60,9 @@ export class ProveedorRepositorioSqlite implements ProveedorRepositorio {
       ruc || null,
       telefono || null,
     ]);
-    return this.obtenerPorId(this.bd.ultimoIdInsertado());
+    const id = this.bd.ultimoIdInsertado();
+    this.actividad?.registrar({ accion: 'proveedor_creado', entidad: 'proveedor', entidadId: id, detalle: nombre.trim(), permiso: 'gestionar_proveedores' });
+    return this.obtenerPorId(id);
   }
 
   actualizar(id: number, datos: DatosActualizarProveedor): Proveedor {
@@ -73,6 +79,7 @@ export class ProveedorRepositorioSqlite implements ProveedorRepositorio {
       'UPDATE proveedor SET nombre = ?, ruc = ?, telefono = ?, activo = ? WHERE id = ?',
       [datos.nombre.trim(), ruc, telefono, datos.activo ? 1 : 0, id],
     );
+    this.actividad?.registrar({ accion: 'proveedor_modificado', entidad: 'proveedor', entidadId: id, detalle: datos.nombre.trim(), permiso: 'gestionar_proveedores' });
     return this.obtenerPorId(id);
   }
 }
