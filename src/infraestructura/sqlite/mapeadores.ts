@@ -1,4 +1,5 @@
 import type { Cliente, Compra, MetadatoRespaldo, MovimientoCaja, MovimientoInventarioItem, Producto, Proveedor, Venta } from '@/core/tipos';
+import { textoComprobante, type TipoComprobante } from '@/core/comprobantes';
 
 // Las filas que devuelve sql.js tienen exactamente los nombres de
 // columna de esquema.sql (snake_case). Estos tipos documentan esa
@@ -128,10 +129,18 @@ export interface FilaVenta {
   comprobante_pago_ruta: string | null;
   cliente_nombre_libre: string | null;
   usuario_id: number | null;
+  tipo_comprobante?: TipoComprobante | null;
+  serie?: string | null;
+  numero_comprobante?: number | null;
+  /** Dígitos de la serie (vienen del JOIN con serie_comprobante; NULL si la venta no tiene serie). */
+  digitos_numero?: number | null;
   creado_en: string;
 }
 
 export function mapearVenta(fila: FilaVenta): Venta {
+  const tipoComprobante: TipoComprobante = fila.tipo_comprobante ?? 'nota_venta';
+  const serie = fila.serie ?? null;
+  const numeroComprobante = fila.numero_comprobante ?? null;
   return {
     id: fila.id,
     fechaHora: fila.fecha_hora,
@@ -146,6 +155,16 @@ export function mapearVenta(fila: FilaVenta): Venta {
     comprobantePagoRuta: fila.comprobante_pago_ruta,
     clienteNombreLibre: fila.cliente_nombre_libre ?? null,
     usuarioId: fila.usuario_id ?? null,
+    tipoComprobante,
+    serie,
+    numeroComprobante,
+    comprobante: textoComprobante({
+      tipo: tipoComprobante,
+      serie,
+      numero: numeroComprobante,
+      ventaId: fila.id,
+      digitos: fila.digitos_numero ?? null,
+    }),
     creadoEn: fila.creado_en,
   };
 }

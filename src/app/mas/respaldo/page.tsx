@@ -1,14 +1,22 @@
 'use client';
 
 import Link from 'next/link';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { restaurarRespaldo } from '@/infraestructura/sqlite/contenedor';
-import { descargarBinario, descargarTexto, leerArchivoComoBytes } from '@/infraestructura/exportacion/descargas';
-import { exportarFiadosACsv, exportarProductosACsv, exportarVentasACsv } from '@/core/exportacion';
+import { descargarBinario, descargarExcel, leerArchivoComoBytes } from '@/infraestructura/exportacion/descargas';
+import { generarLibroExcel } from '@/infraestructura/exportacion/excel';
+import {
+  construirHojaCaja,
+  construirHojaClientes,
+  construirHojaComprasDetallado,
+  construirHojaProductos,
+  construirHojaProveedores,
+  construirHojaVentas,
+} from '@/core/exportacion';
 import { horaLocalCompacta, hoyLocalSql } from '@/core/tiempo';
 import { nombreRespaldoPorDefecto } from '@/core/backup-automatico';
-import { CLAVE_PLAN_FECHA_MAXIMA_VISTA, CLAVE_PLAN_VENCE_EN } from '@/core/plan';
+import { CLAVE_PLAN_FECHA_MAXIMA_VISTA, CLAVE_PLAN_VENCE_EN, type EstadoPlan } from '@/core/plan';
 
 function fechaParaNombreArchivo(): string {
   return hoyLocalSql();
@@ -20,6 +28,14 @@ export default function PaginaRespaldo() {
   const [restaurando, setRestaurando] = useState(false);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
   const [respaldoRestaurado, setRespaldoRestaurado] = useState(false);
+  const [estadoPlan, setEstadoPlan] = useState<EstadoPlan | null>(null);
+
+  useEffect(() => {
+    if (!contenedor) return;
+    setEstadoPlan(contenedor.plan.obtenerEstado());
+  }, [contenedor]);
+
+  const esPremium = estadoPlan?.tipo === 'premium';
 
   // Por defecto, "Desde" y "Hasta" arrancan en la fecha actual del
   // dispositivo (misma fecha local que usa el resto de la app — ver
@@ -28,26 +44,23 @@ export default function PaginaRespaldo() {
   const [hasta, setHasta] = useState(hoyLocalSql());
   const rangoInvalido = Boolean(desde && hasta && desde > hasta);
 
-  async function exportarVentas() {
-    if (!contenedor || rangoInvalido) return;
-    const csv = exportarVentasACsv(
-      contenedor.ventas.listarDetalleParaExportar(desde || undefined, hasta || undefined),
-    );
-    await descargarTexto(`ventas-${fechaParaNombreArchivo()}.csv`, csv);
-  }
-
-  async function exportarProductos() {
-    if (!contenedor) return;
-    const csv = exportarProductosACsv(contenedor.productos.listarActivos());
-    await descargarTexto(`productos-${fechaParaNombreArchivo()}.csv`, csv);
-  }
-
-  async function exportarFiados() {
-    if (!contenedor || rangoInvalido) return;
-    const csv = exportarFiadosACsv(
-      contenedor.fiados.listarClientesConDeuda(desde || undefined, hasta || undefined),
-    );
-    await descargarTexto(`fiados-${fechaParaNombreArchivo()}.csv`, csv);
+  // Un solo Excel con todo el negocio. El rango de fechas aplica a lo que tiene fecha (ventas, ventas
+  // anuladas, caja y compras); productos, clientes y proveedores salen completos.
+  async function exportarTodoAExcel() {
+    if (!contenedor || !esPremium || rangoInvalido) return;
+    const libro = generarLibroExcel([
+      construirHojaVentas(contenedor.ventas.listarDetalleParaExportar(desde || undefined, hasta || undefined)),
+      construirHojaVentas(
+        contenedor.ventas.listarAnuladasParaExportar(desde || undefined, hasta || undefined),
+        'Ventas anuladas',
+      ),
+      construirHojaCaja(contenedor.caja.listarMovimientosPorRango(desde || '0001-01-01', hasta || hoyLocalSql())),
+      construirHojaComprasDetallado(contenedor.compras.listarDetalleParaExportar(desde || undefined, hasta || undefined)),
+      construirHojaProductos(contenedor.productos.listarTodos()),
+      construirHojaClientes(contenedor.clientes.listarTodos()),
+      construirHojaProveedores(contenedor.proveedores.listarTodos()),
+    ]);
+    await descargarExcel(`venta-facil-completo-${fechaParaNombreArchivo()}.xlsx`, libro);
   }
 
   async function descargarRespaldoCompleto() {
@@ -104,73 +117,76 @@ export default function PaginaRespaldo() {
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       <section className="mt-6">
-        <p className="text-sm font-semibold text-tinta">Exportar a CSV</p>
+        <p className="text-sm font-semibold text-tinta">Exportar todo a Excel</p>
         <p className="mt-1 text-xs text-tinta/50">
-          Ábrelos en Excel, Google Sheets o cualquier programa de hojas de cálculo.
+          Un solo archivo Excel con todo tu negocio: productos, clientes, proveedores, ventas, caja y compras, cada
+          uno en su propia pestaña.
         </p>
 
-        <div className="mt-3 rounded-xl border border-linea p-3">
-          <p className="text-xs font-semibold text-tinta/70">Rango de fechas (opcional)</p>
-          <div className="mt-2 flex gap-2">
-            <div className="flex-1">
-              <label className="mb-1 block text-xs text-tinta/50">Desde</label>
-              <input
-                type="date"
-                value={desde}
-                onChange={(e) => setDesde(e.target.value)}
-                max={hasta || undefined}
-                className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="mb-1 block text-xs text-tinta/50">Hasta</label>
-              <input
-                type="date"
-                value={hasta}
-                onChange={(e) => setHasta(e.target.value)}
-                min={desde || undefined}
-                className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
-              />
-            </div>
+        {estadoPlan && !esPremium && (
+          <div className="mt-3 rounded-xl border border-linea p-5 text-center">
+            <p className="text-sm font-semibold text-tinta">Exportar todo a Excel es una función Premium</p>
+            <p className="mt-2 text-xs text-tinta/60">Actívala desde el panel de administrador.</p>
           </div>
-          {rangoInvalido && (
-            <p className="mt-2 text-xs text-alerta">La fecha "desde" no puede ser posterior a "hasta".</p>
-          )}
-          {(desde || hasta) && !rangoInvalido && (
-            <button
-              onClick={() => {
-                setDesde('');
-                setHasta('');
-              }}
-              className="mt-2 text-xs font-semibold text-bodega-oscuro"
-            >
-              Quitar filtro de fechas
-            </button>
-          )}
-        </div>
+        )}
 
-        <div className="mt-3 space-y-2">
-          <button
-            onClick={exportarVentas}
-            disabled={rangoInvalido}
-            className="flex h-12 w-full items-center justify-between rounded-xl border border-linea px-4 text-sm font-medium text-tinta disabled:opacity-40"
-          >
-            Historial de ventas <span className="text-tinta/40">↓</span>
-          </button>
-          <button
-            onClick={exportarProductos}
-            className="flex h-12 w-full items-center justify-between rounded-xl border border-linea px-4 text-sm font-medium text-tinta"
-          >
-            Productos e inventario <span className="text-tinta/40">↓</span>
-          </button>
-          <button
-            onClick={exportarFiados}
-            disabled={rangoInvalido}
-            className="flex h-12 w-full items-center justify-between rounded-xl border border-linea px-4 text-sm font-medium text-tinta disabled:opacity-40"
-          >
-            Fiados pendientes <span className="text-tinta/40">↓</span>
-          </button>
-        </div>
+        {esPremium && (
+          <>
+            <div className="mt-3 rounded-xl border border-linea p-3">
+              <p className="text-xs font-semibold text-tinta/70">Rango de fechas (opcional)</p>
+              <div className="mt-2 flex gap-2">
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-tinta/50">Desde</label>
+                  <input
+                    type="date"
+                    value={desde}
+                    onChange={(e) => setDesde(e.target.value)}
+                    max={hasta || undefined}
+                    className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
+                  />
+                </div>
+                <div className="flex-1">
+                  <label className="mb-1 block text-xs text-tinta/50">Hasta</label>
+                  <input
+                    type="date"
+                    value={hasta}
+                    onChange={(e) => setHasta(e.target.value)}
+                    min={desde || undefined}
+                    className="h-11 w-full rounded-lg border border-linea px-2 text-sm"
+                  />
+                </div>
+              </div>
+              {rangoInvalido && (
+                <p className="mt-2 text-xs text-alerta">La fecha "desde" no puede ser posterior a "hasta".</p>
+              )}
+              {(desde || hasta) && !rangoInvalido && (
+                <button
+                  onClick={() => {
+                    setDesde('');
+                    setHasta('');
+                  }}
+                  className="mt-2 text-xs font-semibold text-bodega-oscuro"
+                >
+                  Quitar filtro de fechas
+                </button>
+              )}
+            </div>
+
+            <p className="mt-2 text-xs text-tinta/50">
+              {desde || hasta
+                ? 'El rango aplica a ventas, ventas anuladas, caja y compras. Productos, clientes y proveedores salen completos.'
+                : 'Sin filtro de fechas: se exporta todo el historial.'}
+            </p>
+
+            <button
+              onClick={exportarTodoAExcel}
+              disabled={rangoInvalido}
+              className="mt-3 h-12 w-full rounded-xl bg-bodega text-sm font-semibold text-white active:bg-bodega-oscuro disabled:opacity-40"
+            >
+              Descargar Excel completo ↓
+            </button>
+          </>
+        )}
       </section>
 
       <section className="mt-8">

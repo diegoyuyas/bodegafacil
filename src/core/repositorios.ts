@@ -10,6 +10,7 @@
 
 import type { ActividadUsuario, RegistroActividad, ResumenVentasUsuario } from './actividad';
 import type { ResultadoAcceso, RolUsuario, Usuario } from './usuarios';
+import type { SerieComprobante, TipoComprobante, TipoSerie } from './comprobantes';
 import type {
   Cliente,
   Compra,
@@ -130,6 +131,70 @@ export interface DatosActualizarCliente {
   documento: string;
   telefono?: string | null;
   activo: boolean;
+}
+
+/** Datos para crear una serie nueva. Si no se indican, 7 dígitos y empieza en el 1. */
+export interface DatosNuevaSerie {
+  tipo: TipoSerie;
+  serie: string;
+  digitosNumero?: number;
+  /** Para continuar un talonario físico (ej. empezar en el 501). */
+  siguienteNumero?: number;
+}
+
+/** Lo que se puede cambiar de una serie. El nombre y los dígitos no se tocan si la serie ya se usó. */
+export interface CambiosSerie {
+  serie?: string;
+  digitosNumero?: number;
+  siguienteNumero?: number;
+}
+
+/** El número que se acaba de reservar para una venta. */
+export interface NumeroReservado {
+  serieId: number;
+  serie: string;
+  numero: number;
+  digitosNumero: number;
+  /** `B001-0000123` */
+  texto: string;
+}
+
+export interface AsignacionSerieUsuario {
+  usuarioId: number;
+  tipo: TipoSerie;
+  serieId: number;
+}
+
+/**
+ * Series de comprobantes (Premium). Quién puede llamar a cada método (solo administradores) lo decide la
+ * pantalla con core/permisos.ts; este repositorio cuida que los números nunca se repitan ni se salten.
+ */
+export interface SerieComprobanteRepositorio {
+  /** Todas, activas e inactivas, por tipo. */
+  listar(): SerieComprobante[];
+  listarActivas(): SerieComprobante[];
+  obtenerPorId(id: number): SerieComprobante;
+  crear(datos: DatosNuevaSerie): SerieComprobante;
+  /**
+   * Edita la serie. El «siguiente número» solo se puede SUBIR (continuar un talonario): bajarlo está
+   * prohibido para todos, administrador incluido, y el correlativo siempre continúa.
+   */
+  actualizar(id: number, cambios: CambiosSerie): SerieComprobante;
+  /** Desactivar no borra: la serie conserva sus números emitidos. Al desactivar la predeterminada, otra toma su lugar. */
+  establecerActiva(id: number, activo: boolean): SerieComprobante;
+  establecerPredeterminada(id: number): SerieComprobante;
+  /** Asigna la serie que ese usuario usa por defecto para el tipo (null = quitarla). */
+  asignarAUsuario(usuarioId: number, tipo: TipoSerie, serieId: number | null): void;
+  listarAsignaciones(): AsignacionSerieUsuario[];
+  /** La serie que le toca a ese usuario para ese tipo (asignada, predeterminada o la activa más antigua). */
+  resolverSerie(tipo: TipoSerie, usuarioId: number | null): SerieComprobante | null;
+  /**
+   * Reserva el siguiente número de la serie. Debe llamarse DENTRO de la transacción que guarda la venta
+   * (no abre una propia): si la venta falla, el número no se gasta.
+   */
+  tomarSiguienteNumero(serieId: number): NumeroReservado;
+  /** Cuántas ventas (anuladas o no) ya se emitieron con la serie, y el número más alto. */
+  resumenEmitido(serie: string): { cantidad: number; maximo: number | null };
 }
 
 export interface VentaRepositorio {

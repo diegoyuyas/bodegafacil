@@ -2,6 +2,7 @@ import { BaseDatosLocal } from './base-datos';
 import { ProductoRepositorioSqlite } from './producto.repositorio';
 import { ClienteRepositorioSqlite } from './cliente.repositorio';
 import { VentaRepositorioSqlite } from './venta.repositorio';
+import { SerieComprobanteRepositorioSqlite } from './serie-comprobante.repositorio';
 import { CajaRepositorioSqlite } from './caja.repositorio';
 import { FiadoRepositorioSqlite } from './fiado.repositorio';
 import { ProveedorRepositorioSqlite } from './proveedor.repositorio';
@@ -26,6 +27,8 @@ export interface ContenedorRepositorios {
   productos: ProductoRepositorioSqlite;
   clientes: ClienteRepositorioSqlite;
   ventas: VentaRepositorioSqlite;
+  /** Series de comprobantes (Boleta/Factura, Premium) — Más > Configuración > Configuración de Impresión > Configuración de Series. */
+  series: SerieComprobanteRepositorioSqlite;
   caja: CajaRepositorioSqlite;
   fiados: FiadoRepositorioSqlite;
   proveedores: ProveedorRepositorioSqlite;
@@ -85,7 +88,8 @@ async function inicializar(): Promise<ContenedorRepositorios> {
   const productos = new ProductoRepositorioSqlite(bd, actividad);
   const clientes = new ClienteRepositorioSqlite(bd, configuracion, actividad);
   const caja = new CajaRepositorioSqlite(bd, actividad);
-  const ventas = new VentaRepositorioSqlite(bd, productos, caja, configuracion, actividad);
+  const series = new SerieComprobanteRepositorioSqlite(bd, actividad, configuracion);
+  const ventas = new VentaRepositorioSqlite(bd, productos, caja, configuracion, actividad, series);
   const fiados = new FiadoRepositorioSqlite(bd, caja, actividad);
   const proveedores = new ProveedorRepositorioSqlite(bd, actividad);
   const compras = new CompraRepositorioSqlite(bd, productos, caja, actividad);
@@ -115,6 +119,7 @@ async function inicializar(): Promise<ContenedorRepositorios> {
     productos,
     clientes,
     ventas,
+    series,
     caja,
     fiados,
     proveedores,

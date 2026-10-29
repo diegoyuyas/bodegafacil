@@ -237,7 +237,7 @@ async function main() {
   // La cabecera ahora empieza con los datos del vendedor y sigue con el pedido (correlativo V-N).
   afirmar(
     csvVentas.startsWith(
-      'Nombre vendedor,Nro. Documento vendedor,Pedido,Fecha,Producto,Cantidad,Precio unitario,Subtotal,Método de pago,Cliente',
+      'Nombre vendedor,Nro. Documento vendedor,Pedido,Comprobante,Fecha,Producto,Cantidad,Precio unitario,Subtotal,Método de pago,Cliente',
     ),
     'El CSV de ventas tiene la cabecera "Pedido" (correlativo V-N) precedida por los datos del vendedor',
   );

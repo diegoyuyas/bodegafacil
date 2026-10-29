@@ -15,6 +15,7 @@ import {
 } from '@/core/informacion-tienda';
 import { CLAVE_MONEDA, obtenerSimboloMoneda } from '@/core/moneda';
 import type { DatosComprobante } from '@/core/comprobante-impresion';
+import { TITULO_COMPROBANTE } from '@/core/comprobantes';
 
 function fechaHoraLegibles(fechaHoraSql: string): { fecha: string; hora: string } {
   const [fecha = '', hora = ''] = fechaHoraSql.split(' ');
@@ -53,8 +54,15 @@ export function construirDatosComprobanteDeVenta(
   const cliente = venta.clienteId ? contenedor.clientes.obtenerPorId(venta.clienteId) : null;
   const { fecha, hora } = fechaHoraLegibles(venta.fechaHora);
 
+  // Boleta/factura: título y número con serie (B001-0000123); la referencia interna V-N va aparte.
+  // Nota de venta (y ventas anteriores a las series): igual que siempre, «NOTA DE VENTA V-N».
+  const tieneSerie = venta.tipoComprobante !== 'nota_venta' && venta.serie !== null && venta.numeroComprobante !== null;
+
   return {
-    numeroComprobante: `V-${venta.id}`,
+    numeroComprobante: venta.comprobante,
+    tituloComprobante: TITULO_COMPROBANTE[tieneSerie ? venta.tipoComprobante : 'nota_venta'],
+    referenciaPedido: tieneSerie ? `V-${venta.id}` : null,
+    etiquetaDocumentoCliente: venta.tipoComprobante === 'factura' ? 'RUC' : 'DNI',
     fecha,
     hora,
     nombreVendedor: nombreDelVendedor(contenedor, venta.usuarioId),

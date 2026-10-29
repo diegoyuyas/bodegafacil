@@ -101,6 +101,9 @@ CREATE TABLE venta (
     telefono_whatsapp   TEXT,   -- número usado para WhatsApp en esta venta (clave para reenviar a clientes eventuales, que no tienen registro propio)
     comprobante_pago_ruta TEXT, -- foto del pago (Yape/Plin, Premium, opcional) — solo la ruta del archivo, la foto en sí nunca vive en esta base
     cliente_nombre_libre TEXT,  -- nombre escrito a mano en la venta (cliente sin registrar); solo aplica si cliente_id es NULL
+    tipo_comprobante    TEXT NOT NULL DEFAULT 'nota_venta' CHECK (tipo_comprobante IN ('nota_venta','boleta','factura')),
+    serie               TEXT,                         -- serie del comprobante (ej. B001); NULL en notas de venta y ventas anteriores a las series
+    numero_comprobante  INTEGER,                      -- correlativo dentro de la serie; NULL = sin número
     usuario_id          INTEGER,                      -- quién la registró (control de usuarios); NULL = hecha sin control de usuarios
     anulada_por         INTEGER,                      -- quién la anuló (control de usuarios)
     fecha_anulacion     TEXT,                         -- cuándo se anuló
@@ -110,6 +113,9 @@ CREATE TABLE venta (
 CREATE INDEX idx_venta_fecha    ON venta(fecha_hora);
 CREATE INDEX idx_venta_cliente  ON venta(cliente_id);
 CREATE INDEX idx_venta_anulada  ON venta(anulada);
+-- Una serie nunca repite número (una venta anulada conserva el suyo). Lo anterior a las series queda en NULL.
+CREATE UNIQUE INDEX idx_venta_comprobante ON venta(serie, numero_comprobante)
+    WHERE serie IS NOT NULL AND numero_comprobante IS NOT NULL;
 
 CREATE TABLE detalle_venta (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -331,3 +337,31 @@ CREATE TABLE actividad_usuario (
 );
 
 CREATE INDEX idx_actividad_usuario_fecha ON actividad_usuario(fecha_hora);
+
+-- ------------------------------------------------------------
+-- 10. Series de comprobantes (Premium; series NO electrónicas, sin SUNAT)
+-- ------------------------------------------------------------
+-- Cada serie lleva su propio correlativo. El largo del número (7 u 8) queda guardado en la serie.
+-- Una serie que ya se usó no se borra: se desactiva (los números emitidos nunca se reutilizan).
+
+CREATE TABLE serie_comprobante (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    tipo                TEXT NOT NULL CHECK (tipo IN ('boleta','factura')),
+    serie               TEXT NOT NULL,                  -- 3 o 4 caracteres, letras y números, en mayúsculas
+    digitos_numero      INTEGER NOT NULL DEFAULT 7 CHECK (digitos_numero IN (7,8)),
+    siguiente_numero    INTEGER NOT NULL DEFAULT 1 CHECK (siguiente_numero >= 1),
+    activo              INTEGER NOT NULL DEFAULT 1,
+    es_predeterminada   INTEGER NOT NULL DEFAULT 0,     -- la que se usa si el usuario no tiene una asignada
+    creado_en           TEXT NOT NULL DEFAULT (datetime('now')),
+    actualizado_en      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE UNIQUE INDEX idx_serie_comprobante_serie ON serie_comprobante(serie COLLATE NOCASE);
+
+-- Serie que cada usuario usa por defecto, una por tipo (la asigna un administrador).
+CREATE TABLE usuario_serie (
+    usuario_id  INTEGER NOT NULL REFERENCES usuario(id),
+    tipo        TEXT NOT NULL CHECK (tipo IN ('boleta','factura')),
+    serie_id    INTEGER NOT NULL REFERENCES serie_comprobante(id),
+    PRIMARY KEY (usuario_id, tipo)
+);

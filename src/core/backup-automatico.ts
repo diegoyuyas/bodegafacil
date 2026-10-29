@@ -9,10 +9,16 @@
  * bodeguero no abre la app ese día, ese día no hay backup — para eso
  * está la notificación de aviso.
  *
- * Solo guarda en el almacenamiento del teléfono — se evaluó también
- * Google Drive, pero se descartó: exige que el bodeguero autorice con
- * un toque cada vez (Google no permite subir en silencio), lo que
- * contradice la idea de "automático". Queda solo local.
+ * Siempre guarda una copia en el almacenamiento del teléfono. No hay
+ * integración con Google Drive (se descartó: exige autorizar con un toque
+ * y mantener un proyecto de Google). En su lugar, y si el interruptor
+ * "Preguntar dónde guardar" está activo, después de generar el backup se
+ * abre la pantalla de compartir de Android para que el bodeguero lo guarde
+ * en Drive u otro lugar; si la cierra, la copia local ya quedó guardada.
+ *
+ * A la hora configurada la app también programa una notificación local
+ * (recordatorio): al tocarla se abre la app y se genera el backup.
+ * Abrir la app pasada la hora hace lo mismo, sin necesidad del aviso.
  *
  * Todo lo de acá es lógica PURA (sin DOM ni SQLite), igual que
  * `core/plan.ts` / `core/configuracion.ts`.
@@ -26,6 +32,8 @@ export const CLAVE_BACKUP_AUTO_HORA = 'backup_automatico_hora';
 export const CLAVE_BACKUP_AUTO_FRECUENCIA_DIAS = 'backup_automatico_frecuencia_dias';
 /** Última fecha 'YYYY-MM-DD' en que el backup automático terminó bien. */
 export const CLAVE_BACKUP_AUTO_ULTIMA_FECHA = 'backup_automatico_ultima_fecha';
+/** '1' (predeterminado) o '0': abrir la pantalla de compartir después de generar el backup. */
+export const CLAVE_BACKUP_AUTO_PREGUNTAR_DESTINO = 'backup_automatico_preguntar_destino';
 
 export const HORA_BACKUP_PREDETERMINADA = '03:00';
 export const FRECUENCIA_BACKUP_MINIMA_DIAS = 1;
@@ -94,4 +102,59 @@ export function tocaEjecutarBackupAutomatico(
   if (!config.ultimaFecha) return true; // nunca se ejecutó
   if (config.ultimaFecha >= hoyIso) return false; // ya se ejecutó hoy (o el reloj del equipo retrocedió)
   return diferenciaEnDiasSql(config.ultimaFecha, hoyIso) >= config.frecuenciaDias;
+}
+
+/** El interruptor «Preguntar dónde guardar» viene ACTIVADO si nunca se tocó (solo '0' lo apaga). */
+export function preguntarDestinoActivo(valorGuardado: string | null): boolean {
+  return valorGuardado !== '0';
+}
+
+/** Suma (o resta) días a una fecha 'YYYY-MM-DD' sin depender de la zona horaria del equipo. */
+export function sumarDiasAFechaIso(fechaIso: string, dias: number): string {
+  const [anio = 0, mes = 1, dia = 1] = fechaIso.split('-').map(Number);
+  const f = new Date(Date.UTC(anio, mes - 1, dia + dias));
+  const dd = String(f.getUTCDate()).padStart(2, '0');
+  const mm = String(f.getUTCMonth() + 1).padStart(2, '0');
+  return `${f.getUTCFullYear()}-${mm}-${dd}`;
+}
+
+export interface AvisoBackupProgramado {
+  /** 'YYYY-MM-DD' (fecha local). */
+  fecha: string;
+  /** 'HH:MM' (hora local configurada para el backup). */
+  hora: string;
+}
+
+/**
+ * ¿Cuándo debe sonar el próximo recordatorio de backup? null si no corresponde ninguno (backup apagado).
+ *  - Se toma la fecha en que toca el backup: la última fecha + la frecuencia (o hoy si nunca se hizo o ya está atrasado).
+ *  - Si esa fecha es hoy y la hora configurada ya pasó, el aviso queda para mañana (hoy ya no sonaría:
+ *    si el backup está atrasado, se hace al abrir la app).
+ *  - Si ya se hizo hoy, el próximo aviso es el de la fecha que corresponda más adelante (nunca el de hoy).
+ */
+export function calcularProximoAviso(
+  config: ConfigBackupAutomatico,
+  hoyIso: string,
+  horaActualHHmm: string,
+): AvisoBackupProgramado | null {
+  if (!config.activo) return null;
+  let fecha = config.ultimaFecha ? sumarDiasAFechaIso(config.ultimaFecha, config.frecuenciaDias) : hoyIso;
+  if (fecha < hoyIso) fecha = hoyIso;
+  if (fecha === hoyIso && horaActualHHmm >= config.hora) fecha = sumarDiasAFechaIso(hoyIso, 1);
+  return { fecha, hora: config.hora };
+}
+
+/** Al tocar el aviso: generar el backup, salvo que el de hoy ya se haya hecho (entonces solo se informa). */
+export function accionAlTocarAviso(config: ConfigBackupAutomatico, hoyIso: string): 'generar' | 'ya_hecho' | 'ninguna' {
+  if (!config.activo) return 'ninguna';
+  if (config.ultimaFecha && config.ultimaFecha >= hoyIso) return 'ya_hecho';
+  return 'generar';
+}
+
+/**
+ * Con la pantalla de compartir activa, el backup espera si la persona está en medio de una venta:
+ * la hoja de compartir saltaría encima del cobro. Sale de «Nueva venta» y se hace.
+ */
+export function debeEsperarPorVenta(rutaActual: string): boolean {
+  return rutaActual === '/ventas' || rutaActual.startsWith('/ventas/');
 }

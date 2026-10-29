@@ -65,7 +65,7 @@ export function MenuImprimirTicket({
             Imprimir en ticketera
             {!imprimirEnTicketeraDisponible && (
               <span className="mt-0.5 block text-xs font-normal text-tinta/50">
-                Activa la impresora en Configuración de Impresión
+                Activa la impresora en Configuración de Impresión &gt; Sincronizar Impresora Bluetooth
               </span>
             )}
           </span>

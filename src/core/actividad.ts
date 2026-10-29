@@ -29,7 +29,12 @@ export type AccionActividad =
   | 'clave_cambiada'
   | 'control_activado'
   | 'control_desactivado'
-  | 'clave_recuperacion_nueva';
+  | 'clave_recuperacion_nueva'
+  | 'serie_creada'
+  | 'serie_modificada'
+  | 'serie_desactivada'
+  | 'serie_asignada'
+  | 'serie_numero_cambiado';
 
 export interface EventoActividad {
   accion: AccionActividad;
@@ -95,6 +100,11 @@ const VERBOS: Record<AccionActividad, string> = {
   control_activado: 'encendió el control de usuarios',
   control_desactivado: 'apagó el control de usuarios',
   clave_recuperacion_nueva: 'generó una clave de recuperación nueva',
+  serie_creada: 'creó la serie',
+  serie_modificada: 'modificó la serie',
+  serie_desactivada: 'desactivó la serie',
+  serie_asignada: 'asignó la serie',
+  serie_numero_cambiado: 'cambió el siguiente número de la serie',
 };
 
 /** «anuló la venta V-12», «creó el producto GASEOSA»... (sin el nombre de quien lo hizo). */

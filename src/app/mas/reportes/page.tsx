@@ -59,6 +59,8 @@ const ETIQUETAS_TIPO_MOVIMIENTO_KARDEX: Record<MovimientoInventarioItem['tipo'],
 
 interface VentaAgrupada {
   pedido: string;
+  /** «Boleta B001-0000123», «Factura F001-0000045» o null si es nota de venta (entonces basta el V-N). */
+  comprobante: string | null;
   fecha: string;
   cliente: string;
   metodoPago: string;
@@ -253,6 +255,7 @@ export default function PaginaReportes() {
       if (!grupo) {
         grupo = {
           pedido: fila.pedido,
+          comprobante: fila.comprobante && !fila.comprobante.startsWith('Nota de venta') ? fila.comprobante : null,
           fecha: fila.fecha,
           cliente: fila.cliente,
           metodoPago: fila.metodoPago,
@@ -576,7 +579,8 @@ export default function PaginaReportes() {
                     <li key={venta.pedido} className="py-3">
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-tinta/80">
-                          {venta.pedido} · {venta.cliente}
+                          {venta.pedido}
+                          {venta.comprobante ? ` · ${venta.comprobante}` : ''} · {venta.cliente}
                         </span>
                         <span className="font-semibold text-tinta">
                           {formatearMonto(venta.total, simboloMoneda)}

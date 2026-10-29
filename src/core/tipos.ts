@@ -7,6 +7,8 @@
  * base de datos: español.
  */
 
+import type { TipoComprobante } from './comprobantes';
+
 export type MetodoPago = 'efectivo' | 'yape' | 'plin' | 'tarjeta' | 'fiado';
 export type MetodoPagoSinFiado = Exclude<MetodoPago, 'fiado'>;
 export type EstadoDeuda = 'pendiente' | 'pagada_parcial' | 'pagada';
@@ -77,6 +79,14 @@ export interface Venta {
   clienteNombreLibre: string | null;
   /** Usuario que la registró (control de usuarios). null = se hizo sin control de usuarios. */
   usuarioId: number | null;
+  /** 'nota_venta' (por defecto, también en las ventas anteriores a las series), 'boleta' o 'factura'. */
+  tipoComprobante: TipoComprobante;
+  /** Serie del comprobante (ej. `B001`). null en notas de venta y en ventas anteriores a las series. */
+  serie: string | null;
+  /** Correlativo dentro de la serie. null = sin número. */
+  numeroComprobante: number | null;
+  /** Como se muestra: `B001-0000123`, o `V-12` en notas de venta y ventas sin número. */
+  comprobante: string;
   creadoEn: string;
 }
 
@@ -272,6 +282,10 @@ export interface RegistrarVentaInput {
   telefonoWhatsapp?: string | null;
   /** Nombre escrito a mano (cliente sin registrar). Se ignora si hay `clienteId`. Reemplaza a "Cliente Eventual" solo en esta venta. */
   clienteNombreLibre?: string | null;
+  /** Comprobante a emitir. Si no se indica, nota de venta (`V-N`). Boleta y factura son Premium y necesitan una serie activa. */
+  tipoComprobante?: TipoComprobante;
+  /** Serie a usar. Si no se indica: la asignada al usuario o, si no tiene, la predeterminada del tipo. */
+  serieId?: number | null;
 }
 
 /**
@@ -297,6 +311,9 @@ export interface VentaListaItem {
   anulada: boolean;
   /** Quién la registró (control de usuarios). null = sin control de usuarios. */
   usuarioNombre: string | null;
+  tipoComprobante: TipoComprobante;
+  /** Como se muestra: `B001-0000123`, o `V-12` en notas de venta y ventas sin número. */
+  comprobante: string;
 }
 
 /** Una línea de producto dentro de una venta, para el preview al expandir. */
@@ -326,6 +343,9 @@ export interface VentaReimpresionItem {
   clienteNombre: string | null;
   clienteDocumento: string | null;
   anulada: boolean;
+  tipoComprobante: TipoComprobante;
+  /** Como se muestra: `B001-0000123`, o `V-12` en notas de venta y ventas sin número. */
+  comprobante: string;
 }
 
 /**

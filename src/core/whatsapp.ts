@@ -72,7 +72,7 @@ export function construirMensajeVenta(
     '',
     `Gracias por tu compra en ${nombreTienda}.`,
     '',
-    `🧾 Venta: V-${venta.id}`,
+    `🧾 Venta: ${venta.comprobante}`,
     `📅 Fecha: ${formatearFecha(venta.fechaHora)}`,
     '',
     'Productos:',

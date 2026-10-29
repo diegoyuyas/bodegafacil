@@ -44,19 +44,13 @@ const OPCIONES: Opcion[] = [
   {
     href: '/mas/respaldo',
     etiqueta: 'Respaldo y exportación',
-    descripcion: 'CSV, respaldo completo y restaurar',
+    descripcion: 'Exportar todo a Excel (Premium), respaldo completo y restaurar',
     permiso: 'respaldo',
-  },
-  {
-    href: '/mas/exportar-excel',
-    etiqueta: 'Exportar todo a Excel',
-    descripcion: 'Un solo Excel con todo tu negocio (Premium)',
-    permiso: 'exportar',
   },
   {
     href: '/mas/configuracion',
     etiqueta: 'Configuración',
-    descripcion: 'Configuración de venta (precio editable, stock bajo, venta por voz), usuarios, negocio e impresoras',
+    descripcion: 'Configuración de venta (precio editable, stock bajo, venta por voz), usuarios, negocio, series e impresora',
     permiso: 'configuracion',
   },
 ];
@@ -82,7 +76,7 @@ export default function PaginaMas() {
     if (!contenedor) return;
     // "Reimprimir documentos" solo aparece con Premium Y la impresora
     // Bluetooth activada en Más > Configuración > Configuración de
-    // Impresoras — mientras no se cumplan las dos cosas, queda oculta
+    // Impresión > Sincronizar Impresora Bluetooth — mientras no se cumplan las dos cosas, queda oculta
     // en vez de mostrarse deshabilitada.
     const esPremium = contenedor.plan.obtenerEstado().tipo === 'premium';
     const impresoraActiva = contenedor.configuracion.obtenerValor(CLAVE_IMPRESORA_ACTIVA) === '1';

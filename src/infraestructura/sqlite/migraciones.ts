@@ -150,6 +150,34 @@ const MIGRACIONES: string[] = [
   `ALTER TABLE compra ADD COLUMN modificada_por INTEGER;`,
   `ALTER TABLE compra ADD COLUMN fecha_modificacion TEXT;`,
   `ALTER TABLE pago_deuda ADD COLUMN anulado_por INTEGER;`,
+  // 0031 a 0034: tipo, serie y número del comprobante de cada venta (Series y comprobantes, Premium).
+  // Las ventas anteriores quedan como nota de venta, sin serie ni número (no se numeran hacia atrás).
+  // Las columnas nuevas de una tabla que ya existe van SIN REFERENCES.
+  `ALTER TABLE venta ADD COLUMN tipo_comprobante TEXT NOT NULL DEFAULT 'nota_venta' CHECK (tipo_comprobante IN ('nota_venta','boleta','factura'));`,
+  `ALTER TABLE venta ADD COLUMN serie TEXT;`,
+  `ALTER TABLE venta ADD COLUMN numero_comprobante INTEGER;`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_venta_comprobante ON venta(serie, numero_comprobante)
+     WHERE serie IS NOT NULL AND numero_comprobante IS NOT NULL;`,
+  // 0035 y 0036: series de comprobantes (cada una con su correlativo; el largo del número queda en la serie).
+  `CREATE TABLE IF NOT EXISTS serie_comprobante (
+      id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+      tipo                TEXT NOT NULL CHECK (tipo IN ('boleta','factura')),
+      serie               TEXT NOT NULL,
+      digitos_numero      INTEGER NOT NULL DEFAULT 7 CHECK (digitos_numero IN (7,8)),
+      siguiente_numero    INTEGER NOT NULL DEFAULT 1 CHECK (siguiente_numero >= 1),
+      activo              INTEGER NOT NULL DEFAULT 1,
+      es_predeterminada   INTEGER NOT NULL DEFAULT 0,
+      creado_en           TEXT NOT NULL DEFAULT (datetime('now')),
+      actualizado_en      TEXT NOT NULL DEFAULT (datetime('now'))
+  );`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_serie_comprobante_serie ON serie_comprobante(serie COLLATE NOCASE);`,
+  // 0037: serie que cada usuario usa por defecto, una por tipo (la asigna un administrador).
+  `CREATE TABLE IF NOT EXISTS usuario_serie (
+      usuario_id  INTEGER NOT NULL REFERENCES usuario(id),
+      tipo        TEXT NOT NULL CHECK (tipo IN ('boleta','factura')),
+      serie_id    INTEGER NOT NULL REFERENCES serie_comprobante(id),
+      PRIMARY KEY (usuario_id, tipo)
+  );`,
 ];
 
 export function aplicarMigraciones(bd: BaseDatosLocal): void {

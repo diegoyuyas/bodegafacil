@@ -13,6 +13,7 @@ import {
   modoVentaVozDisponible,
   obtenerNombreTienda,
 } from '@/core/configuracion';
+import { comprobantePorDefecto, comprobantesDisponibles } from '@/core/comprobantes';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
 import { partirAlias, normalizarParaBusqueda } from '@/core/texto';
 import type { Cliente, MetodoPago, Producto } from '@/core/tipos';
@@ -572,6 +573,10 @@ export default function PaginaVentaPorVoz() {
         metodoPago: venta.metodoPago,
         clienteId: cliente?.id ?? null,
         clienteNombreLibre: venta.metodoPago !== 'fiado' && !cliente ? nombreLibre || null : null,
+        // Por voz no se pide Factura (exige elegir cliente con RUC en pantalla): Boleta si hay series, si no nota de venta.
+        tipoComprobante: comprobantePorDefecto(
+          comprobantesDisponibles(contenedor.plan.obtenerEstado().tipo === 'premium', contenedor.series.listarActivas()),
+        ),
       });
       await contenedor.persistir();
       notificarStockBajoTrasVenta(venta.lineas);

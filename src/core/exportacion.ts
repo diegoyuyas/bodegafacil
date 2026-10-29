@@ -28,7 +28,10 @@ import type {
 export interface FilaVentaDetallada {
   nombreVendedor: string;
   documentoVendedor: string;
+  /** Referencia interna (V-N). Siempre se muestra, aunque la venta tenga boleta o factura. */
   pedido: string;
+  /** «Boleta B001-0000123» / «Factura F001-0000045» / «Nota de venta V-12». Si falta, se muestra como nota de venta. */
+  comprobante?: string;
   fecha: string;
   producto: string;
   cantidad: number;
@@ -87,6 +90,7 @@ export function exportarVentasACsv(filas: FilaVentaDetallada[]): string {
       'Nombre vendedor',
       'Nro. Documento vendedor',
       'Pedido',
+      'Comprobante',
       'Fecha',
       'Producto',
       ...(conDescripcion ? ['Descripción'] : []),
@@ -100,6 +104,7 @@ export function exportarVentasACsv(filas: FilaVentaDetallada[]): string {
       f.nombreVendedor,
       f.documentoVendedor,
       f.pedido,
+      f.comprobante ?? `Nota de venta ${f.pedido}`,
       f.fecha,
       f.producto,
       ...(conDescripcion ? [f.descripcion ?? ''] : []),
@@ -322,6 +327,7 @@ export function construirHojaVentas(filas: FilaVentaDetallada[], nombre = 'Venta
       'Nombre vendedor',
       'Nro. Documento vendedor',
       'Pedido',
+      'Comprobante',
       'Fecha',
       'Producto',
       ...(conDescripcion ? ['Descripción'] : []),
@@ -336,6 +342,7 @@ export function construirHojaVentas(filas: FilaVentaDetallada[], nombre = 'Venta
       f.nombreVendedor,
       f.documentoVendedor,
       f.pedido,
+      f.comprobante ?? `Nota de venta ${f.pedido}`,
       f.fecha,
       f.producto,
       ...(conDescripcion ? [f.descripcion ?? ''] : []),

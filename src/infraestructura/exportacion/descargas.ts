@@ -121,6 +121,23 @@ function blobABase64(blob: Blob): Promise<string> {
   });
 }
 
+/**
+ * Abre la hoja "Compartir" de Android con un archivo (el backup) para que el bodeguero elija dónde guardarlo
+ * (Drive, WhatsApp, Archivos...). Solo en el APK: en navegador no hay hoja de compartir y no se hace nada
+ * (devuelve false). NO espera a que el usuario elija ni cierre la hoja, y nunca falla por eso.
+ */
+export async function compartirBinarioEnApp(nombreArchivo: string, datos: Uint8Array): Promise<boolean> {
+  if (!Capacitor.isNativePlatform()) return false;
+  try {
+    const blob = new Blob([datos], { type: 'application/octet-stream' });
+    await conLimiteDeTiempo(descargarDentroDelApp(blob, nombreArchivo), LIMITE_ESPERA_ESCRITURA_MS);
+    return true;
+  } catch {
+    // La copia del teléfono ya está guardada: si no se puede abrir la hoja, el backup igual quedó hecho.
+    return false;
+  }
+}
+
 const CARPETA_BACKUP_AUTOMATICO = 'VendeFacil';
 
 /**

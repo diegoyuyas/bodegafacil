@@ -67,7 +67,7 @@ export default function PaginaReimprimirDocumentos() {
     try {
       await imprimirComprobanteDeVenta(contenedor, ventaId);
       setMensajeEsError(false);
-      setMensaje(`V-${ventaId} enviado a la impresora.`);
+      setMensaje(`${resultados.find((v) => v.id === ventaId)?.comprobante ?? `V-${ventaId}`} enviado a la impresora.`);
     } catch {
       setMensajeEsError(true);
       setMensaje(MENSAJE_IMPRESORA_NO_CONFIGURADA);
@@ -111,7 +111,7 @@ export default function PaginaReimprimirDocumentos() {
           <p className="mt-2 text-xs text-tinta/60">
             {!esPremium
               ? 'Actívala desde el panel de administrador.'
-              : 'Ve a Más > Configuración > Configuración de Impresión y activa "Activar impresión Bluetooth".'}
+              : 'Ve a Más > Configuración > Configuración de Impresión > Sincronizar Impresora Bluetooth y activa "Activar impresión Bluetooth".'}
           </p>
         </section>
       </div>
@@ -162,7 +162,7 @@ export default function PaginaReimprimirDocumentos() {
       <input
         value={texto}
         onChange={(e) => setTexto(e.target.value)}
-        placeholder="Buscar por V-1, cliente, DNI o monto…"
+        placeholder="Buscar por V-1, B001, cliente, DNI o monto…"
         className="mt-4 h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
       />
 
@@ -180,7 +180,7 @@ export default function PaginaReimprimirDocumentos() {
             <li key={venta.id} className="flex items-center justify-between gap-3 py-3">
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-tinta">
-                  V-{venta.id} {venta.anulada && <span className="text-alerta">(Anulada)</span>}
+                  {venta.comprobante} {venta.anulada && <span className="text-alerta">(Anulada)</span>}
                 </p>
                 <p className="truncate text-xs text-tinta/50">
                   {venta.clienteNombre ?? 'Cliente Eventual'}

@@ -27,7 +27,45 @@ import { CLAVE_TIENDA_VENDEDOR, CLAVE_TIENDA_VENDEDOR_DOCUMENTO } from '@/core/i
 import { ahoraLocalSql, hoyLocalSql } from '@/core/tiempo';
 import type { BaseDatosLocal } from './base-datos';
 import type { RegistroActividad } from '@/core/actividad';
+import {
+  ETIQUETA_COMPROBANTE,
+  comprobanteConTipo,
+  seriesDisponibles,
+  textoComprobante,
+  validarClienteParaFactura,
+  type SerieComprobante,
+  type TipoComprobante,
+  type TipoSerie,
+} from '@/core/comprobantes';
+import type { SerieComprobanteRepositorio } from '@/core/repositorios';
 import { mapearVenta, type FilaVenta } from './mapeadores';
+
+/** Columnas del comprobante de una venta (con los dígitos de su serie) y el JOIN que las trae. */
+const COLUMNAS_COMPROBANTE = `v.tipo_comprobante AS tipo_comprobante, v.serie AS serie, v.numero_comprobante AS numero_comprobante,
+                sc.digitos_numero AS digitos_numero`;
+const JOIN_SERIE = 'LEFT JOIN serie_comprobante sc ON sc.serie = v.serie';
+
+interface FilaComprobante {
+  id: number;
+  tipo_comprobante: TipoComprobante | null;
+  serie: string | null;
+  numero_comprobante: number | null;
+  digitos_numero: number | null;
+}
+
+function datosTexto(f: FilaComprobante) {
+  return {
+    tipo: f.tipo_comprobante ?? ('nota_venta' as TipoComprobante),
+    serie: f.serie ?? null,
+    numero: f.numero_comprobante ?? null,
+    ventaId: f.id,
+    digitos: f.digitos_numero ?? null,
+  };
+}
+
+/** Una venta con los dígitos de su serie (para mostrar `B001-0000123` con el largo con que se emitió). */
+const SELECT_VENTA = `SELECT v.*, sc.digitos_numero AS digitos_numero
+                      FROM venta v LEFT JOIN serie_comprobante sc ON sc.serie = v.serie`;
 
 export class VentaRepositorioSqlite implements VentaRepositorio {
   constructor(
@@ -36,6 +74,8 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
     private readonly caja: CajaRepositorio,
     private readonly configuracion: ConfiguracionRepositorio,
     private readonly actividad?: RegistroActividad,
+    /** Series y comprobantes (Premium). Sin esto solo se emiten notas de venta. */
+    private readonly series?: SerieComprobanteRepositorio,
   ) {}
 
   /**
@@ -58,6 +98,13 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         );
       }
 
+      // Comprobante: nota de venta (V-N, sin serie) o boleta/factura con su serie y número.
+      const tipoComprobante = input.tipoComprobante ?? 'nota_venta';
+      const serieElegida =
+        tipoComprobante === 'nota_venta'
+          ? null
+          : this.elegirSerieParaVenta(tipoComprobante, input, estadoPlan.tipo === 'premium');
+
       const calculada = construirVenta(input.lineas, (id) => {
         const producto = this.productos.obtenerPorId(id);
         if (producto.tipo === 'insumo') {
@@ -66,9 +113,14 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         return producto;
       });
 
+      // El número se toma DENTRO de esta transacción, justo antes de guardar la venta: si algo falla
+      // más abajo, todo vuelve atrás y el número no se gasta (no hay repetidos ni saltos).
+      const numeroReservado = serieElegida && this.series ? this.series.tomarSiguienteNumero(serieElegida) : null;
+
       this.bd.ejecutar(
-        `INSERT INTO venta (fecha_hora, cliente_id, metodo_pago, subtotal, total, ganancia_estimada, telefono_whatsapp, cliente_nombre_libre, usuario_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO venta (fecha_hora, cliente_id, metodo_pago, subtotal, total, ganancia_estimada, telefono_whatsapp, cliente_nombre_libre, usuario_id,
+                            tipo_comprobante, serie, numero_comprobante)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           ahoraLocalSql(),
           input.clienteId ?? null,
@@ -80,6 +132,9 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
           // Nombre escrito a mano: solo si no hay cliente registrado (en mayúsculas, como todos los nombres).
           input.clienteId ? null : aMayusculas(input.clienteNombreLibre ?? '').slice(0, 60) || null,
           this.actividad?.usuarioActualId() ?? null,
+          tipoComprobante,
+          numeroReservado?.serie ?? null,
+          numeroReservado?.numero ?? null,
         ],
       );
       const ventaId = this.bd.ultimoIdInsertado();
@@ -126,8 +181,37 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
     });
   }
 
+  /**
+   * Valida que se pueda emitir ese comprobante y devuelve el id de la serie a usar:
+   * Premium vigente, serie activa del tipo, y para Factura un cliente registrado con RUC válido.
+   */
+  private elegirSerieParaVenta(tipo: TipoSerie, input: RegistrarVentaInput, esPremium: boolean): number {
+    const etiqueta = ETIQUETA_COMPROBANTE[tipo];
+    if (!seriesDisponibles(esPremium) || !this.series) {
+      throw new ErrorDeNegocio('Las boletas y facturas son una función Premium. Con tu plan actual solo puedes hacer notas de venta.');
+    }
+
+    let serie: SerieComprobante | null;
+    if (input.serieId) {
+      serie = this.series.obtenerPorId(input.serieId);
+      if (serie.tipo !== tipo) throw new ErrorDeNegocio(`La serie ${serie.serie} no es de ${etiqueta}.`);
+      if (!serie.activo) throw new ErrorDeNegocio(`La serie ${serie.serie} está desactivada.`);
+    } else {
+      serie = this.series.resolverSerie(tipo, this.actividad?.usuarioActualId() ?? null);
+      if (!serie) throw new ErrorDeNegocio(`No hay una serie de ${etiqueta} activa. Créala en Configuración de Series.`);
+    }
+
+    if (tipo === 'factura') {
+      const documento = input.clienteId
+        ? (this.bd.consultar<{ documento: string | null }>('SELECT documento FROM cliente WHERE id = ?', [input.clienteId])[0]?.documento ?? null)
+        : null;
+      validarClienteParaFactura(input.clienteId, documento);
+    }
+    return serie.id;
+  }
+
   obtenerPorId(id: number): Venta {
-    const fila = this.bd.consultar<FilaVenta>('SELECT * FROM venta WHERE id = ?', [id])[0];
+    const fila = this.bd.consultar<FilaVenta>(`${SELECT_VENTA} WHERE v.id = ?`, [id])[0];
     if (!fila) {
       throw new ErrorDeNegocio(`La venta ${id} no existe.`);
     }
@@ -137,9 +221,9 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
   listarDeHoy(): Venta[] {
     return this.bd
       .consultar<FilaVenta>(
-        `SELECT * FROM venta
-         WHERE anulada = 0 AND substr(fecha_hora, 1, 10) = ?
-         ORDER BY fecha_hora DESC`,
+        `${SELECT_VENTA}
+         WHERE v.anulada = 0 AND substr(v.fecha_hora, 1, 10) = ?
+         ORDER BY v.fecha_hora DESC`,
         [hoyLocalSql()],
       )
       .map(mapearVenta);
@@ -155,13 +239,19 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         cliente: string | null;
         anulada: number;
         usuario: string | null;
+        tipo_comprobante: TipoComprobante | null;
+        serie: string | null;
+        numero_comprobante: number | null;
+        digitos_numero: number | null;
       }>(
         `SELECT v.id AS id, v.fecha_hora AS fecha_hora, v.metodo_pago AS metodo_pago,
                 v.total AS total, COALESCE(c.nombre, NULLIF(TRIM(v.cliente_nombre_libre), '')) AS cliente, v.anulada AS anulada,
-                us.nombre AS usuario
+                us.nombre AS usuario,
+                ${COLUMNAS_COMPROBANTE}
          FROM venta v
          LEFT JOIN cliente c ON c.id = v.cliente_id
          LEFT JOIN usuario us ON us.id = v.usuario_id
+         ${JOIN_SERIE}
          WHERE substr(v.fecha_hora, 1, 10) = ?
          ORDER BY v.id DESC`,
         [hoyLocalSql()],
@@ -174,6 +264,8 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         clienteNombre: fila.cliente,
         anulada: fila.anulada === 1,
         usuarioNombre: fila.usuario,
+        tipoComprobante: fila.tipo_comprobante ?? 'nota_venta',
+        comprobante: textoComprobante(datosTexto(fila)),
       }));
   }
 
@@ -187,13 +279,19 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         cliente: string | null;
         anulada: number;
         usuario: string | null;
+        tipo_comprobante: TipoComprobante | null;
+        serie: string | null;
+        numero_comprobante: number | null;
+        digitos_numero: number | null;
       }>(
         `SELECT v.id AS id, v.fecha_hora AS fecha_hora, v.metodo_pago AS metodo_pago,
                 v.total AS total, COALESCE(c.nombre, NULLIF(TRIM(v.cliente_nombre_libre), '')) AS cliente, v.anulada AS anulada,
-                us.nombre AS usuario
+                us.nombre AS usuario,
+                ${COLUMNAS_COMPROBANTE}
          FROM venta v
          LEFT JOIN cliente c ON c.id = v.cliente_id
          LEFT JOIN usuario us ON us.id = v.usuario_id
+         ${JOIN_SERIE}
          WHERE substr(v.fecha_hora, 1, 10) >= ? AND substr(v.fecha_hora, 1, 10) <= ?
          ORDER BY v.id DESC`,
         [desde, hasta],
@@ -206,6 +304,8 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         clienteNombre: fila.cliente,
         anulada: fila.anulada === 1,
         usuarioNombre: fila.usuario,
+        tipoComprobante: fila.tipo_comprobante ?? 'nota_venta',
+        comprobante: textoComprobante(datosTexto(fila)),
       }));
   }
 
@@ -220,21 +320,28 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         cliente: string | null;
         documento: string | null;
         anulada: number;
+        tipo_comprobante: TipoComprobante | null;
+        serie: string | null;
+        numero_comprobante: number | null;
+        digitos_numero: number | null;
       }>(
         `SELECT v.id AS id, v.fecha_hora AS fecha_hora, v.metodo_pago AS metodo_pago,
-                v.total AS total, COALESCE(c.nombre, NULLIF(TRIM(v.cliente_nombre_libre), '')) AS cliente, c.documento AS documento, v.anulada AS anulada
+                v.total AS total, COALESCE(c.nombre, NULLIF(TRIM(v.cliente_nombre_libre), '')) AS cliente, c.documento AS documento, v.anulada AS anulada,
+                ${COLUMNAS_COMPROBANTE}
          FROM venta v
          LEFT JOIN cliente c ON c.id = v.cliente_id
+         ${JOIN_SERIE}
          WHERE date(v.fecha_hora) BETWEEN ? AND ?
            AND (
              ? = '' OR
              ('V-' || v.id) LIKE '%' || ? || '%' OR
+             COALESCE(v.serie || '-' || printf('%0' || sc.digitos_numero || 'd', v.numero_comprobante), '') LIKE '%' || ? || '%' OR
              COALESCE(c.nombre, v.cliente_nombre_libre) LIKE '%' || ? || '%' OR
              c.documento LIKE '%' || ? || '%' OR
              CAST(v.total AS TEXT) LIKE '%' || ? || '%'
            )
          ORDER BY v.id DESC`,
-        [desde, hasta, textoLimpio, textoLimpio, textoLimpio, textoLimpio, textoLimpio],
+        [desde, hasta, textoLimpio, textoLimpio, textoLimpio, textoLimpio, textoLimpio, textoLimpio],
       )
       .map((fila) => ({
         id: fila.id,
@@ -244,6 +351,8 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         clienteNombre: fila.cliente,
         clienteDocumento: fila.documento,
         anulada: fila.anulada === 1,
+        tipoComprobante: fila.tipo_comprobante ?? 'nota_venta',
+        comprobante: textoComprobante(datosTexto(fila)),
       }));
   }
 
@@ -532,6 +641,10 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         usuario_creacion: string | null;
         usuario_anulacion: string | null;
         fecha_anulacion: string | null;
+        tipo_comprobante: TipoComprobante | null;
+        serie: string | null;
+        numero_comprobante: number | null;
+        digitos_numero: number | null;
       }>(
         `SELECT
            v.id AS id,
@@ -546,13 +659,15 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
            v.comprobante_pago_ruta AS comprobante_pago_ruta,
            ucr.nombre AS usuario_creacion,
            uan.nombre AS usuario_anulacion,
-           v.fecha_anulacion AS fecha_anulacion
+           v.fecha_anulacion AS fecha_anulacion,
+           ${COLUMNAS_COMPROBANTE}
          FROM detalle_venta dv
          JOIN venta v ON v.id = dv.venta_id
          JOIN producto p ON p.id = dv.producto_id
          LEFT JOIN cliente c ON c.id = v.cliente_id
          LEFT JOIN usuario ucr ON ucr.id = v.usuario_id
          LEFT JOIN usuario uan ON uan.id = v.anulada_por
+         ${JOIN_SERIE}
          WHERE v.anulada = ${anuladas ? 1 : 0}${clausulaFecha}
          ORDER BY v.fecha_hora DESC`,
         parametros,
@@ -564,6 +679,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         nombreVendedor: this.configuracion.obtenerValor(CLAVE_TIENDA_VENDEDOR) ?? '',
         documentoVendedor: this.configuracion.obtenerValor(CLAVE_TIENDA_VENDEDOR_DOCUMENTO) ?? '',
         pedido: `V-${fila.id}`,
+        comprobante: comprobanteConTipo(datosTexto(fila)),
         fecha: fila.fecha_hora,
         producto: fila.producto,
         cantidad: fila.cantidad,

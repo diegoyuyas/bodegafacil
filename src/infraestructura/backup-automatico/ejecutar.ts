@@ -17,13 +17,23 @@ import {
 } from '@/core/backup-automatico';
 import { obtenerNombreTienda, CLAVE_NOMBRE_TIENDA } from '@/core/configuracion';
 import { horaLocalCompacta, hoyLocalSql } from '@/core/tiempo';
-import { guardarBinarioLocalSilencioso } from '@/infraestructura/exportacion/descargas';
+import { compartirBinarioEnApp, guardarBinarioLocalSilencioso } from '@/infraestructura/exportacion/descargas';
 import { mostrarNotificacionBackupAutomaticoFallido } from '@/infraestructura/notificaciones/notificaciones-navegador';
+
+export interface OpcionesBackupAutomatico {
+  /**
+   * Después de guardar la copia en el teléfono, abrir la pantalla de compartir de Android para que el usuario
+   * la guarde en Drive u otro lugar. Solo tiene efecto en el APK. Si el usuario la cierra no pasa nada:
+   * la copia del teléfono ya quedó guardada.
+   */
+  compartir?: boolean;
+}
 
 export async function ejecutarBackupAutomaticoAhora(
   contenedor: ContenedorRepositorios,
   nombreConfigurado: string,
-): Promise<{ ok: true } | { ok: false; mensaje: string }> {
+  opciones: OpcionesBackupAutomatico = {},
+): Promise<{ ok: true; compartido: boolean } | { ok: false; mensaje: string }> {
   const nombreArchivo = nombreArchivoBackupAutomatico(nombreConfigurado, hoyLocalSql(), horaLocalCompacta());
 
   try {
@@ -32,7 +42,9 @@ export async function ejecutarBackupAutomaticoAhora(
     contenedor.respaldos.registrar('automatico', 'completado', ruta, bytes.length);
     contenedor.configuracion.establecerValor(CLAVE_BACKUP_AUTO_ULTIMA_FECHA, hoyLocalSql());
     await contenedor.persistir();
-    return { ok: true };
+    // La hoja de compartir va al final: el backup ya está hecho y registrado pase lo que pase con ella.
+    const compartido = opciones.compartir ? await compartirBinarioEnApp(nombreArchivo, bytes) : false;
+    return { ok: true, compartido };
   } catch (e) {
     const mensaje = e instanceof Error ? e.message : 'error desconocido';
     contenedor.respaldos.registrar('automatico', 'fallido', null, null);

@@ -76,7 +76,14 @@ export interface LineaComprobante {
 }
 
 export interface DatosComprobante {
+  /** El número como se imprime: `B001-0000123`, o `V-12` en notas de venta. */
   numeroComprobante: string;
+  /** Título del documento: 'BOLETA', 'FACTURA' o 'NOTA DE VENTA' (si falta, NOTA DE VENTA). */
+  tituloComprobante?: string;
+  /** Referencia interna `V-N`; solo se imprime cuando el comprobante es boleta o factura. */
+  referenciaPedido?: string | null;
+  /** Cómo se llama el documento del cliente en el ticket: 'RUC' en facturas, 'DNI' en lo demás (por defecto). */
+  etiquetaDocumentoCliente?: string;
   fecha: string;
   hora: string;
   /** Nombre del vendedor (Más > Configuración > Información del Negocio) — opcional; se imprime entre la fecha y el cliente. Su documento NO se imprime, solo va al reporte de ventas. */
@@ -169,13 +176,13 @@ export function construirLineasComprobante(datos: DatosComprobante, ancho: numbe
   if (datos.tienda.ubicacion) c(datos.tienda.ubicacion);
   c('');
 
-  c('NOTA DE VENTA', { negrita: true });
-  c(datos.numeroComprobante, { negrita: true });
+  c(`${datos.tituloComprobante ?? 'NOTA DE VENTA'} ${datos.numeroComprobante}`, { negrita: true });
+  if (datos.referenciaPedido) c(`Pedido ${datos.referenciaPedido}`);
   i(lineaSeparadora(ancho));
 
   i(`Fecha: ${datos.fecha}  Hora: ${datos.hora}`);
   if (datos.nombreVendedor) i(`Vendedor: ${datos.nombreVendedor}`);
-  const documentoCliente = datos.clienteDocumento ? ` / DNI: ${datos.clienteDocumento}` : '';
+  const documentoCliente = datos.clienteDocumento ? ` / ${datos.etiquetaDocumentoCliente ?? 'DNI'}: ${datos.clienteDocumento}` : '';
   i(`Cliente: ${datos.clienteNombre}${documentoCliente}`);
   i(lineaSeparadora(ancho));
 

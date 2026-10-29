@@ -24,6 +24,7 @@ import { ProductoRepositorioSqlite } from '../src/infraestructura/sqlite/product
 import { ClienteRepositorioSqlite } from '../src/infraestructura/sqlite/cliente.repositorio';
 import { ConfiguracionRepositorioSqlite } from '../src/infraestructura/sqlite/configuracion.repositorio';
 import { UsuarioRepositorioSqlite } from '../src/infraestructura/sqlite/usuario.repositorio';
+import { SerieComprobanteRepositorioSqlite } from '../src/infraestructura/sqlite/serie-comprobante.repositorio';
 
 function afirmar(condicion: boolean, mensaje: string): void {
   if (!condicion) throw new Error(`❌ Falló: ${mensaje}`);
@@ -31,10 +32,10 @@ function afirmar(condicion: boolean, mensaje: string): void {
 }
 
 /** Índices que agregaron las migraciones (hay que quitarlos antes que su columna). */
-const INDICES_DE_MIGRACIONES = ['idx_cliente_documento'];
+const INDICES_DE_MIGRACIONES = ['idx_cliente_documento', 'idx_venta_comprobante', 'idx_serie_comprobante_serie']; // 0001, 0034, 0036
 
 /** Tablas que crearon las migraciones. */
-const TABLAS_DE_MIGRACIONES = ['producto_historial', 'bitacora_anulacion_pago', 'usuario', 'actividad_usuario']; // 0009, 0010, 0017, 0022
+const TABLAS_DE_MIGRACIONES = ['producto_historial', 'bitacora_anulacion_pago', 'usuario_serie', 'serie_comprobante', 'usuario', 'actividad_usuario']; // 0009, 0010, 0037, 0035, 0017, 0022
 
 /** Columnas que agregaron las migraciones, por tabla. */
 const COLUMNAS_DE_MIGRACIONES: Record<string, string[]> = {
@@ -42,7 +43,7 @@ const COLUMNAS_DE_MIGRACIONES: Record<string, string[]> = {
   proveedor: ['ruc'], // 0002
   compra: ['proveedor_nombre_libre', 'comprobante', 'metodo_pago', 'motivo_anulacion', 'usuario_id', 'anulada_por', 'fecha_anulacion', 'modificada_por', 'fecha_modificacion'], // 0002, 0006, 0019, 0026-0029
   producto: ['controla_stock', 'tipo', 'alias'], // 0003, 0014, 0016
-  venta: ['telefono_whatsapp', 'comprobante_pago_ruta', 'cliente_nombre_libre', 'usuario_id', 'anulada_por', 'fecha_anulacion'], // 0004, 0005, 0015, 0018, 0024-0025
+  venta: ['telefono_whatsapp', 'comprobante_pago_ruta', 'cliente_nombre_libre', 'usuario_id', 'anulada_por', 'fecha_anulacion', 'tipo_comprobante', 'serie', 'numero_comprobante'], // 0004, 0005, 0015, 0018, 0024-0025, 0031-0033
   movimiento_caja: ['compra_id', 'cliente_id', 'clase', 'abono_id', 'pago_anulado', 'usuario_id'], // 0007, 0011, 0012, 0020
   pago_deuda: ['foto_ruta', 'abono_id', 'anulado', 'motivo_anulacion', 'fecha_anulacion', 'usuario_id', 'anulado_por'], // 0008, 0010, 0021, 0030
   detalle_venta: ['descripcion'], // 0013
@@ -135,6 +136,14 @@ async function main() {
     'Lo hecho antes del control de usuarios queda sin usuario (no se inventa quién fue)',
   );
 
+  const comprobanteViejo = bd.consultar<{ tipo_comprobante: string; serie: string | null; numero_comprobante: number | null }>(
+    'SELECT tipo_comprobante, serie, numero_comprobante FROM venta WHERE id = 1',
+  )[0];
+  afirmar(
+    comprobanteViejo?.tipo_comprobante === 'nota_venta' && comprobanteViejo.serie === null && comprobanteViejo.numero_comprobante === null,
+    'La venta anterior a las series queda como nota de venta, sin serie ni número (no se numera hacia atrás)',
+  );
+
   const detalle = bd.consultar<{ cantidad: number; descripcion: string | null }>('SELECT cantidad, descripcion FROM detalle_venta WHERE id = 1')[0];
   afirmar(detalle?.cantidad === 2 && detalle.descripcion === null, 'El detalle de la venta vieja sigue ahí');
 
@@ -174,6 +183,12 @@ async function main() {
   const { usuario: admin } = await usuarios.crearPrimerAdministrador({ nombre: 'Diego', clave: 'Admin.2024' });
   afirmar(admin.rol === 'administrador', 'Tras migrar, ya se puede crear el primer administrador');
 
+  const seriesMigradas = new SerieComprobanteRepositorioSqlite(bd);
+  afirmar(seriesMigradas.listar().length === 0, 'Tras migrar, la base antigua queda SIN series (solo notas de venta)');
+  const serieNueva = seriesMigradas.crear({ tipo: 'boleta', serie: 'B001' });
+  const numeroTomado = bd.transaccion(() => seriesMigradas.tomarSiguienteNumero(serieNueva.id));
+  afirmar(numeroTomado.texto === 'B001-0000001', 'Tras migrar, ya se puede crear una serie y tomar su primer número (B001-0000001)');
+
   // 6. Volver a correr las migraciones sobre la base YA migrada no debe explotar (pasa cada vez que se abre la app).
   const bdOtraVez = await BaseDatosLocal.crear({ localizarArchivo, datosPrevios: bd.exportar() });
   const clientesOtraVez = new ClienteRepositorioSqlite(bdOtraVez, new ConfiguracionRepositorioSqlite(bdOtraVez));
@@ -182,6 +197,8 @@ async function main() {
   afirmar(productosOtraVez.listarActivos().length === 2, 'Correr las migraciones de nuevo no falla ni duplica productos');
   afirmar(productosOtraVez.obtenerPorId(productoNuevo.id).alias === 'COBERTURA,BITTER', 'Los alias sobreviven a cerrar y abrir la app');
   const usuariosOtraVez = new UsuarioRepositorioSqlite(bdOtraVez, new ConfiguracionRepositorioSqlite(bdOtraVez));
+  const seriesOtraVez = new SerieComprobanteRepositorioSqlite(bdOtraVez);
+  afirmar(seriesOtraVez.listar().length === 1 && seriesOtraVez.obtenerPorId(serieNueva.id).siguienteNumero === 2, 'Las series y su correlativo sobreviven a cerrar y abrir la app (y a un respaldo)');
   afirmar(usuariosOtraVez.listarTodos().length === 1 && usuariosOtraVez.controlActivadoEnConfiguracion(), 'Los usuarios y el control sobreviven a cerrar y abrir la app (y a un respaldo)');
   afirmar((await usuariosOtraVez.verificarAcceso(admin.id, 'Admin.2024')).ok, 'La contraseña del administrador sigue funcionando tras cerrar y abrir');
 

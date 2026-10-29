@@ -151,7 +151,7 @@ export default function PaginaConfiguracion() {
           >
             <div>
               <p className="text-sm font-semibold text-tinta">Configuración de Impresión</p>
-              <p className="mt-0.5 text-xs text-tinta/50">Imprimir comprobantes en ticketera Bluetooth.</p>
+              <p className="mt-0.5 text-xs text-tinta/50">Series de Boleta y Factura, e impresora Bluetooth.</p>
               <p className="mt-1 text-xs font-semibold text-acento-oscuro">Función Premium</p>
             </div>
             <span className="text-tinta/40">›</span>

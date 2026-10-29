@@ -488,7 +488,7 @@ export default function PaginaInicio() {
                             >
                               <div>
                                 <p className="text-xs text-tinta/40">
-                                  V-{venta.id} · {formatearFechaHora(venta.fechaHora)}
+                                  {venta.comprobante} · {formatearFechaHora(venta.fechaHora)}
                                   {venta.usuarioNombre && ` · ${venta.usuarioNombre}`}
                                 </p>
                                 <p className="text-sm text-tinta/80">

@@ -15,6 +15,16 @@ import { LIMITE_DESCRIPCION_LINEA, limpiarNumeroEscrito, mayusculasAlEscribir } 
 import { guardarTicketComoImagen } from '@/infraestructura/comprobante-imagen/compartir-ticket';
 import { capturarFotoComprobantePago } from '@/infraestructura/comprobante-pago/capturar-foto';
 import {
+  ETIQUETA_COMPROBANTE,
+  comprobantePorDefecto,
+  comprobantesDisponibles,
+  esRucValido,
+  formatearComprobante,
+  validarClienteParaFactura,
+  type SerieComprobante,
+  type TipoComprobante,
+} from '@/core/comprobantes';
+import {
   mostrarNotificacionSinStock,
   mostrarNotificacionStockBajoProducto,
   soportaNotificaciones,
@@ -99,6 +109,10 @@ export default function PaginaNuevaVenta() {
   const [descripcionActiva, setDescripcionActiva] = useState(false);
   const [esPremium, setEsPremium] = useState(false);
   const [notificarStockBajo, setNotificarStockBajo] = useState(false);
+  // Series y comprobantes (Premium): sin series solo hay nota de venta; con series, Boleta por defecto.
+  const [seriesActivas, setSeriesActivas] = useState<SerieComprobante[]>([]);
+  const [tipoComprobante, setTipoComprobante] = useState<TipoComprobante>('nota_venta');
+  const [comprobanteGuardado, setComprobanteGuardado] = useState('');
 
   useEffect(() => {
     if (!contenedor) return;
@@ -110,6 +124,9 @@ export default function PaginaNuevaVenta() {
     setPrecioEditable(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_PRECIO_EDITABLE_VENTA)));
     setDescripcionActiva(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_DESCRIPCION_LINEAS)));
     setEsPremium(premium);
+    const activas = contenedor.series.listarActivas();
+    setSeriesActivas(activas);
+    setTipoComprobante(comprobantePorDefecto(comprobantesDisponibles(premium, activas)));
     setNotificarStockBajo(
       estaActivado(contenedor.configuracion.obtenerValor(CLAVE_NOTIFICAR_STOCK_BAJO)),
     );
@@ -154,6 +171,27 @@ export default function PaginaNuevaVenta() {
 
   const calculoValido = calculo && typeof calculo !== 'string' ? calculo : null;
   const errorCalculo = typeof calculo === 'string' ? calculo : null;
+
+  const comprobantesPosibles = comprobantesDisponibles(esPremium, seriesActivas);
+  const hayComprobantes = comprobantesPosibles.length > 1;
+  const tipoEfectivo: TipoComprobante = comprobantesPosibles.includes(tipoComprobante) ? tipoComprobante : 'nota_venta';
+  // La serie que le toca a quien vende (la asignada, o la predeterminada del tipo): la misma que usará el repositorio.
+  const serieElegida = useMemo(() => {
+    if (!contenedor || tipoEfectivo === 'nota_venta') return null;
+    return contenedor.series.resolverSerie(tipoEfectivo, contenedor.actor.usuarioActualId());
+  }, [contenedor, tipoEfectivo, seriesActivas]);
+  const numeroPrevisto = serieElegida
+    ? formatearComprobante(serieElegida.serie, serieElegida.siguienteNumero, serieElegida.digitosNumero)
+    : null;
+  // La factura exige un cliente registrado con RUC válido.
+  let errorFactura: string | null = null;
+  if (tipoEfectivo === 'factura') {
+    try {
+      validarClienteParaFactura(clienteSeleccionado?.id ?? null, clienteSeleccionado?.documento ?? null);
+    } catch (e) {
+      errorFactura = e instanceof ErrorDeNegocio ? e.message : 'La factura necesita un cliente con RUC válido.';
+    }
+  }
 
   function agregarProducto(producto: Producto) {
     setTexto('');
@@ -258,7 +296,8 @@ export default function PaginaNuevaVenta() {
     // Corrige el bug de que un cliente elegido para una venta al fiado
     // quedara "pegado" si luego se cambia a efectivo/yape/etc: al salir
     // de fiado, se limpia la selección para no arrastrarla.
-    if (valor !== 'fiado') {
+    // (Con factura el cliente se queda: es obligatorio sea cual sea el método de pago.)
+    if (valor !== 'fiado' && tipoEfectivo !== 'factura') {
       setClienteSeleccionado(null);
     }
   }
@@ -325,6 +364,10 @@ export default function PaginaNuevaVenta() {
       setMensajeError('Elige un cliente para la venta al fiado.');
       return;
     }
+    if (errorFactura) {
+      setMensajeError(errorFactura);
+      return;
+    }
 
     const telefonoFinal = telefonoWhatsAppFinal();
     if (enviarWhatsApp && !telefonoFinal) {
@@ -346,12 +389,15 @@ export default function PaginaNuevaVenta() {
         clienteId: clienteSeleccionado?.id ?? null,
         clienteNombreLibre: nombreClienteLibre() || null,
         telefonoWhatsapp: telefonoFinal || null,
+        tipoComprobante: tipoEfectivo,
+        serieId: serieElegida?.id ?? null,
       });
       await contenedor.persistir();
       notificarStockBajoTrasVenta(carrito);
       setTotalGuardado(venta.total);
       setVentaGuardadaId(venta.id);
       setMetodoPagoGuardado(venta.metodoPago);
+      setComprobanteGuardado(`${ETIQUETA_COMPROBANTE[venta.tipoComprobante]} ${venta.comprobante}`);
       setEtapa('guardada');
       if (enviarWhatsApp && telefonoFinal) {
         abrirWhatsAppDeVenta(venta, telefonoFinal);
@@ -402,7 +448,14 @@ export default function PaginaNuevaVenta() {
     setMensajeFotoPago(null);
     setMensajeError(null);
     setEtapa('armando');
-    if (contenedor) setProductos(contenedor.productos.listarActivosParaVenta());
+    if (contenedor) {
+      setProductos(contenedor.productos.listarActivosParaVenta());
+      // Las series pudieron cambiar (el siguiente número avanzó): se vuelven a leer y vuelve el comprobante por defecto.
+      const activas = contenedor.series.listarActivas();
+      setSeriesActivas(activas);
+      setTipoComprobante(comprobantePorDefecto(comprobantesDisponibles(esPremium, activas)));
+      setComprobanteGuardado('');
+    }
   }
 
   if (cargando) {
@@ -440,6 +493,7 @@ export default function PaginaNuevaVenta() {
         <div>
           <p className="text-sm text-tinta/60">Venta guardada</p>
           <p className="text-4xl font-extrabold text-tinta">{formatearMonto(totalGuardado, simboloMoneda)}</p>
+          {comprobanteGuardado && <p className="mt-1 text-sm font-semibold text-tinta/70">{comprobanteGuardado}</p>}
         </div>
         {mensajeTicket && <p className="text-sm text-alerta">{mensajeTicket}</p>}
 
@@ -523,6 +577,12 @@ export default function PaginaNuevaVenta() {
           Pago: {METODOS_PAGO.find((m) => m.valor === metodoPago)?.etiqueta} ·{' '}
           {clienteSeleccionado ? clienteSeleccionado.nombre : nombreClienteLibre().toLocaleUpperCase('es') || 'Cliente eventual'}
         </p>
+        {hayComprobantes && (
+          <p className="mt-1 text-sm text-tinta/60">
+            Comprobante: {ETIQUETA_COMPROBANTE[tipoEfectivo]}
+            {numeroPrevisto ? ` ${numeroPrevisto}` : ''}
+          </p>
+        )}
 
         {enviarWhatsApp && (
           <p className="mt-1 text-xs text-tinta/50">
@@ -698,6 +758,31 @@ export default function PaginaNuevaVenta() {
         {errorCalculo && <p className="mt-2 text-sm text-alerta">{errorCalculo}</p>}
       </section>
 
+      {/* Comprobante: solo aparece si hay series (Premium). Sin series, todo sale como nota de venta. */}
+      {hayComprobantes && (
+        <section className="mt-6">
+          <p className="text-sm font-bold text-tinta/60">Comprobante</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {comprobantesPosibles.map((t) => (
+              <button
+                key={t}
+                onClick={() => setTipoComprobante(t)}
+                className={`h-9 rounded-full border px-4 text-sm font-medium ${
+                  tipoEfectivo === t ? 'border-bodega bg-bodega text-white' : 'border-linea text-tinta/70'
+                }`}
+              >
+                {ETIQUETA_COMPROBANTE[t]}
+              </button>
+            ))}
+          </div>
+          {numeroPrevisto && <p className="mt-2 text-xs text-tinta/50">Saldrá como {numeroPrevisto}</p>}
+          {tipoEfectivo === 'factura' && (
+            <p className="mt-1 text-xs text-tinta/50">La factura necesita un cliente registrado con RUC (11 dígitos).</p>
+          )}
+          {errorFactura && <p className="mt-1 text-sm text-alerta">{errorFactura}</p>}
+        </section>
+      )}
+
       {/* Método de pago */}
       <section className="mt-6">
         <p className="text-sm font-bold text-tinta/60">Método de pago</p>
@@ -721,7 +806,12 @@ export default function PaginaNuevaVenta() {
       {/* Cliente: opcional siempre, obligatorio solo si es fiado */}
       <section className="mt-4">
         <p className="text-sm font-bold text-tinta/60">
-          Cliente {metodoPago === 'fiado' ? '(obligatorio para fiado)' : '(opcional)'}
+          Cliente{' '}
+          {tipoEfectivo === 'factura'
+            ? '(obligatorio para factura, con RUC)'
+            : metodoPago === 'fiado'
+              ? '(obligatorio para fiado)'
+              : '(opcional)'}
         </p>
 
         {clienteSeleccionado ? (
@@ -743,7 +833,7 @@ export default function PaginaNuevaVenta() {
             <input
               value={busquedaCliente}
               onChange={(e) => setBusquedaCliente(mayusculasAlEscribir(e.target.value).slice(0, 60))}
-              placeholder={metodoPago === 'fiado' ? 'Buscar por nombre o documento…' : 'Buscar o escribir el nombre del cliente…'}
+              placeholder={metodoPago === 'fiado' || tipoEfectivo === 'factura' ? 'Buscar por nombre o documento…' : 'Buscar o escribir el nombre del cliente…'}
               className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
             />
             {clientesEncontrados.length > 0 && (
@@ -756,14 +846,18 @@ export default function PaginaNuevaVenta() {
                     >
                       <span>{cliente.nombre}</span>
                       <span className="text-xs text-tinta/50">{cliente.documento}</span>
+                      {tipoEfectivo === 'factura' && !esRucValido(cliente.documento) && (
+                        <span className="text-xs text-alerta">Sin RUC válido: no sirve para factura</span>
+                      )}
                     </button>
                   </li>
                 ))}
               </ul>
             )}
-            {metodoPago === 'fiado' ? (
+            {metodoPago === 'fiado' || tipoEfectivo === 'factura' ? (
               <p className="mt-2 text-xs text-tinta/40">
-                El fiado necesita un cliente registrado. ¿Cliente nuevo? Créalo en{' '}
+                {tipoEfectivo === 'factura' ? 'La factura necesita un cliente registrado con RUC.' : 'El fiado necesita un cliente registrado.'}{' '}
+                ¿Cliente nuevo? Créalo en{' '}
                 <Link href="/mas/clientes" className="underline">
                   Más → Clientes
                 </Link>
@@ -853,7 +947,8 @@ export default function PaginaNuevaVenta() {
               setMensajeError(null);
               setEtapa('revisando');
             }}
-            className="flex h-14 w-full items-center justify-center rounded-full bg-bodega text-base font-semibold text-white active:bg-bodega-oscuro"
+            disabled={Boolean(errorFactura)}
+            className="flex h-14 w-full items-center justify-center rounded-full bg-bodega text-base font-semibold text-white active:bg-bodega-oscuro disabled:opacity-60"
           >
             Revisar y cobrar {formatearMonto(calculoValido.total, simboloMoneda)}
           </button>
