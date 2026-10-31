@@ -4,6 +4,7 @@ import type { Permiso } from '@/core/permisos';
 import {
   digitosNumeroDeConfiguracion,
   elegirSerie,
+  esSerieValida,
   formatearComprobante,
   normalizarSerie,
   numeroMaximo,
@@ -154,6 +155,11 @@ export class SerieComprobanteRepositorioSqlite implements SerieComprobanteReposi
       if (actual.activo === activo) return actual;
 
       if (activo) {
+        if (!esSerieValida(actual.serie)) {
+          throw new ErrorDeNegocio(
+            `La serie ${actual.serie} es antigua (tiene letras) y ya no se puede usar: las series son de 3 números (001). Crea una nueva.`,
+          );
+        }
         // Al reactivar, si el tipo se quedó sin predeterminada activa, esta pasa a serlo.
         const hay = this.bd.consultar<{ n: number }>(
           'SELECT COUNT(*) AS n FROM serie_comprobante WHERE tipo = ? AND activo = 1 AND es_predeterminada = 1',

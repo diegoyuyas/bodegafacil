@@ -14,8 +14,8 @@ import {
   CLAVE_TIENDA_VENDEDOR,
 } from '@/core/informacion-tienda';
 import { CLAVE_MONEDA, obtenerSimboloMoneda } from '@/core/moneda';
+import { CLAVE_LOGO_DATOS, CLAVE_LOGO_EN_IMAGEN, esLogoValido, logoEnImagenActivo } from '@/core/logo';
 import type { DatosComprobante } from '@/core/comprobante-impresion';
-import { TITULO_COMPROBANTE } from '@/core/comprobantes';
 
 function fechaHoraLegibles(fechaHoraSql: string): { fecha: string; hora: string } {
   const [fecha = '', hora = ''] = fechaHoraSql.split(' ');
@@ -54,13 +54,16 @@ export function construirDatosComprobanteDeVenta(
   const cliente = venta.clienteId ? contenedor.clientes.obtenerPorId(venta.clienteId) : null;
   const { fecha, hora } = fechaHoraLegibles(venta.fechaHora);
 
-  // Boleta/factura: título y número con serie (B001-0000123); la referencia interna V-N va aparte.
-  // Nota de venta (y ventas anteriores a las series): igual que siempre, «NOTA DE VENTA V-N».
+  // Todo ticket dice «DOCUMENTO INTERNO» y, debajo, la serie y el número (001-0000123). En las notas de venta
+  // (y las ventas anteriores a las series) el número es el de siempre, V-N; en boleta/factura la referencia V-N va aparte.
   const tieneSerie = venta.tipoComprobante !== 'nota_venta' && venta.serie !== null && venta.numeroComprobante !== null;
+
+  const logo = c.obtenerValor(CLAVE_LOGO_DATOS);
+  const logoParaImagen = logoEnImagenActivo(c.obtenerValor(CLAVE_LOGO_EN_IMAGEN)) && esLogoValido(logo) ? logo : null;
 
   return {
     numeroComprobante: venta.comprobante,
-    tituloComprobante: TITULO_COMPROBANTE[tieneSerie ? venta.tipoComprobante : 'nota_venta'],
+    logoParaImagen,
     referenciaPedido: tieneSerie ? `V-${venta.id}` : null,
     etiquetaDocumentoCliente: venta.tipoComprobante === 'factura' ? 'RUC' : 'DNI',
     fecha,

@@ -101,9 +101,9 @@ async function main() {
 
   // Con Premium el dueño crea su primera serie: la numeración arranca en 1 y NO toca lo anterior.
   app.premium(true);
-  const b001 = app.series.crear({ tipo: 'boleta', serie: 'B001' });
+  const b001 = app.series.crear({ tipo: 'boleta', serie: '001' });
   const primera = app.ventas.registrarVenta({ lineas: [{ productoId: producto.id, cantidad: 1 }], metodoPago: 'efectivo', tipoComprobante: 'boleta' });
-  afirmar(primera.comprobante === 'B001-0000001' && b001.predeterminada, 'La primera boleta de una base antigua sale como B001-0000001');
+  afirmar(primera.comprobante === '001-0000001' && b001.predeterminada, 'La primera boleta de una base antigua sale como 001-0000001');
   afirmar(app.ventas.obtenerPorId(antiguas[0]!).comprobante === `V-${antiguas[0]}`, 'Las ventas antiguas siguen sin número (no se numeran hacia atrás)');
   afirmar(
     comprobantePorDefecto(comprobantesDisponibles(app.esPremium(), app.series.listarActivas())) === 'boleta',
@@ -112,7 +112,7 @@ async function main() {
 
   // ---------- B. Respaldo NUEVO (con series) en un dispositivo con Premium vencido ----------
   app.ventas.registrarVenta({ lineas: [{ productoId: producto.id, cantidad: 1 }], metodoPago: 'efectivo', tipoComprobante: 'boleta' });
-  app.series.crear({ tipo: 'factura', serie: 'F001', siguienteNumero: 501 });
+  app.series.crear({ tipo: 'factura', serie: '002', siguienteNumero: 501 });
   const respaldoNuevo = app.bd.exportar();
 
   const otroEquipo = await abrir((await abrir(respaldoNuevo)).bd.exportar());
@@ -131,17 +131,52 @@ async function main() {
   // Al volver el Premium, la numeración continúa donde quedó.
   otroEquipo.premium(true);
   const continua = otroEquipo.ventas.registrarVenta({ lineas: [{ productoId: producto.id, cantidad: 1 }], metodoPago: 'efectivo', tipoComprobante: 'boleta' });
-  afirmar(continua.comprobante === 'B001-0000003', 'Al volver el Premium, la boleta continúa en el 3 (la nota de venta no gastó número)');
-  afirmar(otroEquipo.series.listar().find((s) => s.serie === 'F001')?.siguienteNumero === 501, 'La serie de factura conserva su siguiente número (501)');
+  afirmar(continua.comprobante === '001-0000003', 'Al volver el Premium, la boleta continúa en el 3 (la nota de venta no gastó número)');
+  afirmar(otroEquipo.series.listar().find((s) => s.serie === '002')?.siguienteNumero === 501, 'La serie de factura conserva su siguiente número (501)');
 
   // ---------- C. Restaurar dos veces el mismo respaldo no rompe nada ----------
   const unaVez = await abrir(respaldoNuevo);
   const dosVeces = await abrir(unaVez.bd.exportar());
   const tresVeces = await abrir(dosVeces.bd.exportar());
   afirmar(
-    tresVeces.series.listar().length === 2 && tresVeces.ventas.obtenerPorId(primera.id).comprobante === 'B001-0000001',
+    tresVeces.series.listar().length === 2 && tresVeces.ventas.obtenerPorId(primera.id).comprobante === '001-0000001',
     'Abrir y restaurar varias veces el mismo respaldo no duplica series ni cambia números',
   );
+
+  // ---------- D. Series antiguas con letras (B001, F001...) de versiones de prueba ----------
+  const conLetras = await abrir(respaldoNuevo);
+  conLetras.bd.ejecutar("INSERT INTO serie_comprobante (tipo, serie, digitos_numero, siguiente_numero, activo, es_predeterminada) VALUES ('boleta', 'B001', 7, 5, 1, 1)");
+  conLetras.bd.ejecutar("INSERT INTO serie_comprobante (tipo, serie, digitos_numero, siguiente_numero, activo, es_predeterminada) VALUES ('factura', 'F001', 7, 3, 1, 1)");
+  const idLetras = conLetras.series.listar().find((s) => s.serie === 'B001')!.id;
+  conLetras.bd.ejecutar("INSERT INTO venta (metodo_pago, subtotal, total, tipo_comprobante, serie, numero_comprobante) VALUES ('efectivo', 4, 4, 'boleta', 'B001', 4)");
+  const ventaConLetras = conLetras.bd.ultimoIdInsertado();
+
+  const migrada = await abrir(conLetras.bd.exportar()); // al abrir, las migraciones desactivan las series con letras
+  const antiguas2 = migrada.series.listar().filter((s) => s.serie === 'B001' || s.serie === 'F001');
+  afirmar(
+    antiguas2.length === 2 && antiguas2.every((s) => !s.activo && !s.predeterminada),
+    'Las series antiguas con letras (B001, F001) quedan desactivadas al abrir la app',
+  );
+  afirmar(
+    migrada.series.listar().filter((s) => /^\d{3}$/.test(s.serie)).every((s) => s.activo),
+    'Las series de 3 números siguen activas',
+  );
+  afirmar(
+    lanza(() => migrada.series.establecerActiva(idLetras, true)) && lanza(() => migrada.series.crear({ tipo: 'boleta', serie: 'B001' })),
+    'Una serie con letras no se puede reactivar ni crear de nuevo',
+  );
+  afirmar(
+    migrada.ventas.obtenerPorId(ventaConLetras).comprobante === 'B001-0000004' && migrada.ventas.obtenerPorId(ventaConLetras).numeroComprobante === 4,
+    'Una venta ya emitida con una serie antigua conserva su número (B001-0000004)',
+  );
+  const otraMigracion = await abrir(migrada.bd.exportar());
+  afirmar(
+    otraMigracion.series.listar().filter((s) => s.serie === 'B001').every((s) => !s.activo),
+    'Abrir la app otra vez no las reactiva',
+  );
+  migrada.premium(true);
+  const nueva = migrada.series.crear({ tipo: 'factura', serie: '010' });
+  afirmar(nueva.activo && nueva.serie === '010', 'Se puede crear una serie nueva de 3 números (010) y queda activa');
 
   console.log('\n🎉 Respaldos y bases antiguas con series: migración, restauración y numeración correctas.');
 }

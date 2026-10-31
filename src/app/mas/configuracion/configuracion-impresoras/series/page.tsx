@@ -4,23 +4,19 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { EtiquetaCampo, VentanaFormulario } from '@/components/ventana-formulario';
 import { usarContenedor } from '@/hooks/usar-contenedor';
-import {
-  CLAVE_SERIES_DIGITOS_NUMERO,
-  CLAVE_SERIES_LARGO_SERIE,
-} from '@/core/configuracion';
+import { CLAVE_SERIES_DIGITOS_NUMERO } from '@/core/configuracion';
 import {
   DIGITOS_NUMERO_PERMITIDOS,
   ETIQUETA_COMPROBANTE,
-  LARGOS_SERIE_PERMITIDOS,
+  LARGO_SERIE,
   TIPOS_SERIE,
   digitosNumeroDeConfiguracion,
   ejemploComprobante,
+  esSerieValida,
   formatearComprobante,
-  largoSerieDeConfiguracion,
   seriesDisponibles,
   sugerirSerie,
   validarSerie,
-  validarSerieNueva,
   type SerieComprobante,
   type TipoSerie,
 } from '@/core/comprobantes';
@@ -106,7 +102,6 @@ export default function PaginaConfiguracionSeries() {
 
   // Campos del formulario (nueva o editar).
   const [tipo, setTipo] = useState<TipoSerie>('boleta');
-  const [largoSerie, setLargoSerie] = useState<number>(4);
   const [texto, setTexto] = useState('');
   const [digitos, setDigitos] = useState<number>(7);
   const [siguiente, setSiguiente] = useState('1');
@@ -136,10 +131,8 @@ export default function PaginaConfiguracionSeries() {
 
   function abrirNueva() {
     if (!contenedor) return;
-    const largo = largoSerieDeConfiguracion(contenedor.configuracion.obtenerValor(CLAVE_SERIES_LARGO_SERIE));
     setTipo('boleta');
-    setLargoSerie(largo);
-    setTexto(sugerirSerie('boleta', largo));
+    setTexto(sugerirSerie(series.map((s) => s.serie)));
     setDigitos(digitosNumeroDeConfiguracion(contenedor.configuracion.obtenerValor(CLAVE_SERIES_DIGITOS_NUMERO)));
     setSiguiente('1');
     setErrorForm(null);
@@ -161,17 +154,6 @@ export default function PaginaConfiguracionSeries() {
     setErrorForm(null);
   }
 
-  function cambiarTipo(nuevo: TipoSerie) {
-    // Si todavía tiene la serie sugerida, se cambia por la sugerida del otro tipo (B001 ↔ F001).
-    if (texto === '' || texto === sugerirSerie(tipo, largoSerie)) setTexto(sugerirSerie(nuevo, largoSerie));
-    setTipo(nuevo);
-  }
-
-  function cambiarLargo(nuevo: number) {
-    if (texto === '' || texto === sugerirSerie(tipo, largoSerie)) setTexto(sugerirSerie(tipo, nuevo));
-    setLargoSerie(nuevo);
-  }
-
   async function guardar() {
     if (!contenedor || !formulario) return;
     setErrorForm(null);
@@ -179,10 +161,9 @@ export default function PaginaConfiguracionSeries() {
     try {
       const numero = Number(siguiente);
       if (formulario.tipo === 'nueva') {
-        const serie = validarSerieNueva(texto, largoSerie, tipo);
+        const serie = validarSerie(texto);
         contenedor.series.crear({ tipo, serie, digitosNumero: digitos, siguienteNumero: numero });
         // Lo elegido queda como valor por defecto para la próxima serie.
-        contenedor.configuracion.establecerValor(CLAVE_SERIES_LARGO_SERIE, String(largoSerie));
         contenedor.configuracion.establecerValor(CLAVE_SERIES_DIGITOS_NUMERO, String(digitos));
         await contenedor.persistir();
         mostrarAviso(`Serie ${serie} creada.`);
@@ -266,8 +247,9 @@ export default function PaginaConfiguracionSeries() {
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       <p className="mt-4 text-sm text-tinta/70">
-        Crea una serie de Boleta o de Factura para numerar tus comprobantes (ejemplo: B001-0000001). Mientras no
-        tengas ninguna, todas tus ventas salen como Nota de venta.
+        Crea una serie de Boleta o de Factura para numerar tus documentos (ejemplo: 001-0000001). La serie son 3
+        números. Son documentos internos, sin valor tributario. Mientras no tengas ninguna, todas tus ventas salen
+        como Nota de venta.
       </p>
 
       {contenedor && !esPremium && (
@@ -333,7 +315,7 @@ export default function PaginaConfiguracionSeries() {
                             )}
                             {!s.activo && (
                               <span className="rounded-full bg-linea px-2 py-0.5 text-xs font-semibold text-tinta/60">
-                                Desactivada
+                                {esSerieValida(s.serie) ? 'Desactivada' : 'Antigua: ya no se usa'}
                               </span>
                             )}
                           </div>
@@ -355,13 +337,15 @@ export default function PaginaConfiguracionSeries() {
                               Hacer predeterminada
                             </button>
                           )}
-                          <button
-                            type="button"
-                            onClick={() => cambiarActiva(s, !s.activo)}
-                            className="h-10 rounded-xl border border-linea px-4 text-sm font-semibold text-tinta"
-                          >
-                            {s.activo ? 'Desactivar' : 'Activar'}
-                          </button>
+                          {(s.activo || esSerieValida(s.serie)) && (
+                            <button
+                              type="button"
+                              onClick={() => cambiarActiva(s, !s.activo)}
+                              className="h-10 rounded-xl border border-linea px-4 text-sm font-semibold text-tinta"
+                            >
+                              {s.activo ? 'Desactivar' : 'Activar'}
+                            </button>
+                          )}
                         </div>
                       </li>
                     );
@@ -429,11 +413,7 @@ export default function PaginaConfiguracionSeries() {
             <>
               <div>
                 <EtiquetaCampo>¿De qué comprobante?</EtiquetaCampo>
-                <Opciones valores={TIPOS_SERIE} valor={tipo} onChange={cambiarTipo} etiqueta={(v) => ETIQUETA_COMPROBANTE[v]} nombre="Tipo de comprobante" />
-              </div>
-              <div>
-                <EtiquetaCampo>Caracteres de la serie</EtiquetaCampo>
-                <Opciones valores={LARGOS_SERIE_PERMITIDOS} valor={largoSerie} onChange={cambiarLargo} etiqueta={(v) => `${v} caracteres`} nombre="Caracteres de la serie" />
+                <Opciones valores={TIPOS_SERIE} valor={tipo} onChange={setTipo} etiqueta={(v) => ETIQUETA_COMPROBANTE[v]} nombre="Tipo de comprobante" />
               </div>
             </>
           ) : (
@@ -449,17 +429,17 @@ export default function PaginaConfiguracionSeries() {
                   <EtiquetaCampo>Serie</EtiquetaCampo>
                   <input
                     value={texto}
-                    onChange={(e) => setTexto(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
-                    maxLength={formulario.tipo === 'nueva' ? largoSerie : 4}
+                    onChange={(e) => setTexto(e.target.value.replace(/\D/g, ''))}
+                    maxLength={LARGO_SERIE}
+                    inputMode="numeric"
                     disabled={usada}
-                    autoCapitalize="characters"
-                    placeholder={sugerirSerie(formulario.tipo === 'nueva' ? tipo : formulario.serie.tipo, largoSerie)}
+                    placeholder="001"
                     className="h-11 w-full rounded-xl border border-linea px-3 text-base font-semibold tracking-wide disabled:bg-papel disabled:text-tinta/50"
                   />
                   <p className="mt-1 text-xs text-tinta/50">
                     {usada
                       ? 'Esta serie ya se usó en ventas: no se puede cambiar. Si necesitas otra, crea una serie nueva.'
-                      : 'Letras y números, sin espacios (ejemplo: B001).'}
+                      : '3 números, sin letras (ejemplo: 001).'}
                   </p>
                 </div>
 

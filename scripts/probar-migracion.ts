@@ -185,9 +185,9 @@ async function main() {
 
   const seriesMigradas = new SerieComprobanteRepositorioSqlite(bd);
   afirmar(seriesMigradas.listar().length === 0, 'Tras migrar, la base antigua queda SIN series (solo notas de venta)');
-  const serieNueva = seriesMigradas.crear({ tipo: 'boleta', serie: 'B001' });
+  const serieNueva = seriesMigradas.crear({ tipo: 'boleta', serie: '001' });
   const numeroTomado = bd.transaccion(() => seriesMigradas.tomarSiguienteNumero(serieNueva.id));
-  afirmar(numeroTomado.texto === 'B001-0000001', 'Tras migrar, ya se puede crear una serie y tomar su primer número (B001-0000001)');
+  afirmar(numeroTomado.texto === '001-0000001', 'Tras migrar, ya se puede crear una serie y tomar su primer número (001-0000001)');
 
   // 6. Volver a correr las migraciones sobre la base YA migrada no debe explotar (pasa cada vez que se abre la app).
   const bdOtraVez = await BaseDatosLocal.crear({ localizarArchivo, datosPrevios: bd.exportar() });

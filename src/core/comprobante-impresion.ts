@@ -27,6 +27,7 @@
  *    sí se muestran las tildes normalmente.
  */
 
+import { LEYENDA_DOCUMENTO_INTERNO, TITULO_DOCUMENTO_INTERNO } from './comprobantes';
 import { redondear } from './reglas-negocio';
 
 export const ANCHO_TICKET = 32;
@@ -76,10 +77,12 @@ export interface LineaComprobante {
 }
 
 export interface DatosComprobante {
-  /** El número como se imprime: `B001-0000123`, o `V-12` en notas de venta. */
+  /** El número como se imprime debajo de «DOCUMENTO INTERNO»: `001-0000123`, o `V-12` en notas de venta. */
   numeroComprobante: string;
-  /** Título del documento: 'BOLETA', 'FACTURA' o 'NOTA DE VENTA' (si falta, NOTA DE VENTA). */
-  tituloComprobante?: string;
+  /** Logotipo (texto `data:image/...`) para dibujar arriba en la IMAGEN del ticket; null si no hay o está apagado. */
+  logoParaImagen?: string | null;
+  /** Comandos ESC/POS del logotipo para la ticketera (ver `core/logo-impresion.ts`); se arman antes de imprimir. */
+  logoParaImpresion?: string | null;
   /** Referencia interna `V-N`; solo se imprime cuando el comprobante es boleta o factura. */
   referenciaPedido?: string | null;
   /** Cómo se llama el documento del cliente en el ticket: 'RUC' en facturas, 'DNI' en lo demás (por defecto). */
@@ -176,7 +179,9 @@ export function construirLineasComprobante(datos: DatosComprobante, ancho: numbe
   if (datos.tienda.ubicacion) c(datos.tienda.ubicacion);
   c('');
 
-  c(`${datos.tituloComprobante ?? 'NOTA DE VENTA'} ${datos.numeroComprobante}`, { negrita: true });
+  // Todo ticket es un documento interno (sin valor tributario): arriba eso y, debajo, la serie y el número.
+  c(TITULO_DOCUMENTO_INTERNO, { negrita: true });
+  c(datos.numeroComprobante, { negrita: true });
   if (datos.referenciaPedido) c(`Pedido ${datos.referenciaPedido}`);
   i(lineaSeparadora(ancho));
 
@@ -216,6 +221,15 @@ export function construirLineasComprobante(datos: DatosComprobante, ancho: numbe
   c('Gracias por su compra!', { negrita: true });
   if (datos.tienda.contacto) c(`Contáctanos: ${datos.tienda.contacto}`);
   if (datos.tienda.leyenda) c(datos.tienda.leyenda);
+  // Siempre lo último del ticket. En papel angosto se parte en la coma para que se lea bien.
+  c('');
+  if (ancho >= LEYENDA_DOCUMENTO_INTERNO.length) {
+    c(LEYENDA_DOCUMENTO_INTERNO);
+  } else {
+    const [primera = '', ...resto] = LEYENDA_DOCUMENTO_INTERNO.split(', ');
+    c(`${primera},`);
+    c(resto.join(', '));
+  }
 
   return lineas;
 }
@@ -232,11 +246,17 @@ const TEXTO_NORMAL = `${GS}!\x00`;
 /** Corte de papel — en ticketeras sin cuchilla (la mayoría de las portátiles) el comando simplemente no hace nada. */
 const CORTAR_PAPEL = `${GS}V\x00`;
 
-/** Texto ESC/POS real para mandar al socket Bluetooth de la impresora. */
-export function construirTextoComprobante(datos: DatosComprobante): string {
+/**
+ * Texto ESC/POS real para mandar al socket Bluetooth de la impresora. `ancho` son los caracteres por línea del
+ * papel de la ticketera (32 en papel de 58 mm, 48 en 80 mm); sin indicarlo, 32 como siempre.
+ */
+export function construirTextoComprobante(datos: DatosComprobante, ancho: number = ANCHO_TICKET): string {
   const partes: string[] = [INICIALIZAR];
+  // El logotipo (si hay) va primero, ya en comandos de imagen con bytes de 7 bits (0 a 127): la normalización de
+  // abajo no lo altera.
+  if (datos.logoParaImpresion) partes.push(datos.logoParaImpresion);
 
-  for (const linea of construirLineasComprobante(datos, ANCHO_TICKET)) {
+  for (const linea of construirLineasComprobante(datos, ancho)) {
     partes.push(linea.alineacion === 'centro' ? CENTRAR : IZQUIERDA);
     if (linea.negrita) partes.push(NEGRITA_ON);
     if (linea.grande) partes.push(TEXTO_GRANDE);

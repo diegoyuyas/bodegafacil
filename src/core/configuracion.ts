@@ -68,11 +68,10 @@ export function obtenerNombreTienda(valorGuardado: string | null): string {
 export const CLAVE_CONTROL_USUARIOS = 'control_usuarios';
 
 /**
- * Series y comprobantes (Premium) — largos por defecto para las series NUEVAS: caracteres de la serie (3 o 4)
- * y dígitos del número (7 u 8). Cada serie guarda su propio largo al crearla, así que cambiar estos valores
- * después nunca altera cómo se ven los números ya emitidos.
+ * Series y comprobantes (Premium) — dígitos del número (7 u 8) por defecto para las series NUEVAS. Cada serie guarda
+ * su propio largo al crearla, así que cambiar este valor después nunca altera cómo se ven los números ya emitidos.
+ * (La serie siempre son 3 números: no se configura.)
  */
-export const CLAVE_SERIES_LARGO_SERIE = 'series_largo_serie_defecto';
 export const CLAVE_SERIES_DIGITOS_NUMERO = 'series_digitos_numero_defecto';
 
 /** Huella (JSON) de la clave de recuperación de los administradores. Nunca la clave en sí. */

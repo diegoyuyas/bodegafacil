@@ -5,8 +5,10 @@
  *
  *  - Sin series creadas (o sin Premium) solo se emiten notas de venta (correlativo `V-N`).
  *  - Con series, por defecto aparece Boleta. La Factura exige un cliente registrado con RUC válido.
- *  - La SERIE tiene 3 o 4 caracteres (letras y números). El NÚMERO tiene 7 u 8 dígitos.
- *  - Cada serie lleva su propio correlativo y se muestra como `SERIE-NÚMERO` (ej. `B001-0000123`).
+ *  - La SERIE son exactamente 3 NÚMEROS (001, 002...): sin letras, para que nunca se confunda con las series
+ *    alfanuméricas (F001, B001, E001...) que SUNAT usa en los comprobantes ELECTRÓNICOS. El NÚMERO tiene 7 u 8 dígitos.
+ *  - Cada serie lleva su propio correlativo y se muestra como `SERIE-NÚMERO` (ej. `001-0000123`).
+ *  - Todo lo que imprime la app es un DOCUMENTO INTERNO, sin valor tributario.
  */
 
 import { ErrorDeNegocio } from './reglas-negocio';
@@ -23,23 +25,15 @@ export const ETIQUETA_COMPROBANTE: Record<TipoComprobante, string> = {
   factura: 'Factura',
 };
 
-/** Como se escribe en el ticket: «BOLETA B001-0000123». */
-export const TITULO_COMPROBANTE: Record<TipoComprobante, string> = {
-  nota_venta: 'NOTA DE VENTA',
-  boleta: 'BOLETA',
-  factura: 'FACTURA',
-};
+/** Encabezado de todo ticket (nota de venta, boleta o factura): la app no emite comprobantes con valor tributario. */
+export const TITULO_DOCUMENTO_INTERNO = 'DOCUMENTO INTERNO';
+/** Última línea de todo ticket. */
+export const LEYENDA_DOCUMENTO_INTERNO = 'Documento interno, sin valor tributario';
 
-export const LARGOS_SERIE_PERMITIDOS: readonly number[] = [3, 4];
+/** La serie son siempre 3 números. */
+export const LARGO_SERIE = 3;
 export const DIGITOS_NUMERO_PERMITIDOS: readonly number[] = [7, 8];
-export const LARGO_SERIE_PREDETERMINADO = 4;
 export const DIGITOS_NUMERO_PREDETERMINADO = 7;
-
-/** Lee el largo de serie guardado en configuración (3 o 4); si falta o es raro, el predeterminado. */
-export function largoSerieDeConfiguracion(valorGuardado: string | null): number {
-  const n = Number(valorGuardado);
-  return LARGOS_SERIE_PERMITIDOS.includes(n) ? n : LARGO_SERIE_PREDETERMINADO;
-}
 
 /** Lee los dígitos del número guardados en configuración (7 u 8); si falta o es raro, el predeterminado. */
 export function digitosNumeroDeConfiguracion(valorGuardado: string | null): number {
@@ -50,7 +44,7 @@ export function digitosNumeroDeConfiguracion(valorGuardado: string | null): numb
 export interface SerieComprobante {
   id: number;
   tipo: TipoSerie;
-  /** En mayúsculas, 3 o 4 caracteres (ej. `B001`). */
+  /** 3 números (ej. `001`). Las series antiguas con letras quedan desactivadas y sin poder usarse. */
   serie: string;
   /** 7 u 8. Queda guardado en la serie al crearla: cambiar los valores por defecto no altera los ya emitidos. */
   digitosNumero: number;
@@ -68,14 +62,19 @@ export interface SerieComprobante {
 // ------------------------------------------------------------
 
 export function normalizarSerie(texto: string): string {
-  return texto.trim().toUpperCase();
+  return texto.trim();
 }
 
-/** Devuelve la serie normalizada (mayúsculas) o lanza un mensaje claro. */
+/** ¿Es una serie permitida hoy? Exactamente 3 números (001). */
+export function esSerieValida(texto: string): boolean {
+  return /^\d{3}$/.test(texto);
+}
+
+/** Devuelve la serie (3 números) o lanza un mensaje claro. */
 export function validarSerie(texto: string): string {
   const serie = normalizarSerie(texto);
-  if (!/^[A-Z0-9]{3,4}$/.test(serie)) {
-    throw new ErrorDeNegocio('La serie debe tener 3 o 4 caracteres, solo letras y números (ejemplo: B001).');
+  if (!esSerieValida(serie)) {
+    throw new ErrorDeNegocio('La serie debe ser de 3 números, sin letras (ejemplo: 001).');
   }
   return serie;
 }
@@ -102,22 +101,17 @@ export function validarSiguienteNumero(numero: number, digitos: number): number 
   return numero;
 }
 
-/** Una serie de ejemplo para quien empieza: B001 / F001 (o B01 / F01 si la serie es de 3 caracteres). */
-export function sugerirSerie(tipo: TipoSerie, largo: number): string {
-  const letra = tipo === 'boleta' ? 'B' : 'F';
-  return `${letra}${'0'.repeat(Math.max(largo - 2, 1))}1`;
-}
-
-/** Para una serie NUEVA: además de ser válida, tiene que tener el largo elegido (3 o 4). */
-export function validarSerieNueva(texto: string, largo: number, tipo: TipoSerie): string {
-  const serie = validarSerie(texto);
-  if (serie.length !== largo) {
-    throw new ErrorDeNegocio(`La serie debe tener ${largo} caracteres (por ejemplo ${sugerirSerie(tipo, largo)}).`);
+/** La primera serie libre desde la 001 (001, 002, 003...): la que se propone al crear una serie nueva. */
+export function sugerirSerie(existentes: readonly string[]): string {
+  const usadas = new Set(existentes);
+  for (let n = 1; n <= 999; n += 1) {
+    const serie = String(n).padStart(LARGO_SERIE, '0');
+    if (!usadas.has(serie)) return serie;
   }
-  return serie;
+  return '001';
 }
 
-/** El ejemplo en vivo de las pantallas: `B001-0000001`, o null mientras lo escrito todavía no sea válido. */
+/** El ejemplo en vivo de las pantallas: `001-0000001`, o null mientras lo escrito todavía no sea válido. */
 export function ejemploComprobante(serie: string, digitos: number, numero: number): string | null {
   try {
     const s = validarSerie(serie);
@@ -133,7 +127,7 @@ export function formatearNumero(numero: number, digitos: number): string {
   return String(numero).padStart(digitos, '0');
 }
 
-/** `B001-0000123` */
+/** `001-0000123` */
 export function formatearComprobante(serie: string, numero: number, digitos: number): string {
   return `${serie}-${formatearNumero(numero, digitos)}`;
 }
@@ -153,7 +147,7 @@ function tipoEfectivo(datos: DatosTextoComprobante): TipoComprobante {
   return datos.tipo !== 'nota_venta' && datos.serie && datos.numero !== null ? datos.tipo : 'nota_venta';
 }
 
-/** El número tal como se muestra: `B001-0000123` o `V-12`. */
+/** El número tal como se muestra: `001-0000123` o `V-12`. */
 export function textoComprobante(datos: DatosTextoComprobante): string {
   if (datos.tipo === 'nota_venta' || !datos.serie || datos.numero === null) {
     return `V-${datos.ventaId}`;
@@ -161,12 +155,7 @@ export function textoComprobante(datos: DatosTextoComprobante): string {
   return formatearComprobante(datos.serie, datos.numero, datos.digitos ?? DIGITOS_NUMERO_PREDETERMINADO);
 }
 
-/** El título completo del documento: «BOLETA B001-0000123», «NOTA DE VENTA V-12». */
-export function tituloComprobante(datos: DatosTextoComprobante): string {
-  return `${TITULO_COMPROBANTE[tipoEfectivo(datos)]} ${textoComprobante(datos)}`;
-}
-
-/** Para listas y reportes: «Boleta B001-0000123», «Factura F001-0000045», «Nota de venta V-12». */
+/** Para listas y reportes: «Boleta 001-0000123», «Factura 002-0000045», «Nota de venta V-12». */
 export function comprobanteConTipo(datos: DatosTextoComprobante): string {
   return `${ETIQUETA_COMPROBANTE[tipoEfectivo(datos)]} ${textoComprobante(datos)}`;
 }

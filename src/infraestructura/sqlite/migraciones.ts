@@ -178,6 +178,10 @@ const MIGRACIONES: string[] = [
       serie_id    INTEGER NOT NULL REFERENCES serie_comprobante(id),
       PRIMARY KEY (usuario_id, tipo)
   );`,
+  // 0038: las series ahora son solo 3 NÚMEROS (001). Las que se hayan creado con letras (B001, F001...) se
+  // desactivan para siempre (no se pueden reactivar) y conservan sus números ya emitidos. Se vuelve a correr
+  // en cada arranque: es seguro porque esas series ya no se pueden activar.
+  `UPDATE serie_comprobante SET activo = 0, es_predeterminada = 0 WHERE serie NOT GLOB '[0-9][0-9][0-9]' AND (activo = 1 OR es_predeterminada = 1);`,
 ];
 
 export function aplicarMigraciones(bd: BaseDatosLocal): void {

@@ -11,6 +11,7 @@
  */
 
 import { construirLineasComprobante, type DatosComprobante } from '@/core/comprobante-impresion';
+import { tamanoLogoEnImagen } from '@/core/logo';
 
 const ANCHO_CARACTERES = 40;
 const TAMANO_FUENTE = 15;
@@ -18,6 +19,21 @@ const TAMANO_FUENTE_GRANDE = 20;
 const ALTO_LINEA = 21;
 const MARGEN = 20;
 const FUENTE = 'Courier New, monospace';
+/** Espacio entre el logotipo y el resto del ticket. */
+const ESPACIO_LOGO = 12;
+
+/** Abre el logotipo guardado; si por lo que sea no se puede, el ticket sale igual, sin logotipo. */
+async function cargarLogo(datos: string | null | undefined): Promise<HTMLImageElement | null> {
+  if (!datos) return null;
+  try {
+    const img = new Image();
+    img.src = datos;
+    await img.decode();
+    return img.naturalWidth > 0 && img.naturalHeight > 0 ? img : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function generarImagenComprobante(datos: DatosComprobante): Promise<Blob> {
   const lineas = construirLineasComprobante(datos, ANCHO_CARACTERES);
@@ -34,7 +50,15 @@ export async function generarImagenComprobante(datos: DatosComprobante): Promise
   const anchoCaracter = medicion.measureText('0').width;
 
   const anchoLienzo = Math.ceil(anchoCaracter * ANCHO_CARACTERES) + MARGEN * 2;
-  const altoLienzo = lineas.length * ALTO_LINEA + MARGEN * 2;
+
+  // Logotipo arriba (si hay y está activo): centrado, sin agrandarse, y el ticket crece lo que él ocupa.
+  const logo = await cargarLogo(datos.logoParaImagen);
+  const tamanoLogo = logo
+    ? tamanoLogoEnImagen(logo.naturalWidth, logo.naturalHeight, anchoLienzo - MARGEN * 2)
+    : { ancho: 0, alto: 0 };
+  const altoLogo = tamanoLogo.alto > 0 ? tamanoLogo.alto + ESPACIO_LOGO : 0;
+
+  const altoLienzo = lineas.length * ALTO_LINEA + MARGEN * 2 + altoLogo;
 
   const lienzo = document.createElement('canvas');
   lienzo.width = anchoLienzo;
@@ -48,6 +72,10 @@ export async function generarImagenComprobante(datos: DatosComprobante): Promise
   ctx.textBaseline = 'top';
 
   let y = MARGEN;
+  if (logo && tamanoLogo.alto > 0) {
+    ctx.drawImage(logo, (anchoLienzo - tamanoLogo.ancho) / 2, y, tamanoLogo.ancho, tamanoLogo.alto);
+    y += altoLogo;
+  }
   for (const linea of lineas) {
     const tamano = linea.grande ? TAMANO_FUENTE_GRANDE : TAMANO_FUENTE;
     ctx.font = `${linea.negrita ? 'bold ' : ''}${tamano}px ${FUENTE}`;
