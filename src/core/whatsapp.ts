@@ -19,17 +19,29 @@ const ETIQUETAS_METODO_PAGO_MENSAJE: Record<string, string> = {
 
 function formatearFecha(fechaIso: string): string {
   // fechaIso viene como 'YYYY-MM-DD HH:MM:SS' o similar de SQLite.
-  return new Date(fechaIso).toLocaleDateString('es-PE', {
+  return new Date(fechaIso.replace(' ', 'T')).toLocaleDateString('es-PE', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
   });
 }
 
+/** «de hoy», «de ayer», «de hace 20 días» (para la línea de la deuda más antigua). */
+function textoDeudaMasAntigua(dias: number): string {
+  if (dias <= 0) return 'de hoy';
+  if (dias === 1) return 'de ayer';
+  return `de hace ${dias} días`;
+}
+
+/**
+ * Recordatorio de cobro (texto fijo). Si se conoce la antigüedad de la deuda más vieja
+ * (`diasMasAntigua`), se agrega una línea con ella.
+ */
 export function construirMensajeDeuda(
   cliente: Cliente,
   deudas: DeudaPendienteDetalle[],
   simboloMoneda: string,
+  diasMasAntigua?: number | null,
 ): string {
   const lineas = [`Hola ${cliente.nombre}, este es tu saldo pendiente en la tienda:`, ''];
 
@@ -48,6 +60,10 @@ export function construirMensajeDeuda(
     }
   }
 
+  if (diasMasAntigua !== undefined && diasMasAntigua !== null) {
+    lineas.push('');
+    lineas.push(`⏳ Tu deuda más antigua es ${textoDeudaMasAntigua(diasMasAntigua)}.`);
+  }
   lineas.push('');
   lineas.push(`*Total pendiente: ${formatearMonto(cliente.saldoPendiente, simboloMoneda)}*`);
   lineas.push('');
@@ -89,5 +105,39 @@ export function construirMensajeVenta(
   lineas.push('');
   lineas.push('¡Gracias por tu compra! 😊');
 
+  return lineas.join('\n');
+}
+
+export interface DatosPagoMensaje {
+  /** 'YYYY-MM-DD HH:MM:SS' en hora local. */
+  fecha: string;
+  monto: number;
+  metodoPago: string;
+  /** Lo que queda debiendo el cliente después de este pago. */
+  saldoNuevo: number;
+}
+
+/**
+ * Comprobante de un pago de fiado, para enviar por WhatsApp al cliente justo después de cobrar.
+ * Es un aviso de la bodega, no un comprobante tributario.
+ */
+export function construirMensajePago(cliente: Pick<Cliente, 'nombre'>, pago: DatosPagoMensaje, simboloMoneda: string): string {
+  const lineas = [
+    `Hola ${cliente.nombre} 👋`,
+    '',
+    'Recibimos tu pago ✅',
+    '',
+    `📅 Fecha: ${formatearFecha(pago.fecha)}`,
+    `💰 Pagaste: ${formatearMonto(pago.monto, simboloMoneda)}`,
+    `💳 Método de pago: ${ETIQUETAS_METODO_PAGO_MENSAJE[pago.metodoPago] ?? pago.metodoPago}`,
+    '',
+  ];
+  if (pago.saldoNuevo > 0) {
+    lineas.push(`*Te queda por pagar: ${formatearMonto(pago.saldoNuevo, simboloMoneda)}*`);
+  } else {
+    lineas.push('*Ya no tienes deuda pendiente* 🙌');
+  }
+  lineas.push('');
+  lineas.push('¡Gracias por tu pago! 😊');
   return lineas.join('\n');
 }

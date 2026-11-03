@@ -18,7 +18,7 @@ export default function PaginaConfiguracionImpresorasAntigua() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
-      <p className="text-sm text-tinta/60">Llevándote a Sincronizar Impresora Bluetooth…</p>
+      <p className="text-sm text-tinta-suave">Llevándote a Sincronizar Impresora Bluetooth…</p>
       <Link href={destino} className="mt-3 text-sm font-semibold text-bodega-oscuro">
         Si no cambia sola, toca aquí
       </Link>

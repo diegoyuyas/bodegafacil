@@ -40,7 +40,7 @@ export default function PaginaEditarCompra() {
   return (
     <Suspense
       fallback={
-        <div className="mx-auto max-w-app px-5 pt-6 text-sm text-tinta/60">Cargando…</div>
+        <div className="mx-auto max-w-app px-5 pt-6 text-sm text-tinta-suave">Cargando…</div>
       }
     >
       <ContenidoEditarCompra />
@@ -216,13 +216,13 @@ function ContenidoEditarCompra() {
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-[calc(7rem+var(--area-segura-abajo))] pt-6">
       {modalPermiso}
       <header className="flex items-center gap-3">
-        <Link href="/compras" className="text-xl text-tinta/60" aria-label="Volver">
+        <Link href="/compras" className="text-xl text-tinta-suave" aria-label="Volver">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Modificar compra C-{compraId}</h1>
       </header>
 
-      {(cargando || cargandoCompra) && <p className="mt-4 text-sm text-tinta/60">Cargando…</p>}
+      {(cargando || cargandoCompra) && <p className="mt-4 text-sm text-tinta-suave">Cargando…</p>}
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       {!cargandoCompra && (
@@ -243,7 +243,7 @@ function ContenidoEditarCompra() {
                       className="flex w-full items-center justify-between px-4 py-3 text-left text-sm"
                     >
                       <span>{producto.nombre}</span>
-                      <span className="text-tinta/60">
+                      <span className="text-tinta-suave">
                         {producto.tipo === 'insumo' ? 'Insumo' : `Stock: ${producto.stockActual}`}
                       </span>
                     </button>
@@ -255,7 +255,7 @@ function ContenidoEditarCompra() {
 
           <section className="mt-6">
             {carrito.length === 0 ? (
-              <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
+              <p className="border-y border-linea py-6 text-center text-sm text-tinta-suave">
                 Agrega al menos un producto
               </p>
             ) : (
@@ -266,12 +266,12 @@ function ContenidoEditarCompra() {
                       <span className="text-sm text-tinta">
                         {linea.nombre}
                         {linea.esInsumo && (
-                          <span className="ml-2 text-xs font-semibold text-tinta/50">(Insumo)</span>
+                          <span className="ml-2 text-xs font-semibold text-tinta-suave">(Insumo)</span>
                         )}
                       </span>
                       <button
                         onClick={() => quitarLinea(linea.productoId)}
-                        className="text-tinta/40"
+                        className="text-tinta-suave"
                         aria-label={`Quitar ${linea.nombre}`}
                       >
                         ✕
@@ -279,7 +279,7 @@ function ContenidoEditarCompra() {
                     </div>
                     <div className="flex items-center gap-3">
                       {!linea.esInsumo && (
-                      <label className="flex-1 text-xs text-tinta/50">
+                      <label className="flex-1 text-xs text-tinta-suave">
                         Cantidad
                         <input
                           type="number"
@@ -292,7 +292,7 @@ function ContenidoEditarCompra() {
                         />
                       </label>
                       )}
-                      <label className="flex-1 text-xs text-tinta/50">
+                      <label className="flex-1 text-xs text-tinta-suave">
                         {linea.esInsumo ? 'Monto' : 'Costo unitario'}
                         <input
                           type="number"
@@ -320,7 +320,7 @@ function ContenidoEditarCompra() {
                         className="h-9 w-full rounded-lg border border-linea px-3 text-xs text-tinta outline-none placeholder:text-tinta/30 focus:border-bodega"
                       />
                     ) : (
-                      linea.descripcion && <p className="break-words text-xs text-tinta/50">{linea.descripcion}</p>
+                      linea.descripcion && <p className="break-words text-xs text-tinta-suave">{linea.descripcion}</p>
                     )}
                   </li>
                 ))}
@@ -329,20 +329,20 @@ function ContenidoEditarCompra() {
           </section>
 
           <section className="mt-6">
-            <p className="text-sm font-bold text-tinta/60">Proveedor (opcional)</p>
+            <p className="text-sm font-bold text-tinta-suave">Proveedor (opcional)</p>
 
             {proveedorSeleccionado ? (
               <div className="mt-2 flex items-center justify-between rounded-xl border border-linea bg-white px-4 py-3">
                 <div>
                   <p className="text-sm text-tinta">{proveedorSeleccionado.nombre}</p>
-                  <p className="text-xs text-tinta/50">
+                  <p className="text-xs text-tinta-suave">
                     {proveedorSeleccionado.ruc ? `RUC ${proveedorSeleccionado.ruc}` : 'Sin RUC'}
                     {proveedorSeleccionado.telefono && ` · ${proveedorSeleccionado.telefono}`}
                   </p>
                 </div>
                 <button
                   onClick={() => setProveedorSeleccionado(null)}
-                  className="text-tinta/40"
+                  className="text-tinta-suave"
                   aria-label="Quitar proveedor"
                 >
                   ✕
@@ -366,7 +366,7 @@ function ContenidoEditarCompra() {
                             className="flex w-full flex-col items-start px-4 py-2 text-left text-sm"
                           >
                             <span>{proveedor.nombre}</span>
-                            <span className="text-xs text-tinta/50">
+                            <span className="text-xs text-tinta-suave">
                               {proveedor.ruc ? `RUC ${proveedor.ruc}` : 'Sin RUC'}
                               {proveedor.telefono && ` · ${proveedor.telefono}`}
                             </span>
@@ -389,7 +389,7 @@ function ContenidoEditarCompra() {
           </section>
 
           <section className="mt-6">
-            <p className="text-sm font-bold text-tinta/60">Comprobante (opcional)</p>
+            <p className="text-sm font-bold text-tinta-suave">Comprobante (opcional)</p>
             <input
               value={comprobante}
               onChange={(e) => setComprobante(e.target.value)}
@@ -400,7 +400,7 @@ function ContenidoEditarCompra() {
           </section>
 
           <section className="mt-6">
-            <p className="text-sm font-bold text-tinta/60">Pagada con</p>
+            <p className="text-sm font-bold text-tinta-suave">Pagada con</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {METODOS.map((m) => (
                 <button

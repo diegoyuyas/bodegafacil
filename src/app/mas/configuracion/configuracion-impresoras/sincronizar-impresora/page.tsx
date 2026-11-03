@@ -35,7 +35,7 @@ export default function PaginaSincronizarImpresora() {
     return (
       <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
         <header className="flex items-center gap-3">
-          <Link href="/mas/configuracion/configuracion-impresoras" className="text-xl text-tinta/60" aria-label="Volver">
+          <Link href="/mas/configuracion/configuracion-impresoras" className="text-xl text-tinta-suave" aria-label="Volver">
             ←
           </Link>
           <h1 className="text-lg font-extrabold text-bodega-oscuro">Sincronizar Impresora Bluetooth</h1>
@@ -171,13 +171,13 @@ export default function PaginaSincronizarImpresora() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
-        <Link href="/mas/configuracion/configuracion-impresoras" className="text-xl text-tinta/60" aria-label="Volver">
+        <Link href="/mas/configuracion/configuracion-impresoras" className="text-xl text-tinta-suave" aria-label="Volver">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Sincronizar Impresora Bluetooth</h1>
       </header>
 
-      {cargando && <p className="mt-4 text-sm text-tinta/60">Cargando…</p>}
+      {cargando && <p className="mt-4 text-sm text-tinta-suave">Cargando…</p>}
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       <p className="mt-4 text-sm text-tinta/70">
@@ -189,7 +189,7 @@ export default function PaginaSincronizarImpresora() {
       {estadoPlan && !esPremium && (
         <section className="mt-6 rounded-xl border border-linea p-5 text-center">
           <p className="text-sm font-semibold text-tinta">Sincronizar Impresora Bluetooth es una función Premium</p>
-          <p className="mt-2 text-xs text-tinta/60">Actívala desde el panel de administrador.</p>
+          <p className="mt-2 text-xs text-tinta-suave">Actívala desde el panel de administrador.</p>
         </section>
       )}
 
@@ -219,10 +219,10 @@ export default function PaginaSincronizarImpresora() {
             {direccionGuardada ? (
               <div className="mt-2 rounded-xl border border-linea bg-white px-4 py-3">
                 <p className="text-sm text-tinta">{nombreGuardado}</p>
-                <p className="text-xs text-tinta/40">{direccionGuardada}</p>
+                <p className="text-xs text-tinta-suave">{direccionGuardada}</p>
               </div>
             ) : (
-              <p className="mt-2 text-xs text-tinta/50">Ninguna todavía.</p>
+              <p className="mt-2 text-xs text-tinta-suave">Ninguna todavía.</p>
             )}
 
             <button
@@ -242,7 +242,7 @@ export default function PaginaSincronizarImpresora() {
                       className="flex w-full items-center justify-between px-4 py-3 text-left text-sm"
                     >
                       <span>{d.name || 'Sin nombre'}</span>
-                      <span className="text-xs text-tinta/40">{d.address}</span>
+                      <span className="text-xs text-tinta-suave">{d.address}</span>
                     </button>
                   </li>
                 ))}
@@ -252,7 +252,7 @@ export default function PaginaSincronizarImpresora() {
 
           <section className="mt-6">
             <p className="text-sm font-semibold text-tinta">Ancho del papel</p>
-            <p className="mt-1 text-xs text-tinta/50">
+            <p className="mt-1 text-xs text-tinta-suave">
               El papel de las ticketeras pequeñas es de 58 mm; el de las grandes, de 80 mm. Elige el tuyo e imprime una prueba
               para comprobarlo.
             </p>
@@ -278,7 +278,7 @@ export default function PaginaSincronizarImpresora() {
                 </button>
               ))}
             </div>
-            <p className="mt-2 text-xs text-tinta/50">
+            <p className="mt-2 text-xs text-tinta-suave">
               {ancho.papel === 'otro'
                 ? 'Caracteres por línea (según tu impresora, entre 32 y 48):'
                 : `Se imprimen ${ancho.caracteres} caracteres por línea.`}
@@ -297,7 +297,7 @@ export default function PaginaSincronizarImpresora() {
               const sugerido = papelSugeridoPorNombre(nombreGuardado);
               if (!sugerido || sugerido === ancho.papel) return null;
               return (
-                <p className="mt-2 text-xs text-tinta/60">
+                <p className="mt-2 text-xs text-tinta-suave">
                   El nombre de tu impresora parece de {sugerido} mm.{' '}
                   <button type="button" onClick={() => guardarAncho(sugerido)} className="font-semibold text-bodega-oscuro underline">
                     Usar {sugerido} mm

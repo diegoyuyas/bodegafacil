@@ -471,6 +471,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
                 saldoNuevo,
                 venta.clienteId,
               ]);
+              this.bd.ejecutar('UPDATE cliente SET fecha_compromiso = NULL WHERE id = ? AND saldo_pendiente <= 0', [venta.clienteId]);
             }
           }
           // Se deja en 0 y "pagada" (el estado no admite "anulada" sin
@@ -500,6 +501,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
               saldoNuevo,
               venta.clienteId,
             ]);
+            this.bd.ejecutar('UPDATE cliente SET fecha_compromiso = NULL WHERE id = ? AND saldo_pendiente <= 0', [venta.clienteId]);
           }
         }
       } else {

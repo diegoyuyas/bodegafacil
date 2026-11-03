@@ -15,7 +15,7 @@ export default function PaginaAcercaDe() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
-        <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver a Más">
+        <Link href="/mas" className="text-xl text-tinta-suave" aria-label="Volver a Más">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Acerca de Vende Fácil</h1>
@@ -42,7 +42,7 @@ export default function PaginaAcercaDe() {
         {DATOS.map((dato) => (
           <li key={dato.etiqueta} className="flex items-center justify-between py-4">
             <p className="text-sm font-semibold text-tinta">{dato.etiqueta}</p>
-            <p className="text-sm text-tinta/60">{dato.valor}</p>
+            <p className="text-sm text-tinta-suave">{dato.valor}</p>
           </li>
         ))}
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { IconoWhatsApp } from '@/components/ui/iconos';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
@@ -218,7 +219,7 @@ export default function PaginaAdmin() {
   }
 
   if (cargando || tienePin === null) {
-    return <p className="p-5 text-sm text-tinta/60">Cargando…</p>;
+    return <p className="p-5 text-sm text-tinta-suave">Cargando…</p>;
   }
   if (error) {
     return <p className="p-5 text-sm text-alerta">{error.message}</p>;
@@ -229,7 +230,7 @@ export default function PaginaAdmin() {
     return (
       <div className="mx-auto flex min-h-dvh max-w-app flex-col justify-center px-5">
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Configurar administrador</h1>
-        <p className="mt-1 text-sm text-tinta/60">
+        <p className="mt-1 text-sm text-tinta-suave">
           Este PIN es tuyo. Úsalo en cada negocio para entrar a este panel.
         </p>
         <input
@@ -255,7 +256,7 @@ export default function PaginaAdmin() {
         >
           Guardar PIN
         </button>
-        <Link href="/" className="mt-4 text-center text-sm text-tinta/50">
+        <Link href="/" className="mt-4 text-center text-sm text-tinta-suave">
           Volver a Inicio
         </Link>
       </div>
@@ -284,7 +285,7 @@ export default function PaginaAdmin() {
         >
           Entrar
         </button>
-        <Link href="/" className="mt-4 text-center text-sm text-tinta/50">
+        <Link href="/" className="mt-4 text-center text-sm text-tinta-suave">
           Volver a Inicio
         </Link>
       </div>
@@ -295,14 +296,14 @@ export default function PaginaAdmin() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-10 pt-6">
       <header className="flex items-center gap-3">
-        <Link href="/" className="text-xl text-tinta/60" aria-label="Volver a inicio">
+        <Link href="/" className="text-xl text-tinta-suave" aria-label="Volver a inicio">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Panel de administrador</h1>
       </header>
 
       <section className="mt-6 rounded-xl border border-linea p-4">
-        <p className="text-sm text-tinta/60">Estado actual</p>
+        <p className="text-sm text-tinta-suave">Estado actual</p>
         {estadoPlan?.tipo === 'premium' ? (
           <p className="mt-1 text-lg font-semibold text-bodega-oscuro">
             Premium — vence el {estadoPlan.venceEn} ({estadoPlan.diasRestantes}{' '}
@@ -316,7 +317,7 @@ export default function PaginaAdmin() {
       </section>
 
       <section className="mt-6">
-        <p className="text-sm text-tinta/60">Activar Premium por</p>
+        <p className="text-sm text-tinta-suave">Activar Premium por</p>
         <div className="mt-2 flex gap-2">
           {DURACIONES_PREMIUM_DIAS.map((dias) => (
             <button
@@ -329,7 +330,7 @@ export default function PaginaAdmin() {
           ))}
         </div>
 
-        <p className="mt-4 text-xs text-tinta/50">
+        <p className="mt-4 text-xs text-tinta-suave">
           O un número de días a tu elección ({DIAS_PREMIUM_MINIMO} a {DIAS_PREMIUM_MAXIMO})
         </p>
         <div className="mt-2 flex gap-2">
@@ -356,7 +357,7 @@ export default function PaginaAdmin() {
 
       <section className="mt-8 rounded-xl border border-linea p-4">
         <p className="text-sm font-semibold text-tinta">Generar código para OTRA tienda</p>
-        <p className="mt-1 text-xs text-tinta/50">
+        <p className="mt-1 text-xs text-tinta-suave">
           Para activar Premium a distancia por WhatsApp, sin necesitar la laptop. El bodeguero te
           manda su ID de dispositivo desde este mismo panel (en su celular), tú generas el código
           acá, y él lo pega en Más → Configuración de su app.
@@ -372,7 +373,7 @@ export default function PaginaAdmin() {
               placeholder="Llave privada (hex) — pégala una sola vez"
               className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
             />
-            <p className="mt-1 text-xs text-tinta/50">
+            <p className="mt-1 text-xs text-tinta-suave">
               La misma que te dio <code>generar-llaves.mjs</code>. Queda guardada solo en este
               celular — no se guarda en la base de datos, así que nunca sale en ningún backup ni
               exportación de la app. Ver comentario en llave-privada-local.ts sobre el backup del
@@ -436,7 +437,7 @@ export default function PaginaAdmin() {
                 <p className="break-all font-mono text-sm font-bold text-bodega-oscuro">
                   {codigoGenerado.codigo}
                 </p>
-                <p className="mt-1 text-xs text-tinta/50">
+                <p className="mt-1 text-xs text-tinta-suave">
                   {diasCodigoRemoto} días de Premium · válido para canjear hasta {codigoGenerado.venceEn}
                 </p>
                 <div className="mt-2 flex gap-2">
@@ -448,8 +449,9 @@ export default function PaginaAdmin() {
                   </button>
                   <button
                     onClick={enviarCodigoPorWhatsApp}
-                    className="h-10 flex-1 rounded-lg bg-bodega text-xs font-semibold text-white"
+                    className="flex h-10 flex-1 items-center justify-center rounded-lg bg-bodega text-xs font-semibold text-white"
                   >
+                    <IconoWhatsApp tamano={16} className="mr-1.5" />
                     Enviar por WhatsApp
                   </button>
                 </div>
@@ -459,7 +461,7 @@ export default function PaginaAdmin() {
         )}
       </section>
 
-      <p className="mt-6 text-xs text-tinta/50">
+      <p className="mt-6 text-xs text-tinta-suave">
         ¿Es esta misma tienda y ya tienes el código? Se canjea desde{' '}
         <Link href="/mas/configuracion" className="font-semibold text-bodega-oscuro">
           Más → Configuración

@@ -136,7 +136,7 @@ export function MenuReportes({ esPremium, busqueda, onBusqueda, onElegir }: Menu
       />
 
       {areasVisibles.length === 0 ? (
-        <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+        <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta-suave">
           Ningún reporte coincide con &quot;{busqueda}&quot;.
         </p>
       ) : (
@@ -149,7 +149,7 @@ export function MenuReportes({ esPremium, busqueda, onBusqueda, onElegir }: Menu
                 </span>
                 <div>
                   <h2 className="text-base font-extrabold text-bodega-oscuro">{area.titulo}</h2>
-                  <p className="text-xs text-tinta/50">{area.descripcion}</p>
+                  <p className="text-xs text-tinta-suave">{area.descripcion}</p>
                 </div>
               </div>
               <ul className="divide-y divide-linea border-t border-linea">
@@ -164,7 +164,7 @@ export function MenuReportes({ esPremium, busqueda, onBusqueda, onElegir }: Menu
                           {r.etiqueta}
                           {r.premium && !esPremium && <span className="ml-2 text-xs">🔒</span>}
                         </span>
-                        <span className="block text-xs text-tinta/50">{r.descripcion}</span>
+                        <span className="block text-xs text-tinta-suave">{r.descripcion}</span>
                       </span>
                       <span className="text-lg text-tinta/30" aria-hidden>
                         ›

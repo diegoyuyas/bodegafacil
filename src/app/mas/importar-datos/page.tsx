@@ -13,7 +13,7 @@ export default function PaginaImportarDatos() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
-        <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver">
+        <Link href="/mas" className="text-xl text-tinta-suave" aria-label="Volver">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Importar Datos</h1>
@@ -25,9 +25,9 @@ export default function PaginaImportarDatos() {
             <Link href={opcion.href} className="flex items-center justify-between py-4">
               <div>
                 <p className="text-sm font-semibold text-tinta">{opcion.etiqueta}</p>
-                <p className="text-xs text-tinta/50">{opcion.descripcion}</p>
+                <p className="text-xs text-tinta-suave">{opcion.descripcion}</p>
               </div>
-              <span className="text-tinta/40">›</span>
+              <span className="text-tinta-suave">›</span>
             </Link>
           </li>
         ))}

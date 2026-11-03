@@ -480,18 +480,18 @@ export default function PaginaReportes() {
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
         {pestana ? (
-          <button onClick={() => setPestana(null)} className="text-xl text-tinta/60" aria-label="Volver a Reportes">
+          <button onClick={() => setPestana(null)} className="text-xl text-tinta-suave" aria-label="Volver a Reportes">
             ←
           </button>
         ) : (
-          <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver">
+          <Link href="/mas" className="text-xl text-tinta-suave" aria-label="Volver">
             ←
           </Link>
         )}
         <h1 className="text-lg font-extrabold text-bodega-oscuro">{reporteActual?.etiqueta ?? 'Reportes'}</h1>
       </header>
 
-      {cargando && <p className="mt-4 text-sm text-tinta/60">Cargando…</p>}
+      {cargando && <p className="mt-4 text-sm text-tinta-suave">Cargando…</p>}
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       <>
@@ -511,7 +511,7 @@ export default function PaginaReportes() {
               <p className="text-xs font-semibold text-tinta/70">Rango de fechas</p>
               <div className="mt-2 flex gap-2">
                 <div className="flex-1">
-                  <label className="mb-1 block text-xs text-tinta/50">Desde</label>
+                  <label className="mb-1 block text-xs text-tinta-suave">Desde</label>
                   <input
                     type="date"
                     value={desde}
@@ -521,7 +521,7 @@ export default function PaginaReportes() {
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="mb-1 block text-xs text-tinta/50">Hasta</label>
+                  <label className="mb-1 block text-xs text-tinta-suave">Hasta</label>
                   <input
                     type="date"
                     value={hasta}
@@ -542,7 +542,7 @@ export default function PaginaReportes() {
               onClick={descargarExcelDelReporte}
               disabled={botonExcelDeshabilitado}
               className={`mt-3 flex h-11 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold disabled:opacity-40 ${
-                esPremium ? 'bg-bodega text-white active:bg-bodega-oscuro' : 'border border-linea text-tinta/60'
+                esPremium ? 'bg-bodega text-white active:bg-bodega-oscuro' : 'border border-linea text-tinta-suave'
               }`}
             >
               {esPremium ? 'Descargar Excel ↓' : '🔒 Descargar Excel (Premium)'}
@@ -561,14 +561,14 @@ export default function PaginaReportes() {
               />
 
               <div className="mt-3 rounded-xl border border-linea px-4 py-3">
-                <p className="text-xs text-tinta/60">Total vendido en el rango</p>
+                <p className="text-xs text-tinta-suave">Total vendido en el rango</p>
                 <p className="text-2xl font-extrabold text-tinta">
                   {formatearMonto(totalVentasReporte, simboloMoneda)}
                 </p>
               </div>
 
               {ventasFiltradas.length === 0 ? (
-                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta-suave">
                   {busquedaVentas
                     ? `Ninguna venta coincide con "${busquedaVentas}".`
                     : 'No hay ventas registradas en este rango.'}
@@ -587,7 +587,7 @@ export default function PaginaReportes() {
                         </span>
                       </div>
                       <div className="mt-0.5 flex items-center justify-between gap-2">
-                        <p className="text-xs text-tinta/40">
+                        <p className="text-xs text-tinta-suave">
                           {new Date(venta.fecha).toLocaleString('es-PE')} ·{' '}
                           {ETIQUETAS_METODO_PAGO_REPORTE[venta.metodoPago] ?? venta.metodoPago}
                         </p>
@@ -634,12 +634,12 @@ export default function PaginaReportes() {
                       <div className="mt-1.5 space-y-0.5 pl-2">
                         {venta.lineas.map((linea, i) => (
                           <div key={i}>
-                            <p className="text-xs text-tinta/60">
+                            <p className="text-xs text-tinta-suave">
                               {linea.cantidad} × {linea.producto} —{' '}
                               {formatearMonto(linea.subtotal, simboloMoneda)}
                             </p>
                             {linea.descripcion && (
-                              <p className="break-words pl-3 text-xs text-tinta/40">{linea.descripcion}</p>
+                              <p className="break-words pl-3 text-xs text-tinta-suave">{linea.descripcion}</p>
                             )}
                           </div>
                         ))}
@@ -654,7 +654,7 @@ export default function PaginaReportes() {
           {pestana === 'caja' && (
             <section className="mt-4">
               <div>
-                <label className="mb-1 block text-xs text-tinta/50">Forma de pago</label>
+                <label className="mb-1 block text-xs text-tinta-suave">Forma de pago</label>
                 <select
                   value={filtroMetodoCaja}
                   onChange={(e) => setFiltroMetodoCaja(e.target.value as 'todos' | MetodoPagoSinFiado)}
@@ -670,19 +670,19 @@ export default function PaginaReportes() {
 
               <div className="mt-3 grid grid-cols-3 gap-2">
                 <div className="rounded-xl bg-bodega-claro/40 px-3 py-3 text-center">
-                  <p className="text-xs text-tinta/60">Ingresos</p>
+                  <p className="text-xs text-tinta-suave">Ingresos</p>
                   <p className="text-sm font-extrabold text-bodega-oscuro">
                     {formatearMonto(totalesCaja.ingresos, simboloMoneda)}
                   </p>
                 </div>
                 <div className="rounded-xl bg-alerta/10 px-3 py-3 text-center">
-                  <p className="text-xs text-tinta/60">Egresos</p>
+                  <p className="text-xs text-tinta-suave">Egresos</p>
                   <p className="text-sm font-extrabold text-alerta">
                     {formatearMonto(totalesCaja.egresos, simboloMoneda)}
                   </p>
                 </div>
                 <div className="rounded-xl border border-linea px-3 py-3 text-center">
-                  <p className="text-xs text-tinta/60">Neto</p>
+                  <p className="text-xs text-tinta-suave">Neto</p>
                   <p className="text-sm font-extrabold text-tinta">
                     {formatearMonto(totalesCaja.neto, simboloMoneda)}
                   </p>
@@ -690,7 +690,7 @@ export default function PaginaReportes() {
               </div>
 
               {movimientosCajaFiltrados.length === 0 ? (
-                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta-suave">
                   No hay movimientos de caja {filtroMetodoCaja !== 'todos' ? 'con esa forma de pago ' : ''}en
                   este rango.
                 </p>
@@ -705,26 +705,26 @@ export default function PaginaReportes() {
                       <div className="flex items-center justify-between text-sm">
                         <span className="text-tinta/80">
                           {etiqueta && (
-                            <span className="mr-1.5 rounded bg-tinta/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-tinta/60">
+                            <span className="mr-1.5 rounded bg-tinta/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-tinta-suave">
                               {etiqueta}
                             </span>
                           )}
                           {mov.referencia}
-                          <span className="text-tinta/40"> — {mov.concepto}</span>
+                          <span className="text-tinta-suave"> — {mov.concepto}</span>
                         </span>
                         <span
                           className={`font-semibold ${
-                            apagado ? 'text-tinta/60' : mov.tipo === 'ingreso' ? 'text-bodega-oscuro' : 'text-alerta'
+                            apagado ? 'text-tinta-suave' : mov.tipo === 'ingreso' ? 'text-bodega-oscuro' : 'text-alerta'
                           }`}
                         >
                           {mov.tipo === 'ingreso' ? '+' : '−'} {formatearMonto(montoVigenteDeMovimientoCaja(mov), simboloMoneda)}
                         </span>
                       </div>
-                      <p className="mt-0.5 text-xs text-tinta/40">
+                      <p className="mt-0.5 text-xs text-tinta-suave">
                         {new Date(mov.fechaHora).toLocaleString('es-PE')}
                       </p>
                       {!etiqueta && mov.montoAnulado > 0 && (
-                        <p className="mt-0.5 text-xs text-tinta/50">
+                        <p className="mt-0.5 text-xs text-tinta-suave">
                           Pago de {formatearMonto(mov.monto, simboloMoneda)}; {formatearMonto(mov.montoAnulado, simboloMoneda)}{' '}
                           corresponden a ventas anuladas
                         </p>
@@ -747,12 +747,12 @@ export default function PaginaReportes() {
               />
 
               <div className="mt-3 rounded-xl border border-linea px-4 py-3">
-                <p className="text-xs text-tinta/60">Total comprado en el rango</p>
+                <p className="text-xs text-tinta-suave">Total comprado en el rango</p>
                 <p className="text-2xl font-extrabold text-tinta">{formatearMonto(totalCompras, simboloMoneda)}</p>
               </div>
 
               {comprasFiltradas.length === 0 ? (
-                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta-suave">
                   {busquedaCompras
                     ? `Ninguna compra coincide con "${busquedaCompras}".`
                     : 'No hay compras registradas en este rango.'}
@@ -765,13 +765,13 @@ export default function PaginaReportes() {
                         <span className="text-tinta/80">{compra.proveedor}</span>
                         <span
                           className={`font-semibold ${
-                            compra.estado === 'anulada' ? 'text-tinta/60 line-through' : 'text-tinta'
+                            compra.estado === 'anulada' ? 'text-tinta-suave line-through' : 'text-tinta'
                           }`}
                         >
                           {formatearMonto(compra.total, simboloMoneda)}
                         </span>
                       </div>
-                      <p className="mt-0.5 text-xs text-tinta/40">
+                      <p className="mt-0.5 text-xs text-tinta-suave">
                         {new Date(compra.fecha).toLocaleDateString('es-PE')}
                         {compra.comprobante ? ` · ${compra.comprobante}` : ''}
                         {compra.estado === 'anulada' ? ' · Anulada' : ''}
@@ -779,11 +779,11 @@ export default function PaginaReportes() {
                       <div className="mt-1.5 space-y-0.5 pl-2">
                         {compra.lineas.map((linea, i) => (
                           <div key={i}>
-                            <p className="text-xs text-tinta/60">
+                            <p className="text-xs text-tinta-suave">
                               {linea.cantidad} × {linea.producto} — {formatearMonto(linea.subtotal, simboloMoneda)}
                             </p>
                             {linea.descripcion && (
-                              <p className="break-words pl-3 text-xs text-tinta/40">{linea.descripcion}</p>
+                              <p className="break-words pl-3 text-xs text-tinta-suave">{linea.descripcion}</p>
                             )}
                           </div>
                         ))}
@@ -797,7 +797,7 @@ export default function PaginaReportes() {
 
           {pestana === 'anulaciones' && (
             <section className="mt-4">
-              <p className="text-xs text-tinta/60">Bitácora de pagos de fiado anulados.</p>
+              <p className="text-xs text-tinta-suave">Bitácora de pagos de fiado anulados.</p>
               <input
                 value={busquedaAnulaciones}
                 onChange={(e) => setBusquedaAnulaciones(e.target.value)}
@@ -806,7 +806,7 @@ export default function PaginaReportes() {
               />
 
               {anulacionesFiltradas.length === 0 ? (
-                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta-suave">
                   {busquedaAnulaciones
                     ? `Ninguna anulación coincide con "${busquedaAnulaciones}".`
                     : 'No hay pagos anulados en este rango.'}
@@ -819,12 +819,12 @@ export default function PaginaReportes() {
                         <span className="text-tinta/80">{a.clienteNombre}</span>
                         <span className="font-semibold text-alerta">{formatearMonto(a.monto, simboloMoneda)}</span>
                       </div>
-                      <p className="mt-0.5 text-xs text-tinta/50">
+                      <p className="mt-0.5 text-xs text-tinta-suave">
                         Anulado el {formatearFechaHora(a.fechaAnulacion)} · pago del {formatearFechaHora(a.fechaPago)} ·{' '}
                         {a.metodoPago}
                       </p>
                       <p className="mt-0.5 text-xs text-tinta/70">Motivo: {a.motivo}</p>
-                      <p className="mt-0.5 text-xs text-tinta/40">Reabrió: {a.detalle}</p>
+                      <p className="mt-0.5 text-xs text-tinta-suave">Reabrió: {a.detalle}</p>
                     </li>
                   ))}
                 </ul>
@@ -842,7 +842,7 @@ export default function PaginaReportes() {
               />
 
               {masVendidosFiltrados.length === 0 ? (
-                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta-suave">
                   {busquedaMasVendidos
                     ? `Ningún producto coincide con "${busquedaMasVendidos}".`
                     : 'No hay ventas registradas en este rango.'}
@@ -852,12 +852,12 @@ export default function PaginaReportes() {
                   {masVendidosFiltrados.map((item, indice) => (
                     <li key={item.productoId} className="flex items-center justify-between py-3">
                       <div className="flex min-w-0 items-center gap-3">
-                        <span className="w-5 shrink-0 text-sm font-semibold text-tinta/40">
+                        <span className="w-5 shrink-0 text-sm font-semibold text-tinta-suave">
                           {indice + 1}
                         </span>
                         <div className="min-w-0">
                           <p className="truncate text-sm text-tinta">{item.nombre}</p>
-                          <p className="text-xs text-tinta/50">
+                          <p className="text-xs text-tinta-suave">
                             {item.cantidadVendida} vendidas · ganancia {formatearMonto(item.gananciaTotal, simboloMoneda)}
                           </p>
                         </div>
@@ -882,18 +882,18 @@ export default function PaginaReportes() {
               />
 
               <div className="mt-3 rounded-xl border border-linea px-4 py-3">
-                <p className="text-xs text-tinta/60">Ganancia en el rango</p>
+                <p className="text-xs text-tinta-suave">Ganancia en el rango</p>
                 <p className="text-2xl font-extrabold text-tinta">
                   {formatearMonto(resumenGanancia.ganancia, simboloMoneda)}
                 </p>
-                <p className="text-xs text-tinta/50">
+                <p className="text-xs text-tinta-suave">
                   Vendido {formatearMonto(resumenGanancia.vendido, simboloMoneda)} · margen{' '}
                   {resumenGanancia.margen.toFixed(1)}%
                 </p>
               </div>
 
               {gananciasFiltradas.length === 0 ? (
-                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta-suave">
                   {busquedaGanancia
                     ? `Ningún producto coincide con "${busquedaGanancia}".`
                     : 'No hay ventas registradas en este rango.'}
@@ -903,10 +903,10 @@ export default function PaginaReportes() {
                   {gananciasFiltradas.map((item, indice) => (
                     <li key={item.productoId} className="flex items-center justify-between gap-3 py-3">
                       <div className="flex min-w-0 items-center gap-3">
-                        <span className="w-5 shrink-0 text-sm font-semibold text-tinta/40">{indice + 1}</span>
+                        <span className="w-5 shrink-0 text-sm font-semibold text-tinta-suave">{indice + 1}</span>
                         <div className="min-w-0">
                           <p className="truncate text-sm text-tinta">{item.nombre}</p>
-                          <p className="text-xs text-tinta/50">
+                          <p className="text-xs text-tinta-suave">
                             {item.cantidadVendida} vendidas · costo {formatearMonto(item.costoTotal, simboloMoneda)} ·
                             margen {item.margenPorcentaje.toFixed(1)}%
                           </p>
@@ -916,7 +916,7 @@ export default function PaginaReportes() {
                         <p className="text-sm font-semibold text-tinta">
                           {formatearMonto(item.gananciaTotal, simboloMoneda)}
                         </p>
-                        <p className="text-xs text-tinta/50">de {formatearMonto(item.totalVendido, simboloMoneda)}</p>
+                        <p className="text-xs text-tinta-suave">de {formatearMonto(item.totalVendido, simboloMoneda)}</p>
                       </div>
                     </li>
                   ))}
@@ -928,12 +928,12 @@ export default function PaginaReportes() {
           {pestana === 'formaspago' && (
             <section className="mt-4">
               <div className="rounded-xl border border-linea px-4 py-3">
-                <p className="text-xs text-tinta/60">Total vendido en el rango</p>
+                <p className="text-xs text-tinta-suave">Total vendido en el rango</p>
                 <p className="text-2xl font-extrabold text-tinta">{formatearMonto(totalFormasPago, simboloMoneda)}</p>
               </div>
 
               {formasPago.length === 0 ? (
-                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta-suave">
                   No hay ventas registradas en este rango.
                 </p>
               ) : (
@@ -945,7 +945,7 @@ export default function PaginaReportes() {
                           <p className="text-sm text-tinta">
                             {ETIQUETAS_METODO_PAGO_REPORTE[item.metodoPago] ?? item.metodoPago}
                           </p>
-                          <p className="text-xs text-tinta/50">
+                          <p className="text-xs text-tinta-suave">
                             {item.cantidadVentas} {item.cantidadVentas === 1 ? 'venta' : 'ventas'} ·{' '}
                             {item.porcentaje.toFixed(1)}%
                           </p>
@@ -975,10 +975,10 @@ export default function PaginaReportes() {
                 placeholder="Buscar cliente…"
                 className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
               />
-              <p className="mt-2 text-xs text-tinta/50">Solo cuentan las ventas hechas a clientes registrados.</p>
+              <p className="mt-2 text-xs text-tinta-suave">Solo cuentan las ventas hechas a clientes registrados.</p>
 
               {compradoresFiltrados.length === 0 ? (
-                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta-suave">
                   {busquedaCompradores
                     ? `Ningún cliente coincide con "${busquedaCompradores}".`
                     : 'No hay ventas a clientes registrados en este rango.'}
@@ -988,10 +988,10 @@ export default function PaginaReportes() {
                   {compradoresFiltrados.map((item, indice) => (
                     <li key={item.clienteId} className="flex items-center justify-between gap-3 py-3">
                       <div className="flex min-w-0 items-center gap-3">
-                        <span className="w-5 shrink-0 text-sm font-semibold text-tinta/40">{indice + 1}</span>
+                        <span className="w-5 shrink-0 text-sm font-semibold text-tinta-suave">{indice + 1}</span>
                         <div className="min-w-0">
                           <p className="truncate text-sm text-tinta">{item.nombre}</p>
-                          <p className="text-xs text-tinta/50">
+                          <p className="text-xs text-tinta-suave">
                             {item.cantidadCompras} {item.cantidadCompras === 1 ? 'compra' : 'compras'} · última{' '}
                             {formatearFechaHora(item.ultimaCompra)}
                           </p>
@@ -1015,15 +1015,15 @@ export default function PaginaReportes() {
                 placeholder="Buscar cliente…"
                 className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
               />
-              <p className="mt-2 text-xs text-tinta/50">Situación de hoy, sin rango de fechas.</p>
+              <p className="mt-2 text-xs text-tinta-suave">Situación de hoy, sin rango de fechas.</p>
 
               <div className="mt-3 grid grid-cols-3 gap-2">
                 <div className="rounded-xl border border-linea px-3 py-2">
-                  <p className="text-xs text-tinta/60">0 a 7 días</p>
+                  <p className="text-xs text-tinta-suave">0 a 7 días</p>
                   <p className="text-sm font-extrabold text-tinta">{formatearMonto(totalesAntiguedad.a, simboloMoneda)}</p>
                 </div>
                 <div className="rounded-xl border border-linea px-3 py-2">
-                  <p className="text-xs text-tinta/60">8 a 30 días</p>
+                  <p className="text-xs text-tinta-suave">8 a 30 días</p>
                   <p className="text-sm font-extrabold text-tinta">{formatearMonto(totalesAntiguedad.b, simboloMoneda)}</p>
                 </div>
                 <div className="rounded-xl border border-alerta/40 px-3 py-2">
@@ -1033,7 +1033,7 @@ export default function PaginaReportes() {
               </div>
 
               {antiguedadFiltrada.length === 0 ? (
-                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta-suave">
                   {busquedaAntiguedad
                     ? `Ningún cliente coincide con "${busquedaAntiguedad}".`
                     : 'Nadie tiene deuda pendiente.'}
@@ -1045,7 +1045,7 @@ export default function PaginaReportes() {
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                           <p className="truncate text-sm text-tinta">{item.nombre}</p>
-                          <p className="text-xs text-tinta/50">
+                          <p className="text-xs text-tinta-suave">
                             deuda más antigua: {item.diasMasAntigua} {item.diasMasAntigua === 1 ? 'día' : 'días'}
                           </p>
                         </div>
@@ -1053,7 +1053,7 @@ export default function PaginaReportes() {
                           {formatearMonto(item.total, simboloMoneda)}
                         </span>
                       </div>
-                      <p className="mt-1 text-xs text-tinta/60">
+                      <p className="mt-1 text-xs text-tinta-suave">
                         {item.deuda0a7 > 0 && <span className="mr-3">0-7: {formatearMonto(item.deuda0a7, simboloMoneda)}</span>}
                         {item.deuda8a30 > 0 && <span className="mr-3">8-30: {formatearMonto(item.deuda8a30, simboloMoneda)}</span>}
                         {item.deuda31omas > 0 && (
@@ -1075,15 +1075,15 @@ export default function PaginaReportes() {
                 placeholder="Buscar cliente…"
                 className="h-11 w-full rounded-xl border border-linea bg-white px-4 text-sm outline-none focus:border-bodega"
               />
-              <p className="mt-2 text-xs text-tinta/50">Situación de hoy, sin rango de fechas.</p>
+              <p className="mt-2 text-xs text-tinta-suave">Situación de hoy, sin rango de fechas.</p>
 
               <div className="mt-3 rounded-xl border border-linea px-4 py-3">
-                <p className="text-xs text-tinta/60">Total que te deben</p>
+                <p className="text-xs text-tinta-suave">Total que te deben</p>
                 <p className="text-2xl font-extrabold text-tinta">{formatearMonto(totalDeudores, simboloMoneda)}</p>
               </div>
 
               {deudoresFiltrados.length === 0 ? (
-                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta-suave">
                   {busquedaDeudores
                     ? `Ningún cliente coincide con "${busquedaDeudores}".`
                     : 'Nadie tiene deuda pendiente.'}
@@ -1093,10 +1093,10 @@ export default function PaginaReportes() {
                   {deudoresFiltrados.map((item, indice) => (
                     <li key={item.clienteId} className="flex items-center justify-between gap-3 py-3">
                       <div className="flex min-w-0 items-center gap-3">
-                        <span className="w-5 shrink-0 text-sm font-semibold text-tinta/40">{indice + 1}</span>
+                        <span className="w-5 shrink-0 text-sm font-semibold text-tinta-suave">{indice + 1}</span>
                         <div className="min-w-0">
                           <p className="truncate text-sm text-tinta">{item.nombre}</p>
-                          <p className="text-xs text-tinta/50">
+                          <p className="text-xs text-tinta-suave">
                             {item.cantidadDeudas} {item.cantidadDeudas === 1 ? 'deuda' : 'deudas'} · la más antigua hace{' '}
                             {item.diasMasAntigua} {item.diasMasAntigua === 1 ? 'día' : 'días'}
                           </p>
@@ -1115,7 +1115,7 @@ export default function PaginaReportes() {
           {pestana === 'costos' && (
             <section className="mt-4">
               {!esPremium ? (
-                <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
+                <p className="border-y border-linea py-6 text-center text-sm text-tinta-suave">
                   🔒 El historial de costos es una función Premium.
                 </p>
               ) : (
@@ -1125,13 +1125,13 @@ export default function PaginaReportes() {
                       <div className="flex items-center justify-between rounded-xl border border-linea bg-white px-4 py-3">
                         <div>
                           <p className="text-sm text-tinta">{productoElegido.nombre}</p>
-                          <p className="text-xs text-tinta/50">
+                          <p className="text-xs text-tinta-suave">
                             Costo actual: {formatearMonto(productoElegido.costo, simboloMoneda)}
                           </p>
                         </div>
                         <button
                           onClick={() => setProductoElegido(null)}
-                          className="text-tinta/40"
+                          className="text-tinta-suave"
                           aria-label="Quitar producto"
                         >
                           ✕
@@ -1154,7 +1154,7 @@ export default function PaginaReportes() {
                                   className="flex w-full items-center justify-between px-4 py-3 text-left text-sm"
                                 >
                                   <span>{producto.nombre}</span>
-                                  <span className="text-tinta/60">{formatearMonto(producto.costo, simboloMoneda)}</span>
+                                  <span className="text-tinta-suave">{formatearMonto(producto.costo, simboloMoneda)}</span>
                                 </button>
                               </li>
                             ))}
@@ -1177,7 +1177,7 @@ export default function PaginaReportes() {
                       )}
 
                       {historialCostos.length === 0 ? (
-                        <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                        <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta-suave">
                           No hay compras registradas de este producto en el rango elegido.
                         </p>
                       ) : (
@@ -1192,7 +1192,7 @@ export default function PaginaReportes() {
                                   {formatearMonto(item.costoUnitario, simboloMoneda)} c/u
                                 </span>
                               </div>
-                              <p className="mt-0.5 text-xs text-tinta/40">
+                              <p className="mt-0.5 text-xs text-tinta-suave">
                                 {new Date(item.fecha).toLocaleDateString('es-PE')} · {item.cantidad}{' '}
                                 {productoElegido.unidadMedida} · C-{item.compraId}
                               </p>
@@ -1213,13 +1213,13 @@ export default function PaginaReportes() {
                   <div className="flex items-center justify-between rounded-xl border border-linea bg-white px-4 py-3">
                     <div>
                       <p className="text-sm text-tinta">{productoElegidoKardex.nombre}</p>
-                      <p className="text-xs text-tinta/50">
+                      <p className="text-xs text-tinta-suave">
                         Stock actual: {productoElegidoKardex.stockActual} {productoElegidoKardex.unidadMedida}
                       </p>
                     </div>
                     <button
                       onClick={() => setProductoElegidoKardex(null)}
-                      className="text-tinta/40"
+                      className="text-tinta-suave"
                       aria-label="Quitar producto"
                     >
                       ✕
@@ -1242,7 +1242,7 @@ export default function PaginaReportes() {
                               className="flex w-full items-center justify-between px-4 py-3 text-left text-sm"
                             >
                               <span>{producto.nombre}</span>
-                              <span className="text-tinta/60">
+                              <span className="text-tinta-suave">
                                 {producto.stockActual} {producto.unidadMedida}
                               </span>
                             </button>
@@ -1257,13 +1257,13 @@ export default function PaginaReportes() {
               {productoElegidoKardex && (
                 <>
                   {!esPremium && (
-                    <p className="mt-3 text-center text-xs text-tinta/50">
+                    <p className="mt-3 text-center text-xs text-tinta-suave">
                       🔒 Descargar el Kardex a Excel es una función Premium — verlo acá es gratis.
                     </p>
                   )}
 
                   {movimientosKardex.length === 0 ? (
-                    <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta/50">
+                    <p className="mt-4 border-y border-linea py-6 text-center text-sm text-tinta-suave">
                       No hay movimientos de stock de este producto en el rango elegido.
                     </p>
                   ) : (
@@ -1278,11 +1278,11 @@ export default function PaginaReportes() {
                                 {entrada !== null ? `+${entrada}` : `-${salida}`} → saldo {m.stockResultante}
                               </span>
                             </div>
-                            <p className="mt-0.5 text-xs text-tinta/40">
+                            <p className="mt-0.5 text-xs text-tinta-suave">
                               {new Date(m.fechaHora).toLocaleString('es-PE')} · {m.motivo}
                             </p>
                             {m.documento && (
-                              <p className="mt-0.5 text-xs text-tinta/60">
+                              <p className="mt-0.5 text-xs text-tinta-suave">
                                 {m.documento}
                                 {m.tercero ? ` · ${m.tercero}` : ''}
                               </p>

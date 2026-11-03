@@ -64,7 +64,7 @@ export function MenuImprimirTicket({
           <span>
             Imprimir en ticketera
             {!imprimirEnTicketeraDisponible && (
-              <span className="mt-0.5 block text-xs font-normal text-tinta/50">
+              <span className="mt-0.5 block text-xs font-normal text-tinta-suave">
                 Activa la impresora en Configuración de Impresión &gt; Sincronizar Impresora Bluetooth
               </span>
             )}
@@ -84,7 +84,7 @@ export function MenuImprimirTicket({
 
         <button
           onClick={onCerrar}
-          className="mt-3 h-12 w-full rounded-xl text-sm font-semibold text-tinta/50"
+          className="mt-3 h-12 w-full rounded-xl text-sm font-semibold text-tinta-suave"
         >
           Cancelar
         </button>

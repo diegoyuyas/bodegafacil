@@ -52,7 +52,7 @@ export function PantallaAcceso({
 
         {!elegido && (
           <>
-            <p className="mt-2 text-center text-sm text-tinta/60">¿Quién va a usar la app?</p>
+            <p className="mt-2 text-center text-sm text-tinta-suave">¿Quién va a usar la app?</p>
             <div className="mt-8 grid grid-cols-2 gap-5">
               {lista.map((u) => (
                 <RecuadroUsuario key={u.id} usuario={u} onClick={() => setElegido(u)} />

@@ -82,7 +82,7 @@ function Opciones<T extends number | string>({
 function EjemploEnVivo({ texto }: { texto: string | null }) {
   return (
     <div className="rounded-xl bg-papel px-4 py-3">
-      <p className="text-xs text-tinta/50">Así se verá en el comprobante</p>
+      <p className="text-xs text-tinta-suave">Así se verá en el comprobante</p>
       <p className="mt-0.5 text-base font-extrabold tracking-wide text-bodega-oscuro">{texto ?? '—'}</p>
     </div>
   );
@@ -237,13 +237,13 @@ export default function PaginaConfiguracionSeries() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
-        <Link href="/mas/configuracion/configuracion-impresoras" className="text-xl text-tinta/60" aria-label="Volver">
+        <Link href="/mas/configuracion/configuracion-impresoras" className="text-xl text-tinta-suave" aria-label="Volver">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Configuración de Series</h1>
       </header>
 
-      {cargando && <p className="mt-4 text-sm text-tinta/60">Cargando…</p>}
+      {cargando && <p className="mt-4 text-sm text-tinta-suave">Cargando…</p>}
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       <p className="mt-4 text-sm text-tinta/70">
@@ -255,7 +255,7 @@ export default function PaginaConfiguracionSeries() {
       {contenedor && !esPremium && (
         <section className="mt-6 rounded-xl border border-linea p-5 text-center">
           <p className="text-sm font-semibold text-tinta">Las series de Boleta y Factura son una función Premium</p>
-          <p className="mt-2 text-xs text-tinta/60">
+          <p className="mt-2 text-xs text-tinta-suave">
             Con tu plan actual solo puedes hacer Notas de venta. Tus series se guardan: si activas Premium otra vez, las
             tendrás como las dejaste.
           </p>
@@ -277,7 +277,7 @@ export default function PaginaConfiguracionSeries() {
           {series.length === 0 && (
             <section className="mt-6 rounded-xl border border-linea p-5 text-center">
               <p className="text-sm font-semibold text-tinta">Todavía no tienes series</p>
-              <p className="mt-2 text-xs text-tinta/60">
+              <p className="mt-2 text-xs text-tinta-suave">
                 Toca «Nueva serie». Mientras tanto, todas tus ventas salen como Nota de venta.
               </p>
             </section>
@@ -298,10 +298,10 @@ export default function PaginaConfiguracionSeries() {
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="text-base font-extrabold text-tinta">{s.serie}</p>
-                            <p className="mt-0.5 text-xs text-tinta/60">
+                            <p className="mt-0.5 text-xs text-tinta-suave">
                               Siguiente: {formatearComprobante(s.serie, s.siguienteNumero, s.digitosNumero)}
                             </p>
-                            <p className="text-xs text-tinta/50">
+                            <p className="text-xs text-tinta-suave">
                               {resumen && resumen.cantidad > 0
                                 ? `Ya se usó en ${resumen.cantidad} ${resumen.cantidad === 1 ? 'venta' : 'ventas'}`
                                 : 'Todavía no se usa'}
@@ -314,7 +314,7 @@ export default function PaginaConfiguracionSeries() {
                               </span>
                             )}
                             {!s.activo && (
-                              <span className="rounded-full bg-linea px-2 py-0.5 text-xs font-semibold text-tinta/60">
+                              <span className="rounded-full bg-linea px-2 py-0.5 text-xs font-semibold text-tinta-suave">
                                 {esSerieValida(s.serie) ? 'Desactivada' : 'Antigua: ya no se usa'}
                               </span>
                             )}
@@ -358,12 +358,12 @@ export default function PaginaConfiguracionSeries() {
           {series.length > 0 && (
             <section className="mt-8">
               <h2 className="text-sm font-extrabold text-bodega-oscuro">Serie de cada usuario</h2>
-              <p className="mt-1 text-xs text-tinta/60">
+              <p className="mt-1 text-xs text-tinta-suave">
                 Elige qué serie usa cada usuario estándar. Si no eliges ninguna, usa la predeterminada. Los
                 administradores siempre usan la predeterminada.
               </p>
               {usuariosEstandar.length === 0 ? (
-                <p className="mt-3 text-xs text-tinta/50">
+                <p className="mt-3 text-xs text-tinta-suave">
                   Aún no hay usuarios estándar. Cuando los crees en Administración de Usuarios, aquí podrás elegir su
                   serie.
                 </p>
@@ -381,7 +381,7 @@ export default function PaginaConfiguracionSeries() {
                           const porDefecto = predeterminadaDe(t);
                           return (
                             <div key={t}>
-                              <p className="text-xs text-tinta/50">{ETIQUETA_COMPROBANTE[t]}</p>
+                              <p className="text-xs text-tinta-suave">{ETIQUETA_COMPROBANTE[t]}</p>
                               <select
                                 value={valor}
                                 onChange={(e) => asignar(u, t, e.target.value)}
@@ -436,7 +436,7 @@ export default function PaginaConfiguracionSeries() {
                     placeholder="001"
                     className="h-11 w-full rounded-xl border border-linea px-3 text-base font-semibold tracking-wide disabled:bg-papel disabled:text-tinta/50"
                   />
-                  <p className="mt-1 text-xs text-tinta/50">
+                  <p className="mt-1 text-xs text-tinta-suave">
                     {usada
                       ? 'Esta serie ya se usó en ventas: no se puede cambiar. Si necesitas otra, crea una serie nueva.'
                       : '3 números, sin letras (ejemplo: 001).'}
@@ -456,7 +456,7 @@ export default function PaginaConfiguracionSeries() {
                     inputMode="numeric"
                     className="h-11 w-full rounded-xl border border-linea px-3 text-base"
                   />
-                  <p className="mt-1 text-xs text-tinta/50">
+                  <p className="mt-1 text-xs text-tinta-suave">
                     {formulario.tipo === 'nueva'
                       ? 'Déjalo en 1 si es una serie nueva. Si ya usas un talonario, pon el número por el que vas.'
                       : `Solo puede subir, nunca bajar: así los números siempre continúan.${maximo !== null ? ` Último emitido: ${maximo}.` : ''}`}

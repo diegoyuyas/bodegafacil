@@ -77,7 +77,7 @@ export function PantallaSplash({ children }: { children: React.ReactNode }) {
             <span className="pantalla-splash-punto" style={{ animationDelay: '300ms' }} />
           </div>
 
-          <div className="absolute bottom-8 flex flex-col items-center gap-1 text-xs text-tinta/50">
+          <div className="absolute bottom-8 flex flex-col items-center gap-1 text-xs text-tinta-suave">
             <img
               src="/logo-itect.png"
               alt="ITECT"

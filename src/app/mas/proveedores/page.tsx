@@ -11,6 +11,7 @@ import { SelectorEstado, filtrarPorEstado, type FiltroEstado } from '@/component
 import { EtiquetaCampo, VentanaFormulario } from '@/components/ventana-formulario';
 import { CLAVE_PREFIJO_PAIS, obtenerPrefijoPais } from '@/core/paises';
 import type { EstadoPlan } from '@/core/plan';
+import { IconoWhatsApp } from '@/components/ui/iconos';
 import { construirEnlaceChatWhatsApp } from '@/infraestructura/whatsapp/enlace';
 
 export default function PaginaProveedores() {
@@ -125,7 +126,7 @@ export default function PaginaProveedores() {
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       {modalPermiso}
       <header className="flex items-center gap-3">
-        <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver">
+        <Link href="/mas" className="text-xl text-tinta-suave" aria-label="Volver">
           ←
         </Link>
         <h1 className="flex-1 text-lg font-extrabold text-bodega-oscuro">Proveedores</h1>
@@ -266,17 +267,17 @@ export default function PaginaProveedores() {
       )}
 
       <main className="mt-6 flex-1">
-        {cargando && <p className="text-sm text-tinta/60">Cargando…</p>}
+        {cargando && <p className="text-sm text-tinta-suave">Cargando…</p>}
         {error && <p className="text-sm text-alerta">{error.message}</p>}
 
         {!cargando && proveedores.length === 0 && (
-          <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
+          <p className="border-y border-linea py-6 text-center text-sm text-tinta-suave">
             Todavía no tienes proveedores guardados. Agrega el primero arriba.
           </p>
         )}
 
         {!cargando && proveedores.length > 0 && proveedoresFiltrados.length === 0 && (
-          <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
+          <p className="border-y border-linea py-6 text-center text-sm text-tinta-suave">
             {busqueda.trim()
               ? `Ningún proveedor coincide con "${busqueda}".`
               : `No hay proveedores ${filtroEstado === 'inactivos' ? 'inactivos' : 'activos'}.`}
@@ -296,7 +297,7 @@ export default function PaginaProveedores() {
                       </span>
                     )}
                   </p>
-                  <p className="text-xs text-tinta/50">
+                  <p className="text-xs text-tinta-suave">
                     {proveedor.ruc ? `RUC ${proveedor.ruc}` : 'Sin RUC'}
                     {proveedor.telefono && ` · ${proveedor.telefono}`}
                   </p>
@@ -307,8 +308,9 @@ export default function PaginaProveedores() {
                       onClick={() => abrirChatWhatsApp(proveedor.telefono as string)}
                       disabled={!esPremium}
                       title={!esPremium ? 'Función Premium' : undefined}
-                      className="text-sm font-semibold text-bodega-oscuro disabled:text-tinta/30"
+                      className="group inline-flex items-center gap-1 text-sm font-semibold text-bodega-oscuro disabled:text-tinta/30"
                     >
+                      <IconoWhatsApp tamano={18} className="text-[#25D366] group-disabled:opacity-40" />
                       {esPremium ? 'WhatsApp' : '🔒 WhatsApp'}
                     </button>
                   )}

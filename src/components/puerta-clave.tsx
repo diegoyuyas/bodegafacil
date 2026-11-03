@@ -198,7 +198,7 @@ export function PuertaClave({
               Olvidé mi contraseña
             </button>
           )}
-          {!recuperar && ayudaOlvido && <p className="text-center text-xs text-tinta/60">{ayudaOlvido}</p>}
+          {!recuperar && ayudaOlvido && <p className="text-center text-xs text-tinta-suave">{ayudaOlvido}</p>}
         </div>
       )}
 
@@ -246,7 +246,7 @@ export function PuertaClave({
       )}
 
       {onCancelar && (
-        <button type="button" onClick={onCancelar} className="h-10 w-full text-sm font-semibold text-tinta/60">
+        <button type="button" onClick={onCancelar} className="h-10 w-full text-sm font-semibold text-tinta-suave">
           Cancelar
         </button>
       )}

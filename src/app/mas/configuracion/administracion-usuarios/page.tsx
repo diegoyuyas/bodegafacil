@@ -19,13 +19,13 @@ export default function PaginaAdministracionUsuarios() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
-        <Link href="/mas/configuracion" className="text-xl text-tinta/60" aria-label="Volver">
+        <Link href="/mas/configuracion" className="text-xl text-tinta-suave" aria-label="Volver">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Administración de Usuarios</h1>
       </header>
 
-      {cargando && <p className="mt-4 text-sm text-tinta/60">Cargando…</p>}
+      {cargando && <p className="mt-4 text-sm text-tinta-suave">Cargando…</p>}
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       {contenedor && esPremium !== null && (

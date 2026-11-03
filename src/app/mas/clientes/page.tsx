@@ -3,6 +3,11 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
+import { usarAvisos } from '@/components/proveedor-avisos';
+import { EsqueletoLista } from '@/components/ui/esqueleto';
+import { EstadoVacio } from '@/components/ui/estado-vacio';
+import { IconoClientes, IconoWhatsApp } from '@/components/ui/iconos';
+import { AVISOS, estadoLista } from '@/core/avisos';
 import { usarPermisos } from '@/hooks/usar-permisos';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
 import { soloAlfanumericoAlEscribir, soloDigitosAlEscribir, soloLetrasAlEscribir } from '@/core/texto';
@@ -16,6 +21,7 @@ import { EtiquetaCampo, VentanaFormulario } from '@/components/ventana-formulari
 
 export default function PaginaClientes() {
   const { contenedor, cargando, error } = usarContenedor();
+  const { avisar } = usarAvisos();
   const { pedirPermiso, modalPermiso } = usarPermisos(contenedor);
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
   const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
@@ -36,8 +42,11 @@ export default function PaginaClientes() {
   const [activoEdit, setActivoEdit] = useState(true);
   const [mensajeErrorEdit, setMensajeErrorEdit] = useState<string | null>(null);
 
+  const [listaLista, setListaLista] = useState(false);
+
   function recargar() {
     if (!contenedor) return;
+    setListaLista(true);
     setClientes(contenedor.clientes.listarTodos());
     setSimboloMoneda(obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)));
     setPrefijoPais(obtenerPrefijoPais(contenedor.configuracion.obtenerValor(CLAVE_PREFIJO_PAIS)));
@@ -65,6 +74,12 @@ export default function PaginaClientes() {
     });
   }, [clientes, busqueda, filtroEstado]);
 
+  const estadoClientes = estadoLista({
+    cargando: cargando || (!listaLista && !error),
+    total: clientes.length,
+    visibles: clientesFiltrados.length,
+  });
+
   const documentoValido = /^[A-Za-z0-9]{1,15}$/.test(documento.trim());
   const formularioValido = nombre.trim().length > 0 && documentoValido;
 
@@ -79,6 +94,7 @@ export default function PaginaClientes() {
       setTelefono('');
       setMostrarFormulario(false);
       recargar();
+      avisar(AVISOS.clienteGuardado, { vibrar: 'guardar' });
     } catch (e) {
       setMensajeError(e instanceof ErrorDeNegocio ? e.message : 'No se pudo guardar el cliente.');
     }
@@ -116,6 +132,7 @@ export default function PaginaClientes() {
       await contenedor.persistir();
       setEditandoId(null);
       recargar();
+      avisar(AVISOS.clienteActualizado, { vibrar: 'guardar' });
     } catch (e) {
       setMensajeErrorEdit(e instanceof ErrorDeNegocio ? e.message : 'No se pudo guardar el cliente.');
     }
@@ -125,7 +142,7 @@ export default function PaginaClientes() {
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       {modalPermiso}
       <header className="flex items-center gap-3">
-        <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver">
+        <Link href="/" className="text-xl text-tinta-suave" aria-label="Volver a inicio">
           ←
         </Link>
         <h1 className="flex-1 text-lg font-extrabold text-bodega-oscuro">Clientes</h1>
@@ -168,7 +185,7 @@ export default function PaginaClientes() {
           <div>
             <EtiquetaCampo>Celular (opcional):</EtiquetaCampo>
             <div className="flex gap-2">
-              <span className="flex h-11 shrink-0 items-center rounded-lg border border-linea bg-papel px-3 text-sm text-tinta/60">
+              <span className="flex h-11 shrink-0 items-center rounded-lg border border-linea bg-papel px-3 text-sm text-tinta-suave">
                 +{prefijoPais}
               </span>
               <input
@@ -226,7 +243,7 @@ export default function PaginaClientes() {
           <div>
             <EtiquetaCampo>Celular (opcional):</EtiquetaCampo>
             <div className="flex gap-2">
-              <span className="flex h-11 shrink-0 items-center rounded-lg border border-linea bg-papel px-3 text-sm text-tinta/60">
+              <span className="flex h-11 shrink-0 items-center rounded-lg border border-linea bg-papel px-3 text-sm text-tinta-suave">
                 +{prefijoPais}
               </span>
               <input
@@ -280,17 +297,26 @@ export default function PaginaClientes() {
       )}
 
       <main className="mt-6 flex-1">
-        {cargando && <p className="text-sm text-tinta/60">Cargando…</p>}
         {error && <p className="text-sm text-alerta">{error.message}</p>}
 
-        {!cargando && clientes.length === 0 && (
-          <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
-            Todavía no tienes clientes guardados. Agrega el primero arriba.
-          </p>
+        {estadoClientes === 'cargando' && !error && <EsqueletoLista />}
+
+        {estadoClientes === 'vacia' && (
+          <EstadoVacio
+            icono={<IconoClientes tamano={40} />}
+            titulo="Aún no tienes clientes guardados"
+            descripcion="Guárdalos con su documento y teléfono para venderles al fiado."
+            textoAccion="Agregar el primero"
+            onAccion={() => {
+              setEditandoId(null);
+              setMostrarFormulario(true);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          />
         )}
 
-        {!cargando && clientes.length > 0 && clientesFiltrados.length === 0 && (
-          <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
+        {estadoClientes === 'sin_resultados' && (
+          <p className="border-y border-linea py-6 text-center text-sm text-tinta-suave">
             {busqueda.trim()
               ? `Ningún cliente coincide con "${busqueda}".`
               : `No hay clientes ${filtroEstado === 'inactivos' ? 'inactivos' : 'activos'}.`}
@@ -310,7 +336,7 @@ export default function PaginaClientes() {
                       </span>
                     )}
                   </p>
-                  <p className="text-xs text-tinta/50">
+                  <p className="text-xs text-tinta-suave">
                     {cliente.documento ?? 'Sin documento'}
                     {cliente.telefono && ` · ${cliente.telefono}`}
                     {cliente.saldoPendiente > 0 && (
@@ -324,8 +350,9 @@ export default function PaginaClientes() {
                       onClick={() => abrirChatWhatsApp(cliente.telefono as string)}
                       disabled={!esPremium}
                       title={!esPremium ? 'Función Premium' : undefined}
-                      className="text-sm font-semibold text-bodega-oscuro disabled:text-tinta/30"
+                      className="group inline-flex items-center gap-1 text-sm font-semibold text-bodega-oscuro disabled:text-tinta/30"
                     >
+                      <IconoWhatsApp tamano={18} className="text-[#25D366] group-disabled:opacity-40" />
                       {esPremium ? 'WhatsApp' : '🔒 WhatsApp'}
                     </button>
                   )}

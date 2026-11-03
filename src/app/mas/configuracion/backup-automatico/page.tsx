@@ -119,13 +119,13 @@ export default function PaginaConfigurarBackupAutomatico() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
-        <Link href="/mas/configuracion" className="text-xl text-tinta/60" aria-label="Volver">
+        <Link href="/mas/configuracion" className="text-xl text-tinta-suave" aria-label="Volver">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Backup Automático</h1>
       </header>
 
-      {cargando && <p className="mt-4 text-sm text-tinta/60">Cargando…</p>}
+      {cargando && <p className="mt-4 text-sm text-tinta-suave">Cargando…</p>}
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       <p className="mt-4 text-sm text-tinta/70">
@@ -138,14 +138,14 @@ export default function PaginaConfigurarBackupAutomatico() {
       {estadoPlan && !esPremium && (
         <section className="mt-6 rounded-xl border border-linea p-5 text-center">
           <p className="text-sm font-semibold text-tinta">Backup Automático es una función Premium</p>
-          <p className="mt-2 text-xs text-tinta/60">Actívala desde el panel de administrador.</p>
+          <p className="mt-2 text-xs text-tinta-suave">Actívala desde el panel de administrador.</p>
         </section>
       )}
 
       {esPremium && (
         <>
           {ultimoBackup && (
-            <p className="mt-4 text-xs text-tinta/50">Último backup automático: {ultimoBackup}</p>
+            <p className="mt-4 text-xs text-tinta-suave">Último backup automático: {ultimoBackup}</p>
           )}
 
           <section className="mt-6 flex items-center justify-between gap-4 rounded-xl border border-linea p-4">
@@ -170,7 +170,7 @@ export default function PaginaConfigurarBackupAutomatico() {
           <section className="mt-3 flex items-center justify-between gap-4 rounded-xl border border-linea p-4">
             <div>
               <p className="text-sm font-semibold text-tinta">Preguntar dónde guardar</p>
-              <p className="mt-0.5 text-xs text-tinta/50">
+              <p className="mt-0.5 text-xs text-tinta-suave">
                 Después de generar el backup se abre la pantalla de compartir para guardarlo en Drive u otro lugar. Si la
                 cierras, la copia del teléfono ya quedó guardada.
               </p>
@@ -195,7 +195,7 @@ export default function PaginaConfigurarBackupAutomatico() {
 
           <section className="mt-6">
             <p className="text-sm font-semibold text-tinta">Nombre del archivo</p>
-            <p className="mt-0.5 text-xs text-tinta/50">
+            <p className="mt-0.5 text-xs text-tinta-suave">
               Si lo dejas vacío se usa:{' '}
               {nombreArchivoBackupAutomatico('', hoyLocalSql(), horaLocalCompacta())}
             </p>
@@ -220,7 +220,7 @@ export default function PaginaConfigurarBackupAutomatico() {
 
           <section className="mt-6">
             <p className="text-sm font-semibold text-tinta">Frecuencia (cada cuántos días)</p>
-            <p className="mt-0.5 text-xs text-tinta/50">Obligatorio. Por ejemplo, 2 = cada 2 días.</p>
+            <p className="mt-0.5 text-xs text-tinta-suave">Obligatorio. Por ejemplo, 2 = cada 2 días.</p>
             <input
               type="number"
               inputMode="numeric"
@@ -232,7 +232,7 @@ export default function PaginaConfigurarBackupAutomatico() {
             />
           </section>
 
-          <p className="mt-4 text-xs text-tinta/50">
+          <p className="mt-4 text-xs text-tinta-suave">
             Se guarda en la carpeta Documents/VendeFacil del teléfono. Te pediremos el permiso de
             almacenamiento la primera vez que toque guardar.
           </p>
@@ -263,7 +263,7 @@ export default function PaginaConfigurarBackupAutomatico() {
           >
             {probando ? 'Generando…' : 'Probar backup automático ahora'}
           </button>
-          <p className="mt-2 text-xs text-tinta/50">
+          <p className="mt-2 text-xs text-tinta-suave">
             Genera un backup en este instante, sin esperar la hora ni la frecuencia — útil para
             probar. No cuenta contra la frecuencia configurada ni afecta cuándo toca el próximo
             backup automático real.

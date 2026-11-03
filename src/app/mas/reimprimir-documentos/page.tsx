@@ -82,7 +82,7 @@ export default function PaginaReimprimirDocumentos() {
     return (
       <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
         <header className="flex items-center gap-3">
-          <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver">
+          <Link href="/mas" className="text-xl text-tinta-suave" aria-label="Volver">
             ←
           </Link>
           <h1 className="text-lg font-extrabold text-bodega-oscuro">Reimprimir documentos</h1>
@@ -99,7 +99,7 @@ export default function PaginaReimprimirDocumentos() {
     return (
       <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
         <header className="flex items-center gap-3">
-          <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver">
+          <Link href="/mas" className="text-xl text-tinta-suave" aria-label="Volver">
             ←
           </Link>
           <h1 className="text-lg font-extrabold text-bodega-oscuro">Reimprimir documentos</h1>
@@ -108,7 +108,7 @@ export default function PaginaReimprimirDocumentos() {
           <p className="text-sm font-semibold text-tinta">
             {!esPremium ? 'Reimprimir documentos es una función Premium' : 'Falta activar la impresora'}
           </p>
-          <p className="mt-2 text-xs text-tinta/60">
+          <p className="mt-2 text-xs text-tinta-suave">
             {!esPremium
               ? 'Actívala desde el panel de administrador.'
               : 'Ve a Más > Configuración > Configuración de Impresión > Sincronizar Impresora Bluetooth y activa "Activar impresión Bluetooth".'}
@@ -121,20 +121,20 @@ export default function PaginaReimprimirDocumentos() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
-        <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver">
+        <Link href="/mas" className="text-xl text-tinta-suave" aria-label="Volver">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Reimprimir documentos</h1>
       </header>
 
-      {cargando && <p className="mt-4 text-sm text-tinta/60">Cargando…</p>}
+      {cargando && <p className="mt-4 text-sm text-tinta-suave">Cargando…</p>}
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       <div className="mt-4">
         <p className="text-xs font-semibold text-tinta/70">Rango de fechas</p>
         <div className="mt-2 flex gap-2">
           <div className="flex-1">
-            <label className="mb-1 block text-xs text-tinta/50">Desde</label>
+            <label className="mb-1 block text-xs text-tinta-suave">Desde</label>
             <input
               type="date"
               value={desde}
@@ -144,7 +144,7 @@ export default function PaginaReimprimirDocumentos() {
             />
           </div>
           <div className="flex-1">
-            <label className="mb-1 block text-xs text-tinta/50">Hasta</label>
+            <label className="mb-1 block text-xs text-tinta-suave">Hasta</label>
             <input
               type="date"
               value={hasta}
@@ -171,7 +171,7 @@ export default function PaginaReimprimirDocumentos() {
       )}
 
       {resultados.length === 0 ? (
-        <p className="mt-6 border-y border-linea py-8 text-center text-sm text-tinta/50">
+        <p className="mt-6 border-y border-linea py-8 text-center text-sm text-tinta-suave">
           No hay ventas que coincidan.
         </p>
       ) : (
@@ -182,12 +182,12 @@ export default function PaginaReimprimirDocumentos() {
                 <p className="text-sm font-semibold text-tinta">
                   {venta.comprobante} {venta.anulada && <span className="text-alerta">(Anulada)</span>}
                 </p>
-                <p className="truncate text-xs text-tinta/50">
+                <p className="truncate text-xs text-tinta-suave">
                   {venta.clienteNombre ?? 'Cliente Eventual'}
                   {venta.clienteDocumento ? ` · ${venta.clienteDocumento}` : ''} ·{' '}
                   {ETIQUETAS_METODO_PAGO[venta.metodoPago] ?? venta.metodoPago}
                 </p>
-                <p className="text-xs text-tinta/40">{venta.fechaHora}</p>
+                <p className="text-xs text-tinta-suave">{venta.fechaHora}</p>
               </div>
               <div className="flex shrink-0 items-center gap-3">
                 <span className="text-sm font-semibold text-tinta">

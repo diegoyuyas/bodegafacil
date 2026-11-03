@@ -39,7 +39,7 @@ const TABLAS_DE_MIGRACIONES = ['producto_historial', 'bitacora_anulacion_pago', 
 
 /** Columnas que agregaron las migraciones, por tabla. */
 const COLUMNAS_DE_MIGRACIONES: Record<string, string[]> = {
-  cliente: ['documento'], // 0001
+  cliente: ['documento', 'ultimo_recordatorio_en', 'fecha_compromiso'], // 0001, 0039, 0040
   proveedor: ['ruc'], // 0002
   compra: ['proveedor_nombre_libre', 'comprobante', 'metodo_pago', 'motivo_anulacion', 'usuario_id', 'anulada_por', 'fecha_anulacion', 'modificada_por', 'fecha_modificacion'], // 0002, 0006, 0019, 0026-0029
   producto: ['controla_stock', 'tipo', 'alias'], // 0003, 0014, 0016
@@ -189,11 +189,32 @@ async function main() {
   const numeroTomado = bd.transaccion(() => seriesMigradas.tomarSiguienteNumero(serieNueva.id));
   afirmar(numeroTomado.texto === '001-0000001', 'Tras migrar, ya se puede crear una serie y tomar su primer número (001-0000001)');
 
+  // 5b. Recordatorios de Fiados (0039): el cliente viejo queda «nunca recordado» y se puede guardar el teléfono / el recordatorio.
+  afirmar(clienteExistente?.ultimoRecordatorioEn === null, 'Tras migrar, el cliente viejo queda «nunca recordado» (null, no revienta)');
+  afirmar(clienteExistente?.fechaCompromiso === null, 'Tras migrar, el cliente viejo queda sin compromiso de pago (null, no revienta)');
+  const compromisoViejo = clientes.guardarFechaCompromiso(clienteExistente?.id ?? 1, new Date(Date.now() + 3 * 86_400_000).toISOString().slice(0, 10));
+  afirmar(compromisoViejo === undefined && clientes.obtenerPorId(clienteExistente?.id ?? 1).fechaCompromiso !== null, 'En una base migrada se puede guardar el compromiso de pago de un cliente que debe'); 
+  const sinTelefono = clientes.crear('Cliente sin teléfono', 'SIN111');
+  afirmar(sinTelefono.telefono === null && sinTelefono.ultimoRecordatorioEn === null, 'Un cliente nuevo nace sin teléfono y sin recordatorio');
+  const conTelefono = clientes.guardarTelefono(sinTelefono.id, '+51 987 654 321');
+  afirmar(conTelefono.telefono === '51987654321', 'Guardar el teléfono al momento: queda solo con dígitos');
+  let rechazoTelefono = '';
+  try {
+    clientes.guardarTelefono(sinTelefono.id, '123');
+  } catch (e) {
+    rechazoTelefono = e instanceof Error ? e.message : '';
+  }
+  afirmar(rechazoTelefono === 'Debe tener entre 6 y 12 dígitos.' && clientes.obtenerPorId(sinTelefono.id).telefono === '51987654321', 'Un teléfono inválido se rechaza y no pisa el que ya estaba');
+  clientes.registrarRecordatorio(clienteExistente?.id ?? 1, '2026-10-29 10:30:00');
+  afirmar(clientes.obtenerPorId(clienteExistente?.id ?? 1).ultimoRecordatorioEn === '2026-10-29 10:30:00', 'Se guarda cuándo se le recordó la deuda');
+  afirmar(clientes.obtenerPorId(clienteExistente?.id ?? 1).saldoPendiente === 25.5, 'Recordar no toca su saldo');
+
   // 6. Volver a correr las migraciones sobre la base YA migrada no debe explotar (pasa cada vez que se abre la app).
   const bdOtraVez = await BaseDatosLocal.crear({ localizarArchivo, datosPrevios: bd.exportar() });
   const clientesOtraVez = new ClienteRepositorioSqlite(bdOtraVez, new ConfiguracionRepositorioSqlite(bdOtraVez));
   const productosOtraVez = new ProductoRepositorioSqlite(bdOtraVez);
-  afirmar(clientesOtraVez.listarActivos().length === 2, 'Correr las migraciones de nuevo no falla ni duplica clientes');
+  afirmar(clientesOtraVez.listarActivos().length === 3, 'Correr las migraciones de nuevo no falla ni duplica clientes');
+  afirmar(clientesOtraVez.obtenerPorId(clienteExistente?.id ?? 1).ultimoRecordatorioEn === '2026-10-29 10:30:00' && clientesOtraVez.obtenerPorId(sinTelefono.id).telefono === '51987654321', 'El recordatorio y el teléfono nuevo sobreviven a cerrar y abrir la app (y a un respaldo)');
   afirmar(productosOtraVez.listarActivos().length === 2, 'Correr las migraciones de nuevo no falla ni duplica productos');
   afirmar(productosOtraVez.obtenerPorId(productoNuevo.id).alias === 'COBERTURA,BITTER', 'Los alias sobreviven a cerrar y abrir la app');
   const usuariosOtraVez = new UsuarioRepositorioSqlite(bdOtraVez, new ConfiguracionRepositorioSqlite(bdOtraVez));

@@ -1,12 +1,44 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ComponentType } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { TarjetaUsuarioActual } from '@/components/tarjeta-usuario-actual';
 import { usarSesion } from '@/components/sesion-usuario';
 import type { Permiso } from '@/core/permisos';
 import { CLAVE_IMPRESORA_ACTIVA, IMPRESION_BLUETOOTH_DISPONIBLE } from '@/core/impresora';
+import {
+  IconoActividad,
+  IconoCaja,
+  IconoCompras,
+  IconoConfiguracion,
+  IconoFiados,
+  IconoImportar,
+  IconoImpresora,
+  IconoInfo,
+  IconoPlan,
+  IconoPreferencias,
+  IconoProveedores,
+  IconoReportes,
+  IconoRespaldo,
+  type PropsIcono,
+} from '@/components/ui/iconos';
+
+const ICONOS_MAS: Record<string, ComponentType<PropsIcono>> = {
+  '/caja': IconoCaja,
+  '/compras': IconoCompras,
+  '/mas/reportes': IconoReportes,
+  '/fiados': IconoFiados,
+  '/mas/actividad': IconoActividad,
+  '/mas/proveedores': IconoProveedores,
+  '/mas/importar-datos': IconoImportar,
+  '/mas/respaldo': IconoRespaldo,
+  '/mas/configuracion': IconoConfiguracion,
+  '/mas/preferencias': IconoPreferencias,
+  '/mas/mi-plan': IconoPlan,
+  '/mas/reimprimir-documentos': IconoImpresora,
+  '/mas/acerca-de': IconoInfo,
+};
 
 interface Opcion {
   href: string;
@@ -26,7 +58,7 @@ const OPCIONES: Opcion[] = [
     etiqueta: 'Reportes',
     descripcion: 'Ventas, fiados, compras, inventario y caja por rango de fechas',
   },
-  { href: '/mas/clientes', etiqueta: 'Clientes', descripcion: 'Guardar clientes con su documento' },
+  { href: '/fiados', etiqueta: 'Fiados', descripcion: 'Quién te debe, cobrar y recordar por WhatsApp' },
   {
     href: '/mas/actividad',
     etiqueta: 'Actividad de usuarios',
@@ -51,6 +83,18 @@ const OPCIONES: Opcion[] = [
     href: '/mas/configuracion',
     etiqueta: 'Configuración',
     descripcion: 'Configuración de venta (precio editable, stock bajo, venta por voz), usuarios, negocio, series e impresora',
+    permiso: 'configuracion',
+  },
+  {
+    href: '/mas/preferencias',
+    etiqueta: 'Preferencias',
+    descripcion: 'Moneda, prefijo de país y apariencia',
+    permiso: 'configuracion',
+  },
+  {
+    href: '/mas/mi-plan',
+    etiqueta: 'Mi plan',
+    descripcion: 'Estado de Premium y activación',
     permiso: 'configuracion',
   },
 ];
@@ -92,7 +136,7 @@ export default function PaginaMas() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
-        <Link href="/" className="text-xl text-tinta/60" aria-label="Volver a inicio">
+        <Link href="/" className="text-xl text-tinta-suave" aria-label="Volver a inicio">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Más</h1>
@@ -101,17 +145,21 @@ export default function PaginaMas() {
       <TarjetaUsuarioActual />
 
       <ul className="mt-6 divide-y divide-linea border-y border-linea">
-        {opciones.map((opcion) => (
-          <li key={opcion.href}>
-            <Link href={opcion.href} className="flex items-center justify-between py-4">
-              <div>
-                <p className="text-sm font-semibold text-tinta">{opcion.etiqueta}</p>
-                <p className="text-xs text-tinta/50">{opcion.descripcion}</p>
-              </div>
-              <span className="text-tinta/40">›</span>
-            </Link>
-          </li>
-        ))}
+        {opciones.map((opcion) => {
+          const Icono = ICONOS_MAS[opcion.href];
+          return (
+            <li key={opcion.href}>
+              <Link href={opcion.href} className="flex items-center gap-3 py-4">
+                {Icono && <Icono tamano={22} className="shrink-0 text-bodega" />}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-tinta">{opcion.etiqueta}</p>
+                  <p className="text-xs text-tinta-suave">{opcion.descripcion}</p>
+                </div>
+                <span className="text-tinta-suave">›</span>
+              </Link>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

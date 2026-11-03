@@ -86,13 +86,13 @@ export default function PaginaExportarDrive() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
-        <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver">
+        <Link href="/mas" className="text-xl text-tinta-suave" aria-label="Volver">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Exportar todo a Drive</h1>
       </header>
 
-      {cargando && <p className="mt-4 text-sm text-tinta/60">Cargando…</p>}
+      {cargando && <p className="mt-4 text-sm text-tinta-suave">Cargando…</p>}
       {errorContenedor && <p className="mt-4 text-sm text-alerta">{errorContenedor.message}</p>}
 
       <p className="mt-4 text-sm text-tinta/70">
@@ -104,7 +104,7 @@ export default function PaginaExportarDrive() {
       {estadoPlan && !esPremium && (
         <section className="mt-6 rounded-xl border border-linea p-5 text-center">
           <p className="text-sm font-semibold text-tinta">Exportar a Drive es una función Premium</p>
-          <p className="mt-2 text-xs text-tinta/60">Actívala desde el panel de administrador.</p>
+          <p className="mt-2 text-xs text-tinta-suave">Actívala desde el panel de administrador.</p>
         </section>
       )}
 
@@ -118,7 +118,7 @@ export default function PaginaExportarDrive() {
             {textoBoton[estado]}
           </button>
 
-          <p className="mt-3 text-center text-xs text-tinta/40">
+          <p className="mt-3 text-center text-xs text-tinta-suave">
             Al conectar, Google te pedirá iniciar sesión o elegir tu cuenta. Vende Fácil solo
             recibe permiso para crear este archivo en tu Drive — nunca ve tu contraseña ni el
             resto de tus archivos.

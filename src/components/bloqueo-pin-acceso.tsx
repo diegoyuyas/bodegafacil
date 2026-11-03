@@ -77,7 +77,7 @@ export function BloqueoPinAcceso({ children }: { children: React.ReactNode }) {
   return (
     <div className="fixed inset-0 z-40 flex flex-col items-center justify-center gap-6 bg-papel px-6 text-center">
       <p className="text-lg font-extrabold text-bodega-oscuro">Vende Fácil está bloqueado</p>
-      <p className="text-sm text-tinta/60">Ingresa tu PIN de 4 dígitos para continuar.</p>
+      <p className="text-sm text-tinta-suave">Ingresa tu PIN de 4 dígitos para continuar.</p>
 
       <input
         type="password"

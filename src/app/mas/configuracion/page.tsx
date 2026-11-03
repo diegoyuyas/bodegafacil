@@ -1,82 +1,21 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
-import { CLAVE_MONEDA, MONEDAS_DISPONIBLES, obtenerMoneda } from '@/core/moneda';
-import { CLAVE_PREFIJO_PAIS, PAISES_AMERICA, obtenerPrefijoPais } from '@/core/paises';
-import { ErrorDeNegocio } from '@/core/reglas-negocio';
 
 export default function PaginaConfiguracion() {
-  const { contenedor, cargando, error } = usarContenedor();
-
-  const [codigoMoneda, setCodigoMoneda] = useState(obtenerMoneda(null).codigo);
-  const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
-
-  const [idDispositivo, setIdDispositivo] = useState('');
-  const [codigoActivacion, setCodigoActivacion] = useState('');
-  const [activandoCodigo, setActivandoCodigo] = useState(false);
-  const [mensajeCodigo, setMensajeCodigo] = useState<string | null>(null);
-  const [mensajeCodigoEsError, setMensajeCodigoEsError] = useState(false);
-  const [idCopiado, setIdCopiado] = useState(false);
-
-  useEffect(() => {
-    if (!contenedor) return;
-    setCodigoMoneda(obtenerMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)).codigo);
-    setPrefijoPais(obtenerPrefijoPais(contenedor.configuracion.obtenerValor(CLAVE_PREFIJO_PAIS)));
-
-    const id = contenedor.plan.obtenerIdDispositivoTexto();
-    setIdDispositivo(id);
-    // La primera vez que se genera el ID del dispositivo hay que
-    // guardarlo ya mismo: si se cierra la app antes de la próxima
-    // venta (que persiste sola), el ID se perdería y cambiaría cada
-    // vez, invalidando los códigos ya pedidos para este dispositivo.
-    contenedor.persistir().catch(() => {});
-  }, [contenedor]);
-
-  async function cambiarMoneda(nuevoCodigo: string) {
-    if (!contenedor) return;
-    setCodigoMoneda(nuevoCodigo);
-    contenedor.configuracion.establecerValor(CLAVE_MONEDA, nuevoCodigo);
-    await contenedor.persistir();
-  }
-
-  async function cambiarPrefijoPais(nuevoPrefijo: string) {
-    if (!contenedor) return;
-    setPrefijoPais(nuevoPrefijo);
-    contenedor.configuracion.establecerValor(CLAVE_PREFIJO_PAIS, nuevoPrefijo);
-    await contenedor.persistir();
-  }
-
-  async function activarPremiumConCodigo() {
-    if (!contenedor) return;
-    setMensajeCodigo(null);
-    setMensajeCodigoEsError(false);
-    if (codigoActivacion.trim() === '') return;
-    setActivandoCodigo(true);
-    try {
-      await contenedor.plan.activarConCodigo(codigoActivacion);
-      await contenedor.persistir();
-      setCodigoActivacion('');
-      setMensajeCodigo('¡Código aceptado! Premium activado.');
-    } catch (e) {
-      setMensajeCodigoEsError(true);
-      setMensajeCodigo(e instanceof ErrorDeNegocio ? e.message : 'No se pudo activar con ese código.');
-    } finally {
-      setActivandoCodigo(false);
-    }
-  }
+  const { cargando, error } = usarContenedor();
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
-        <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver">
+        <Link href="/mas" className="text-xl text-tinta-suave" aria-label="Volver">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Configuración</h1>
       </header>
 
-      {cargando && <p className="mt-4 text-sm text-tinta/60">Cargando…</p>}
+      {cargando && <p className="mt-4 text-sm text-tinta-suave">Cargando…</p>}
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       <ul className="mt-6 divide-y divide-linea border-y border-linea">
@@ -84,11 +23,11 @@ export default function PaginaConfiguracion() {
           <Link href="/mas/configuracion/configuracion-venta" className="flex items-center justify-between gap-4 py-4">
             <div>
               <p className="text-sm font-semibold text-tinta">Configuración de Venta</p>
-              <p className="mt-0.5 text-xs text-tinta/50">
+              <p className="mt-0.5 text-xs text-tinta-suave">
                 Precio editable, stock bajo, descripciones, venta por voz
               </p>
             </div>
-            <span className="text-tinta/40">›</span>
+            <span className="text-tinta-suave">›</span>
           </Link>
         </li>
 
@@ -96,10 +35,10 @@ export default function PaginaConfiguracion() {
           <Link href="/mas/configuracion/pin" className="flex items-center justify-between gap-4 py-4">
             <div>
               <p className="text-sm font-semibold text-tinta">Configurar PIN</p>
-              <p className="mt-0.5 text-xs text-tinta/50">Pide un PIN de 4 dígitos para abrir la app.</p>
+              <p className="mt-0.5 text-xs text-tinta-suave">Pide un PIN de 4 dígitos para abrir la app.</p>
               <p className="mt-1 text-xs font-semibold text-acento-oscuro">Función Premium</p>
             </div>
-            <span className="text-tinta/40">›</span>
+            <span className="text-tinta-suave">›</span>
           </Link>
         </li>
 
@@ -110,10 +49,10 @@ export default function PaginaConfiguracion() {
           >
             <div>
               <p className="text-sm font-semibold text-tinta">Administración de Usuarios</p>
-              <p className="mt-0.5 text-xs text-tinta/50">Usuarios con contraseña: administrador y estándar.</p>
+              <p className="mt-0.5 text-xs text-tinta-suave">Usuarios con contraseña: administrador y estándar.</p>
               <p className="mt-1 text-xs font-semibold text-acento-oscuro">Función Premium</p>
             </div>
-            <span className="text-tinta/40">›</span>
+            <span className="text-tinta-suave">›</span>
           </Link>
         </li>
 
@@ -124,10 +63,10 @@ export default function PaginaConfiguracion() {
           >
             <div>
               <p className="text-sm font-semibold text-tinta">Configurar Backup Automático</p>
-              <p className="mt-0.5 text-xs text-tinta/50">Respaldo periódico al almacenamiento del teléfono.</p>
+              <p className="mt-0.5 text-xs text-tinta-suave">Respaldo periódico al almacenamiento del teléfono.</p>
               <p className="mt-1 text-xs font-semibold text-acento-oscuro">Función Premium</p>
             </div>
-            <span className="text-tinta/40">›</span>
+            <span className="text-tinta-suave">›</span>
           </Link>
         </li>
         <li>
@@ -137,10 +76,10 @@ export default function PaginaConfiguracion() {
           >
             <div>
               <p className="text-sm font-semibold text-tinta">Información del Negocio</p>
-              <p className="mt-0.5 text-xs text-tinta/50">Nombre, DNI/RUC, ubicación, contacto y leyenda.</p>
+              <p className="mt-0.5 text-xs text-tinta-suave">Nombre, DNI/RUC, ubicación, contacto y leyenda.</p>
               <p className="mt-1 text-xs font-semibold text-acento-oscuro">Función Premium</p>
             </div>
-            <span className="text-tinta/40">›</span>
+            <span className="text-tinta-suave">›</span>
           </Link>
         </li>
 
@@ -151,101 +90,13 @@ export default function PaginaConfiguracion() {
           >
             <div>
               <p className="text-sm font-semibold text-tinta">Configuración de Impresión</p>
-              <p className="mt-0.5 text-xs text-tinta/50">Series de Boleta y Factura, e impresora Bluetooth.</p>
+              <p className="mt-0.5 text-xs text-tinta-suave">Series de Boleta y Factura, e impresora Bluetooth.</p>
               <p className="mt-1 text-xs font-semibold text-acento-oscuro">Función Premium</p>
             </div>
-            <span className="text-tinta/40">›</span>
+            <span className="text-tinta-suave">›</span>
           </Link>
         </li>
       </ul>
-
-      <section className="mt-6">
-        <p className="text-sm font-semibold text-tinta">Tipo de moneda</p>
-        <p className="mt-0.5 text-xs text-tinta/50">
-          Cambia el símbolo que se muestra en toda la app (ventas, caja, reportes, fiados...).
-        </p>
-        <select
-          value={codigoMoneda}
-          onChange={(e) => cambiarMoneda(e.target.value)}
-          disabled={!contenedor}
-          className="mt-3 h-11 w-full rounded-xl border border-linea bg-white px-3 text-sm disabled:opacity-40"
-        >
-          {MONEDAS_DISPONIBLES.map((m) => (
-            <option key={m.codigo} value={m.codigo}>
-              {m.etiqueta}
-            </option>
-          ))}
-        </select>
-      </section>
-
-      <section className="mt-6">
-        <p className="text-sm font-semibold text-tinta">Prefijo país</p>
-        <p className="mt-0.5 text-xs text-tinta/50">
-          El código con el que se arma el número de celular de tus clientes, para los avisos de
-          fiado por WhatsApp.
-        </p>
-        <select
-          value={prefijoPais}
-          onChange={(e) => cambiarPrefijoPais(e.target.value)}
-          disabled={!contenedor}
-          className="mt-3 h-11 w-full rounded-xl border border-linea bg-white px-3 text-sm disabled:opacity-40"
-        >
-          {PAISES_AMERICA.map((p) => (
-            <option key={p.prefijo} value={p.prefijo}>
-              +{p.prefijo} {p.nombre}
-            </option>
-          ))}
-        </select>
-      </section>
-
-      <section className="mt-6 rounded-xl border border-linea p-4">
-        <p className="text-sm font-semibold text-tinta">Activar Premium con un código</p>
-        <p className="mt-1 text-xs text-tinta/60">
-          1. Manda este ID a quien te da soporte por WhatsApp. 2. Pega acá el código que te
-          responda.
-        </p>
-
-        <div className="mt-3">
-          <p className="text-xs text-tinta/50">ID de este dispositivo</p>
-          <div className="mt-1 flex items-center gap-2 rounded-lg border border-linea bg-papel px-3 py-2">
-            <code className="flex-1 select-all break-all text-sm text-tinta">{idDispositivo}</code>
-            <button
-              type="button"
-              onClick={async () => {
-                await navigator.clipboard?.writeText(idDispositivo);
-                setIdCopiado(true);
-                setTimeout(() => setIdCopiado(false), 2000);
-              }}
-              className="shrink-0 text-xs font-semibold text-bodega-oscuro"
-            >
-              {idCopiado ? 'Código copiado' : 'Copiar'}
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-3">
-          <p className="text-xs text-tinta/50">Código de activación</p>
-          <textarea
-            value={codigoActivacion}
-            onChange={(e) => setCodigoActivacion(e.target.value)}
-            placeholder="Pega aquí el código que te mandaron por WhatsApp"
-            rows={3}
-            className="mt-1 w-full rounded-lg border border-linea px-3 py-2 text-sm"
-          />
-          <button
-            onClick={activarPremiumConCodigo}
-            disabled={activandoCodigo || codigoActivacion.trim() === ''}
-            className="mt-2 h-11 w-full rounded-xl bg-bodega text-sm font-semibold text-white disabled:opacity-40"
-          >
-            {activandoCodigo ? 'Verificando…' : 'Activar con este código'}
-          </button>
-          {mensajeCodigo && (
-            <p className={`mt-2 text-sm ${mensajeCodigoEsError ? 'text-alerta' : 'text-bodega-oscuro'}`}>
-              {mensajeCodigo}
-            </p>
-          )}
-        </div>
-      </section>
     </div>
   );
 }

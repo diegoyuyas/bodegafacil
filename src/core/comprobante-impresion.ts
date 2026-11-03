@@ -133,7 +133,7 @@ export interface LineaTexto {
 }
 
 /** Envuelve por palabras si no entra en `ancho` — para nombre de tienda, ubicación, leyenda o nombres de cliente largos. */
-function envolverTexto(texto: string, ancho: number): string[] {
+export function envolverTexto(texto: string, ancho: number): string[] {
   if (texto.length <= ancho) return [texto];
   const palabras = texto.split(' ');
   const envueltas: string[] = [];

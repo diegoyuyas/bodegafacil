@@ -238,13 +238,13 @@ export default function PaginaInformacionNegocio() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
-        <Link href="/mas/configuracion" className="text-xl text-tinta/60" aria-label="Volver">
+        <Link href="/mas/configuracion" className="text-xl text-tinta-suave" aria-label="Volver">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Información del Negocio</h1>
       </header>
 
-      {cargando && <p className="mt-4 text-sm text-tinta/60">Cargando…</p>}
+      {cargando && <p className="mt-4 text-sm text-tinta-suave">Cargando…</p>}
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       <p className="mt-4 text-sm text-tinta/70">
@@ -255,7 +255,7 @@ export default function PaginaInformacionNegocio() {
       {estadoPlan && !esPremium && (
         <section className="mt-6 rounded-xl border border-linea p-5 text-center">
           <p className="text-sm font-semibold text-tinta">Información del Negocio es una función Premium</p>
-          <p className="mt-2 text-xs text-tinta/60">Actívala desde el panel de administrador.</p>
+          <p className="mt-2 text-xs text-tinta-suave">Actívala desde el panel de administrador.</p>
         </section>
       )}
 
@@ -263,7 +263,7 @@ export default function PaginaInformacionNegocio() {
         <>
           <section className="mt-6">
             <p className="text-sm font-semibold text-tinta">Nombre del negocio</p>
-            <p className="mt-0.5 text-xs text-tinta/50">
+            <p className="mt-0.5 text-xs text-tinta-suave">
               Reemplaza &quot;{NOMBRE_TIENDA_PREDETERMINADO}&quot; en Inicio y en el comprobante.
             </p>
             <input
@@ -277,7 +277,7 @@ export default function PaginaInformacionNegocio() {
 
           <section className="mt-6">
             <p className="text-sm font-semibold text-tinta">Logotipo</p>
-            <p className="mt-0.5 text-xs text-tinta/50">
+            <p className="mt-0.5 text-xs text-tinta-suave">
               Aparece arriba en la imagen del ticket que compartes y en el ticket de la ticketera. Se reduce solo (máximo {LOGO_ANCHO_MAXIMO} × {LOGO_ALTO_MAXIMO} px) y se
               le pone fondo blanco. Formatos: JPG, PNG o WebP.
             </p>
@@ -340,7 +340,7 @@ export default function PaginaInformacionNegocio() {
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="text-sm text-tinta">Imprimir en la ticketera</p>
-                    <p className="mt-0.5 text-xs text-tinta/50">
+                    <p className="mt-0.5 text-xs text-tinta-suave">
                       Sale arriba del ticket, en blanco y negro y centrado (papel {etiquetaAnchoImpresora(anchoPapel)}).
                     </p>
                   </div>
@@ -386,7 +386,7 @@ export default function PaginaInformacionNegocio() {
 
                     {vistaPreviaBn && (
                       <div className="mt-3">
-                        <p className="text-xs text-tinta/50">Así saldrá en el papel ({puntosDePapel(anchoPapel)} puntos de ancho):</p>
+                        <p className="text-xs text-tinta-suave">Así saldrá en el papel ({puntosDePapel(anchoPapel)} puntos de ancho):</p>
                         <div className="mt-1 flex justify-center rounded-xl border border-linea bg-white p-3">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
@@ -407,7 +407,7 @@ export default function PaginaInformacionNegocio() {
                     >
                       {imprimiendoPrueba ? 'Imprimiendo…' : 'Imprimir prueba del logotipo'}
                     </button>
-                    <p className="mt-2 text-xs text-tinta/50">
+                    <p className="mt-2 text-xs text-tinta-suave">
                       Imprime la prueba antes de usarlo en las ventas: algunas ticketeras económicas muestran el logotipo con
                       finas líneas o no lo imprimen. Si te pasa, apaga este interruptor y el ticket sale solo con texto.
                     </p>
@@ -423,7 +423,7 @@ export default function PaginaInformacionNegocio() {
 
           <section className="mt-6">
             <p className="text-sm font-semibold text-tinta">DNI o RUC</p>
-            <p className="mt-0.5 text-xs text-tinta/50">No obligatorio.</p>
+            <p className="mt-0.5 text-xs text-tinta-suave">No obligatorio.</p>
             <input
               value={documento}
               onChange={(e) => setDocumento(e.target.value)}
@@ -435,7 +435,7 @@ export default function PaginaInformacionNegocio() {
 
           <section className="mt-6">
             <p className="text-sm font-semibold text-tinta">Ubicación</p>
-            <p className="mt-0.5 text-xs text-tinta/50">No obligatorio — hasta {LONGITUD_MAXIMA_UBICACION} caracteres.</p>
+            <p className="mt-0.5 text-xs text-tinta-suave">No obligatorio — hasta {LONGITUD_MAXIMA_UBICACION} caracteres.</p>
             <input
               value={ubicacion}
               onChange={(e) => setUbicacion(e.target.value.slice(0, LONGITUD_MAXIMA_UBICACION))}
@@ -447,7 +447,7 @@ export default function PaginaInformacionNegocio() {
 
           <section className="mt-6">
             <p className="text-sm font-semibold text-tinta">Contacto</p>
-            <p className="mt-0.5 text-xs text-tinta/50">No obligatorio — hasta {LONGITUD_MAXIMA_CONTACTO} caracteres.</p>
+            <p className="mt-0.5 text-xs text-tinta-suave">No obligatorio — hasta {LONGITUD_MAXIMA_CONTACTO} caracteres.</p>
             <input
               value={contacto}
               onChange={(e) => setContacto(e.target.value.slice(0, LONGITUD_MAXIMA_CONTACTO))}
@@ -459,7 +459,7 @@ export default function PaginaInformacionNegocio() {
 
           <section className="mt-6">
             <p className="text-sm font-semibold text-tinta">Leyenda</p>
-            <p className="mt-0.5 text-xs text-tinta/50">
+            <p className="mt-0.5 text-xs text-tinta-suave">
               Mensaje libre debajo del comprobante impreso — hasta {LONGITUD_MAXIMA_LEYENDA} caracteres.
             </p>
             <textarea
@@ -474,7 +474,7 @@ export default function PaginaInformacionNegocio() {
 
           <section className="mt-6">
             <p className="text-sm font-semibold text-tinta">Nombre del vendedor</p>
-            <p className="mt-0.5 text-xs text-tinta/50">
+            <p className="mt-0.5 text-xs text-tinta-suave">
               No obligatorio — aparece en la nota de venta, entre la fecha y el cliente. Hasta{' '}
               {LONGITUD_MAXIMA_VENDEDOR} caracteres.
             </p>
@@ -489,7 +489,7 @@ export default function PaginaInformacionNegocio() {
 
           <section className="mt-6">
             <p className="text-sm font-semibold text-tinta">N° Doc. Vendedor</p>
-            <p className="mt-0.5 text-xs text-tinta/50">
+            <p className="mt-0.5 text-xs text-tinta-suave">
               No obligatorio — no se imprime en la nota de venta, solo aparece en el reporte de
               ventas. Hasta {LONGITUD_MAXIMA_VENDEDOR_DOCUMENTO} caracteres.
             </p>

@@ -111,18 +111,18 @@ export default function PaginaImportarStock() {
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       {modalPermiso}
       <header className="flex items-center gap-3">
-        <Link href="/mas/importar-datos" className="text-xl text-tinta/60" aria-label="Volver">
+        <Link href="/mas/importar-datos" className="text-xl text-tinta-suave" aria-label="Volver">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Importar Stock masivo</h1>
       </header>
 
-      {cargando && <p className="mt-4 text-sm text-tinta/60">Cargando…</p>}
+      {cargando && <p className="mt-4 text-sm text-tinta-suave">Cargando…</p>}
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       <div className="mt-4 rounded-xl border border-acento/40 bg-acento/10 p-3">
         <p className="text-xs font-semibold text-tinta">⚠️ Solo suma stock, nunca lo resta</p>
-        <p className="mt-1 text-xs text-tinta/60">
+        <p className="mt-1 text-xs text-tinta-suave">
           El nombre de cada producto en el Excel debe ser exactamente igual al que ya tienes registrado
           (mayúsculas/minúsculas no importan, pero el resto sí). No se admiten cantidades negativas.
         </p>
@@ -131,7 +131,7 @@ export default function PaginaImportarStock() {
       {estadoPlan && !esPremium && (
         <section className="mt-6 rounded-xl border border-linea p-5 text-center">
           <p className="text-sm font-semibold text-tinta">Importar Stock masivo es una función Premium</p>
-          <p className="mt-2 text-xs text-tinta/60">Actívala desde el panel de administrador.</p>
+          <p className="mt-2 text-xs text-tinta-suave">Actívala desde el panel de administrador.</p>
         </section>
       )}
 
@@ -139,7 +139,7 @@ export default function PaginaImportarStock() {
         <>
           <section className="mt-6">
             <p className="text-sm font-semibold text-tinta">1. Descarga la plantilla</p>
-            <p className="mt-1 text-xs text-tinta/50">
+            <p className="mt-1 text-xs text-tinta-suave">
               Columnas: nombre_producto, cantidad_a_sumar. Ambas obligatorias.
             </p>
             <button
@@ -160,14 +160,14 @@ export default function PaginaImportarStock() {
               disabled={importando}
               className="mt-3 block w-full text-sm text-tinta/70"
             />
-            {nombreArchivo && <p className="mt-2 text-xs text-tinta/50">Archivo: {nombreArchivo}</p>}
+            {nombreArchivo && <p className="mt-2 text-xs text-tinta-suave">Archivo: {nombreArchivo}</p>}
             {mensajeError && <p className="mt-2 text-sm text-alerta">{mensajeError}</p>}
           </section>
 
           {filas.length > 0 && (
             <section className="mt-8">
               <p className="text-sm font-semibold text-tinta">3. Revisa e importa</p>
-              <p className="mt-1 text-xs text-tinta/60">
+              <p className="mt-1 text-xs text-tinta-suave">
                 {filasValidas.length} producto(s) listos ·{' '}
                 {filasConError.length > 0 && (
                   <span className="text-alerta">{filasConError.length} con error (no se aplicarán)</span>

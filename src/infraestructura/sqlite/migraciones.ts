@@ -182,6 +182,12 @@ const MIGRACIONES: string[] = [
   // desactivan para siempre (no se pueden reactivar) y conservan sus números ya emitidos. Se vuelve a correr
   // en cada arranque: es seguro porque esas series ya no se pueden activar.
   `UPDATE serie_comprobante SET activo = 0, es_predeterminada = 0 WHERE serie NOT GLOB '[0-9][0-9][0-9]' AND (activo = 1 OR es_predeterminada = 1);`,
+  // 0039: cuándo se le envió por última vez el recordatorio de cobro por WhatsApp (Fiados). NULL = nunca.
+  // Columna nueva de una tabla que ya existe: SIN REFERENCES.
+  `ALTER TABLE cliente ADD COLUMN ultimo_recordatorio_en TEXT;`,
+  // 0040: fecha en que el cliente se comprometió a pagar su deuda ('YYYY-MM-DD'). NULL = sin compromiso.
+  // Se borra sola cuando el cliente queda sin deuda. Columna nueva de una tabla existente: SIN REFERENCES.
+  `ALTER TABLE cliente ADD COLUMN fecha_compromiso TEXT;`,
 ];
 
 export function aplicarMigraciones(bd: BaseDatosLocal): void {

@@ -49,19 +49,19 @@ export default function PaginaActividad() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
-        <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver">
+        <Link href="/mas" className="text-xl text-tinta-suave" aria-label="Volver">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Actividad de usuarios</h1>
       </header>
 
-      {cargando && <p className="mt-4 text-sm text-tinta/60">Cargando…</p>}
+      {cargando && <p className="mt-4 text-sm text-tinta-suave">Cargando…</p>}
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       {controlVigente === false && (
         <section className="mt-6 rounded-xl border border-linea p-5 text-center">
           <p className="text-sm font-semibold text-tinta">Aquí verás qué hace cada usuario</p>
-          <p className="mt-2 text-xs text-tinta/60">
+          <p className="mt-2 text-xs text-tinta-suave">
             Se registra solo cuando el control de usuarios está encendido (Más › Configuración › Administración de Usuarios).
           </p>
         </section>
@@ -105,14 +105,14 @@ export default function PaginaActividad() {
           <section className="mt-6">
             <h2 className="text-sm font-extrabold text-tinta">Ventas por usuario</h2>
             {resumenVisible.length === 0 ? (
-              <p className="mt-2 text-sm text-tinta/60">No hay ventas en este periodo.</p>
+              <p className="mt-2 text-sm text-tinta-suave">No hay ventas en este periodo.</p>
             ) : (
               <ul className="mt-2 divide-y divide-linea border-y border-linea">
                 {resumenVisible.map((r) => (
                   <li key={r.usuarioId ?? 'sin-usuario'} className="flex items-center justify-between gap-3 py-3">
                     <div>
                       <p className="text-sm font-bold text-tinta">{r.usuarioNombre}</p>
-                      <p className="text-xs text-tinta/60">
+                      <p className="text-xs text-tinta-suave">
                         {r.cantidad} {r.cantidad === 1 ? 'venta' : 'ventas'}
                         {r.anuladas > 0 && ` · ${r.anuladas} ${r.anuladas === 1 ? 'anulada' : 'anuladas'}`}
                       </p>
@@ -127,7 +127,7 @@ export default function PaginaActividad() {
           <section className="mt-6">
             <h2 className="text-sm font-extrabold text-tinta">Acciones registradas</h2>
             {actividad.length === 0 ? (
-              <p className="mt-2 text-sm text-tinta/60">No hay acciones registradas en este periodo.</p>
+              <p className="mt-2 text-sm text-tinta-suave">No hay acciones registradas en este periodo.</p>
             ) : (
               <ul className="mt-2 divide-y divide-linea border-y border-linea">
                 {actividad.map((a) => (
@@ -135,7 +135,7 @@ export default function PaginaActividad() {
                     <p className="text-sm text-tinta">
                       <strong>{a.usuarioNombre}</strong> {textoDeActividad(a)}
                     </p>
-                    <p className="mt-0.5 text-xs text-tinta/50">
+                    <p className="mt-0.5 text-xs text-tinta-suave">
                       {formatearFechaHora(a.fechaHora)}
                       {a.autorizadoPorNombre && (
                         <span className="font-semibold text-acento-oscuro"> · autorizado por {a.autorizadoPorNombre}</span>

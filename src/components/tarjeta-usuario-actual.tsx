@@ -18,7 +18,7 @@ export function TarjetaUsuarioActual() {
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-bold text-tinta">{usuario.nombre}</p>
-        <p className="text-xs text-tinta/60">{etiquetaDeRol(usuario.rol)}</p>
+        <p className="text-xs text-tinta-suave">{etiquetaDeRol(usuario.rol)}</p>
       </div>
       <button
         type="button"

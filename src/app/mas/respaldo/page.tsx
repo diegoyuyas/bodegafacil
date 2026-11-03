@@ -16,6 +16,7 @@ import {
 } from '@/core/exportacion';
 import { horaLocalCompacta, hoyLocalSql } from '@/core/tiempo';
 import { nombreRespaldoPorDefecto } from '@/core/backup-automatico';
+import { CLAVE_ULTIMO_RESPALDO_MANUAL } from '@/core/para-hoy';
 import { CLAVE_PLAN_FECHA_MAXIMA_VISTA, CLAVE_PLAN_VENCE_EN, type EstadoPlan } from '@/core/plan';
 
 function fechaParaNombreArchivo(): string {
@@ -67,6 +68,9 @@ export default function PaginaRespaldo() {
     if (!contenedor) return;
     const bytes = contenedor.exportarRespaldoCompleto();
     await descargarBinario(`${nombreRespaldoPorDefecto(hoyLocalSql(), horaLocalCompacta())}.sqlite`, bytes);
+    // Se anota el día para que Inicio no avise de «falta un respaldo» a quien lo hace a mano.
+    contenedor.configuracion.establecerValor(CLAVE_ULTIMO_RESPALDO_MANUAL, hoyLocalSql());
+    await contenedor.persistir();
   }
 
   async function manejarArchivoSeleccionado(archivos: FileList | null) {
@@ -107,18 +111,18 @@ export default function PaginaRespaldo() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
-        <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver">
+        <Link href="/mas" className="text-xl text-tinta-suave" aria-label="Volver">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Respaldo y exportación</h1>
       </header>
 
-      {cargando && <p className="mt-4 text-sm text-tinta/60">Cargando…</p>}
+      {cargando && <p className="mt-4 text-sm text-tinta-suave">Cargando…</p>}
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       <section className="mt-6">
         <p className="text-sm font-semibold text-tinta">Exportar todo a Excel</p>
-        <p className="mt-1 text-xs text-tinta/50">
+        <p className="mt-1 text-xs text-tinta-suave">
           Un solo archivo Excel con todo tu negocio: productos, clientes, proveedores, ventas, caja y compras, cada
           uno en su propia pestaña.
         </p>
@@ -126,7 +130,7 @@ export default function PaginaRespaldo() {
         {estadoPlan && !esPremium && (
           <div className="mt-3 rounded-xl border border-linea p-5 text-center">
             <p className="text-sm font-semibold text-tinta">Exportar todo a Excel es una función Premium</p>
-            <p className="mt-2 text-xs text-tinta/60">Actívala desde el panel de administrador.</p>
+            <p className="mt-2 text-xs text-tinta-suave">Actívala desde el panel de administrador.</p>
           </div>
         )}
 
@@ -136,7 +140,7 @@ export default function PaginaRespaldo() {
               <p className="text-xs font-semibold text-tinta/70">Rango de fechas (opcional)</p>
               <div className="mt-2 flex gap-2">
                 <div className="flex-1">
-                  <label className="mb-1 block text-xs text-tinta/50">Desde</label>
+                  <label className="mb-1 block text-xs text-tinta-suave">Desde</label>
                   <input
                     type="date"
                     value={desde}
@@ -146,7 +150,7 @@ export default function PaginaRespaldo() {
                   />
                 </div>
                 <div className="flex-1">
-                  <label className="mb-1 block text-xs text-tinta/50">Hasta</label>
+                  <label className="mb-1 block text-xs text-tinta-suave">Hasta</label>
                   <input
                     type="date"
                     value={hasta}
@@ -172,7 +176,7 @@ export default function PaginaRespaldo() {
               )}
             </div>
 
-            <p className="mt-2 text-xs text-tinta/50">
+            <p className="mt-2 text-xs text-tinta-suave">
               {desde || hasta
                 ? 'El rango aplica a ventas, ventas anuladas, caja y compras. Productos, clientes y proveedores salen completos.'
                 : 'Sin filtro de fechas: se exporta todo el historial.'}
@@ -191,7 +195,7 @@ export default function PaginaRespaldo() {
 
       <section className="mt-8">
         <p className="text-sm font-semibold text-tinta">Respaldo completo</p>
-        <p className="mt-1 text-xs text-tinta/50">
+        <p className="mt-1 text-xs text-tinta-suave">
           Un solo archivo con toda tu bodega: ventas, productos, caja y fiados. Tus datos son
           tuyos — guárdalo donde quieras (correo, WhatsApp, USB).
         </p>
@@ -217,7 +221,7 @@ export default function PaginaRespaldo() {
           disabled={restaurando}
           className="mt-3 block w-full text-sm text-tinta/70"
         />
-        {restaurando && !respaldoRestaurado && <p className="mt-2 text-sm text-tinta/60">Restaurando…</p>}
+        {restaurando && !respaldoRestaurado && <p className="mt-2 text-sm text-tinta-suave">Restaurando…</p>}
         {respaldoRestaurado && (
           <p className="mt-2 text-sm font-semibold text-bodega-oscuro">
             Respaldo restaurado correctamente. Abriendo la app…

@@ -262,7 +262,7 @@ function SelectorProducto({
       <div className="mx-auto flex w-full max-w-app flex-1 flex-col overflow-hidden px-5 pt-5">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-extrabold text-bodega-oscuro">{titulo}</h2>
-          <button onClick={onCerrar} aria-label="Cerrar" className="h-10 w-10 text-xl text-tinta/60">
+          <button onClick={onCerrar} aria-label="Cerrar" className="h-10 w-10 text-xl text-tinta-suave">
             ✕
           </button>
         </div>
@@ -274,12 +274,12 @@ function SelectorProducto({
           className="mt-3 h-12 rounded-xl border border-linea bg-white px-4 text-base outline-none focus:border-bodega"
         />
         <ul className="mt-3 flex-1 divide-y divide-linea overflow-y-auto rounded-xl border border-linea bg-white">
-          {resultados.length === 0 && <li className="p-4 text-sm text-tinta/60">No hay productos con ese nombre.</li>}
+          {resultados.length === 0 && <li className="p-4 text-sm text-tinta-suave">No hay productos con ese nombre.</li>}
           {resultados.map((p) => (
             <li key={p.id}>
               <button onClick={() => onElegir(p)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left active:bg-bodega-claro">
                 <span className="text-sm font-semibold text-tinta">{p.nombre}</span>
-                <span className="shrink-0 text-sm text-tinta/60">{formatearMonto(p.precioVenta, simbolo)}</span>
+                <span className="shrink-0 text-sm text-tinta-suave">{formatearMonto(p.precioVenta, simbolo)}</span>
               </button>
             </li>
           ))}
@@ -313,7 +313,7 @@ function PanelCliente({
       <div className="mx-auto flex w-full max-w-app flex-1 flex-col overflow-hidden px-5 pt-5">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-extrabold text-bodega-oscuro">Cliente</h2>
-          <button onClick={onCerrar} aria-label="Cerrar" className="h-10 w-10 text-xl text-tinta/60">
+          <button onClick={onCerrar} aria-label="Cerrar" className="h-10 w-10 text-xl text-tinta-suave">
             ✕
           </button>
         </div>
@@ -329,12 +329,12 @@ function PanelCliente({
             <li key={c.id}>
               <button onClick={() => onElegir(c)} className="w-full px-4 py-3 text-left text-sm font-semibold text-tinta active:bg-bodega-claro">
                 {c.nombre}
-                {c.documento && <span className="ml-2 font-normal text-tinta/50">{c.documento}</span>}
+                {c.documento && <span className="ml-2 font-normal text-tinta-suave">{c.documento}</span>}
               </button>
             </li>
           ))}
           {consulta.trim() !== '' && encontrados.length === 0 && (
-            <li className="p-4 text-sm text-tinta/60">No hay clientes registrados con ese nombre.</li>
+            <li className="p-4 text-sm text-tinta-suave">No hay clientes registrados con ese nombre.</li>
           )}
           {permitirNombreLibre && consulta.trim() !== '' && (
             <li>
@@ -358,7 +358,7 @@ function Hoja({ titulo, onCerrar, children }: { titulo: string; onCerrar: () => 
       <div className="max-h-[88dvh] w-full max-w-app overflow-y-auto rounded-t-3xl bg-white px-5 pb-[calc(1.5rem+var(--area-segura-abajo))] pt-5">
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-lg font-extrabold text-bodega-oscuro">{titulo}</h2>
-          <button onClick={onCerrar} aria-label="Cerrar" className="h-10 w-10 text-xl text-tinta/60">
+          <button onClick={onCerrar} aria-label="Cerrar" className="h-10 w-10 text-xl text-tinta-suave">
             ✕
           </button>
         </div>
@@ -648,7 +648,7 @@ export default function PaginaVentaPorVoz() {
   // --- Pantallas simples -----------------------------------------------------
 
   if (cargando || acceso === 'cargando') {
-    return <p className="p-5 text-sm text-tinta/60">Cargando…</p>;
+    return <p className="p-5 text-sm text-tinta-suave">Cargando…</p>;
   }
   if (error) {
     return <p className="p-5 text-sm text-alerta">No se pudo abrir la base de datos: {error.message}</p>;
@@ -661,7 +661,7 @@ export default function PaginaVentaPorVoz() {
           <IconoMicrofono tamano={30} />
         </div>
         <h1 className="text-lg font-extrabold text-tinta">La venta por voz no está activa</h1>
-        <p className="text-sm text-tinta/60">
+        <p className="text-sm text-tinta-suave">
           Es una función Premium. Actívala en Más › Configuración › Configuración de Venta.
         </p>
         <Link href="/mas/configuracion/configuracion-venta" className="flex h-12 items-center justify-center rounded-full bg-bodega px-6 text-sm font-semibold text-white">
@@ -679,9 +679,9 @@ export default function PaginaVentaPorVoz() {
       <div className="mx-auto flex min-h-dvh max-w-app flex-col items-center justify-center gap-6 px-5 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-bodega-claro text-3xl">✓</div>
         <div>
-          <p className="text-sm text-tinta/60">Venta guardada</p>
+          <p className="text-sm text-tinta-suave">Venta guardada</p>
           <p className="text-4xl font-extrabold text-tinta">{formatearMonto(totalGuardado, simbolo)}</p>
-          <p className="mt-2 text-xs text-tinta/50">Para imprimir o enviar el ticket, búscala en la lista de Inicio.</p>
+          <p className="mt-2 text-xs text-tinta-suave">Para imprimir o enviar el ticket, búscala en la lista de Inicio.</p>
         </div>
         <div className="flex w-full flex-col gap-3">
           <button onClick={empezarOtraVenta} className="flex h-14 items-center justify-center gap-2 rounded-full bg-bodega text-base font-semibold text-white active:bg-bodega-oscuro">
@@ -704,7 +704,7 @@ export default function PaginaVentaPorVoz() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-[calc(7.5rem+var(--area-segura-abajo))] pt-5">
       <header className="flex items-center gap-3">
-        <button onClick={salir} className="h-10 w-10 text-left text-xl text-tinta/60" aria-label="Volver a inicio">
+        <button onClick={salir} className="h-10 w-10 text-left text-xl text-tinta-suave" aria-label="Volver a inicio">
           ←
         </button>
         <h1 className="flex-1 text-lg font-extrabold text-bodega-oscuro">Venta por voz</h1>
@@ -720,7 +720,7 @@ export default function PaginaVentaPorVoz() {
       {/* Estado del micrófono: siempre dice con claridad qué está pasando */}
       <section className="mt-4" aria-live="polite">
         {estadoVoz === 'iniciando' && (
-          <div className="rounded-2xl border border-linea bg-white p-4 text-center text-sm text-tinta/60">Activando micrófono…</div>
+          <div className="rounded-2xl border border-linea bg-white p-4 text-center text-sm text-tinta-suave">Activando micrófono…</div>
         )}
         {escuchando && (
           <div className="rounded-2xl border-2 border-bodega bg-bodega-claro p-4 text-center">
@@ -742,7 +742,7 @@ export default function PaginaVentaPorVoz() {
         {estadoVoz === 'pausado' && (
           <div className="rounded-2xl border border-linea bg-white p-4 text-center">
             <p className="text-base font-extrabold text-tinta">Micrófono en pausa</p>
-            <p className="mt-1 text-sm text-tinta/60">
+            <p className="mt-1 text-sm text-tinta-suave">
               {detalleVoz === 'inactividad' ? 'Se apagó porque no se escuchó nada por un rato.' : 'Toca el botón para seguir hablando.'}
             </p>
             <button onClick={() => void reconocedorRef.current?.iniciar()} className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-full bg-bodega text-base font-semibold text-white active:bg-bodega-oscuro">
@@ -770,7 +770,7 @@ export default function PaginaVentaPorVoz() {
             </button>
           </div>
         )}
-        {ultimaFrase !== '' && <p className="mt-2 text-center text-xs text-tinta/50">Escuché: «{ultimaFrase}»</p>}
+        {ultimaFrase !== '' && <p className="mt-2 text-center text-xs text-tinta-suave">Escuché: «{ultimaFrase}»</p>}
       </section>
 
       {venta.aviso && (
@@ -784,11 +784,11 @@ export default function PaginaVentaPorVoz() {
         <section key={p.id} className="mt-3 rounded-2xl border border-acento bg-acento/10 p-4">
           {p.tipo === 'duda' ? (
             <p className="text-sm font-semibold text-tinta">
-              ¿Cuál quisiste decir con «{p.texto}»? <span className="font-normal text-tinta/60">({p.cantidad} {p.cantidad === 1 ? 'unidad' : 'unidades'})</span>
+              ¿Cuál quisiste decir con «{p.texto}»? <span className="font-normal text-tinta-suave">({p.cantidad} {p.cantidad === 1 ? 'unidad' : 'unidades'})</span>
             </p>
           ) : (
             <p className="text-sm font-semibold text-tinta">
-              No encontré «{p.texto}» <span className="font-normal text-tinta/60">({p.cantidad} {p.cantidad === 1 ? 'unidad' : 'unidades'})</span>
+              No encontré «{p.texto}» <span className="font-normal text-tinta-suave">({p.cantidad} {p.cantidad === 1 ? 'unidad' : 'unidades'})</span>
             </p>
           )}
           <div className="mt-3 flex flex-col gap-2">
@@ -799,7 +799,7 @@ export default function PaginaVentaPorVoz() {
                 className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-bodega bg-white px-4 py-2 text-left text-sm font-semibold text-bodega-oscuro active:bg-bodega-claro"
               >
                 <span>{c.producto.nombre}</span>
-                <span className="shrink-0 text-tinta/60">{formatearMonto(c.producto.precioVenta, simbolo)}</span>
+                <span className="shrink-0 text-tinta-suave">{formatearMonto(c.producto.precioVenta, simbolo)}</span>
               </button>
             ))}
             <div className="flex gap-2">
@@ -824,7 +824,7 @@ export default function PaginaVentaPorVoz() {
       <section className="mt-4">
         <h2 className="text-sm font-extrabold text-tinta">Productos de la venta</h2>
         {venta.lineas.length === 0 ? (
-          <div className="mt-2 flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-linea px-4 py-8 text-center text-tinta/50">
+          <div className="mt-2 flex flex-col items-center gap-2 rounded-2xl border-2 border-dashed border-linea px-4 py-8 text-center text-tinta-suave">
             <IconoMicrofono tamano={32} />
             <p className="text-sm">Aquí aparecerán los productos que digas.</p>
           </div>
@@ -835,7 +835,7 @@ export default function PaginaVentaPorVoz() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="break-words text-sm font-bold text-tinta">{l.nombre}</p>
-                    <p className="text-xs text-tinta/50">{formatearMonto(l.precio, simbolo)} c/u</p>
+                    <p className="text-xs text-tinta-suave">{formatearMonto(l.precio, simbolo)} c/u</p>
                   </div>
                   <button onClick={() => despachar({ tipo: 'quitar', productoId: l.productoId })} aria-label={`Quitar ${l.nombre}`} className="h-9 w-9 shrink-0 rounded-full text-lg text-alerta">
                     ✕
@@ -879,19 +879,19 @@ export default function PaginaVentaPorVoz() {
             </button>
           ))}
         </div>
-        <p className="mt-1 text-xs text-tinta/50">También puedes decir «yape», «plin», «tarjeta» o «fiado».</p>
+        <p className="mt-1 text-xs text-tinta-suave">También puedes decir «yape», «plin», «tarjeta» o «fiado».</p>
       </section>
 
       {/* Cliente */}
       <section className="mt-5">
         <h2 className="text-sm font-extrabold text-tinta">Cliente {venta.metodoPago === 'fiado' ? '(obligatorio para fiado)' : '(opcional)'}</h2>
         <button onClick={() => setPanelCliente({ consulta: '' })} className="mt-2 flex h-12 w-full items-center justify-between rounded-xl border border-linea bg-white px-4 text-left text-sm">
-          <span className={nombreCliente ? 'font-semibold text-tinta' : 'text-tinta/50'}>
+          <span className={nombreCliente ? 'font-semibold text-tinta' : 'text-tinta-suave'}>
             {nombreCliente ?? 'Cliente eventual — toca para elegir'}
           </span>
-          <span className="text-tinta/40">›</span>
+          <span className="text-tinta-suave">›</span>
         </button>
-        <p className="mt-1 text-xs text-tinta/50">También puedes decir «cliente» y su nombre.</p>
+        <p className="mt-1 text-xs text-tinta-suave">También puedes decir «cliente» y su nombre.</p>
       </section>
 
       {/* Barra de abajo: micrófono + guardar */}
@@ -993,7 +993,7 @@ export default function PaginaVentaPorVoz() {
                   <span className="text-base font-semibold text-tinta">Total</span>
                   <span className="text-2xl font-extrabold text-tinta">{formatearMonto(total, simbolo)}</span>
                 </div>
-                <p className="mt-1 text-sm text-tinta/60">
+                <p className="mt-1 text-sm text-tinta-suave">
                   Pago: {METODOS_PAGO.find((m) => m.valor === venta.metodoPago)?.etiqueta} · {nombreCliente ?? 'Cliente eventual'}
                 </p>
                 {errorGuardar && <p className="mt-3 text-sm text-alerta">{errorGuardar}</p>}
@@ -1005,7 +1005,7 @@ export default function PaginaVentaPorVoz() {
                     Seguir editando
                   </button>
                 </div>
-                <p className="mt-2 text-center text-xs text-tinta/50">También puedes decir «sí» o «no».</p>
+                <p className="mt-2 text-center text-xs text-tinta-suave">También puedes decir «sí» o «no».</p>
               </>
             ) : (
               <>

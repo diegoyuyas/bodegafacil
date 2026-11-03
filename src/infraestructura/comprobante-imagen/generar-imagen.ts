@@ -10,7 +10,7 @@
  * como archivo adjunto aparte.
  */
 
-import { construirLineasComprobante, type DatosComprobante } from '@/core/comprobante-impresion';
+import { construirLineasComprobante, type DatosComprobante, type LineaTexto } from '@/core/comprobante-impresion';
 import { tamanoLogoEnImagen } from '@/core/logo';
 
 const ANCHO_CARACTERES = 40;
@@ -36,8 +36,17 @@ async function cargarLogo(datos: string | null | undefined): Promise<HTMLImageEl
 }
 
 export async function generarImagenComprobante(datos: DatosComprobante): Promise<Blob> {
-  const lineas = construirLineasComprobante(datos, ANCHO_CARACTERES);
+  return generarImagenDeLineas(construirLineasComprobante(datos, ANCHO_CARACTERES), datos.logoParaImagen);
+}
 
+/** Ancho (en caracteres) con el que se arman las líneas que se dibujan aquí. */
+export const ANCHO_CARACTERES_IMAGEN = ANCHO_CARACTERES;
+
+/**
+ * Dibuja unas líneas de texto monoespaciado (con un logotipo opcional arriba) y devuelve el PNG. Lo usan el
+ * comprobante de venta y el estado de cuenta de un cliente, para que se vean igual.
+ */
+export async function generarImagenDeLineas(lineas: LineaTexto[], logoParaImagen?: string | null): Promise<Blob> {
   const medicion = document.createElement('canvas').getContext('2d');
   if (!medicion) throw new Error('Este dispositivo no puede generar la imagen del comprobante.');
   // El ancho del lienzo se mide con la fuente NORMAL — es la que
@@ -52,7 +61,7 @@ export async function generarImagenComprobante(datos: DatosComprobante): Promise
   const anchoLienzo = Math.ceil(anchoCaracter * ANCHO_CARACTERES) + MARGEN * 2;
 
   // Logotipo arriba (si hay y está activo): centrado, sin agrandarse, y el ticket crece lo que él ocupa.
-  const logo = await cargarLogo(datos.logoParaImagen);
+  const logo = await cargarLogo(logoParaImagen);
   const tamanoLogo = logo
     ? tamanoLogoEnImagen(logo.naturalWidth, logo.naturalHeight, anchoLienzo - MARGEN * 2)
     : { ancho: 0, alto: 0 };

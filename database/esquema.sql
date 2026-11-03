@@ -76,6 +76,8 @@ CREATE TABLE cliente (
     direccion           TEXT,
     saldo_pendiente     REAL NOT NULL DEFAULT 0,      -- total adeudado, se recalcula
     fecha_ultimo_pago   TEXT,
+    ultimo_recordatorio_en TEXT,                       -- cuándo se le envió el último recordatorio de cobro por WhatsApp; NULL = nunca
+    fecha_compromiso    TEXT,                          -- 'YYYY-MM-DD' en que se comprometió a pagar; NULL = sin compromiso; se borra al saldar
     activo              INTEGER NOT NULL DEFAULT 1,
     creado_en           TEXT NOT NULL DEFAULT (datetime('now'))
 );

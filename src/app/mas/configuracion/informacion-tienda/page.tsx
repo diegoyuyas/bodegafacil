@@ -85,13 +85,13 @@ export default function PaginaInformacionTienda() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
-        <Link href="/mas/configuracion" className="text-xl text-tinta/60" aria-label="Volver">
+        <Link href="/mas/configuracion" className="text-xl text-tinta-suave" aria-label="Volver">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Información de la Tienda</h1>
       </header>
 
-      {cargando && <p className="mt-4 text-sm text-tinta/60">Cargando…</p>}
+      {cargando && <p className="mt-4 text-sm text-tinta-suave">Cargando…</p>}
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       <p className="mt-4 text-sm text-tinta/70">
@@ -102,7 +102,7 @@ export default function PaginaInformacionTienda() {
       {estadoPlan && !esPremium && (
         <section className="mt-6 rounded-xl border border-linea p-5 text-center">
           <p className="text-sm font-semibold text-tinta">Información de la Tienda es una función Premium</p>
-          <p className="mt-2 text-xs text-tinta/60">Actívala desde el panel de administrador.</p>
+          <p className="mt-2 text-xs text-tinta-suave">Actívala desde el panel de administrador.</p>
         </section>
       )}
 
@@ -110,7 +110,7 @@ export default function PaginaInformacionTienda() {
         <>
           <section className="mt-6">
             <p className="text-sm font-semibold text-tinta">Nombre de tienda</p>
-            <p className="mt-0.5 text-xs text-tinta/50">
+            <p className="mt-0.5 text-xs text-tinta-suave">
               Reemplaza &quot;{NOMBRE_TIENDA_PREDETERMINADO}&quot; en Inicio y en el comprobante.
             </p>
             <input
@@ -124,7 +124,7 @@ export default function PaginaInformacionTienda() {
 
           <section className="mt-6">
             <p className="text-sm font-semibold text-tinta">DNI o RUC</p>
-            <p className="mt-0.5 text-xs text-tinta/50">No obligatorio.</p>
+            <p className="mt-0.5 text-xs text-tinta-suave">No obligatorio.</p>
             <input
               value={documento}
               onChange={(e) => setDocumento(e.target.value)}
@@ -136,7 +136,7 @@ export default function PaginaInformacionTienda() {
 
           <section className="mt-6">
             <p className="text-sm font-semibold text-tinta">Ubicación</p>
-            <p className="mt-0.5 text-xs text-tinta/50">No obligatorio — hasta {LONGITUD_MAXIMA_UBICACION} caracteres.</p>
+            <p className="mt-0.5 text-xs text-tinta-suave">No obligatorio — hasta {LONGITUD_MAXIMA_UBICACION} caracteres.</p>
             <input
               value={ubicacion}
               onChange={(e) => setUbicacion(e.target.value.slice(0, LONGITUD_MAXIMA_UBICACION))}
@@ -148,7 +148,7 @@ export default function PaginaInformacionTienda() {
 
           <section className="mt-6">
             <p className="text-sm font-semibold text-tinta">Contacto</p>
-            <p className="mt-0.5 text-xs text-tinta/50">No obligatorio — hasta {LONGITUD_MAXIMA_CONTACTO} caracteres.</p>
+            <p className="mt-0.5 text-xs text-tinta-suave">No obligatorio — hasta {LONGITUD_MAXIMA_CONTACTO} caracteres.</p>
             <input
               value={contacto}
               onChange={(e) => setContacto(e.target.value.slice(0, LONGITUD_MAXIMA_CONTACTO))}
@@ -160,7 +160,7 @@ export default function PaginaInformacionTienda() {
 
           <section className="mt-6">
             <p className="text-sm font-semibold text-tinta">Leyenda</p>
-            <p className="mt-0.5 text-xs text-tinta/50">
+            <p className="mt-0.5 text-xs text-tinta-suave">
               Mensaje libre debajo del comprobante impreso — hasta {LONGITUD_MAXIMA_LEYENDA} caracteres.
             </p>
             <textarea

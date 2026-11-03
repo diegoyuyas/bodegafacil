@@ -1,23 +1,31 @@
 import type { Config } from 'tailwindcss';
 
+const variable = (nombre: string) => `rgb(var(--${nombre}) / <alpha-value>)`;
+
 const config: Config = {
   content: ['./src/**/*.{ts,tsx}'],
   theme: {
     extend: {
+      // Los colores viven como variables CSS (ver :root en globals.css). Así el modo oscuro de la
+      // Etapa V5 solo tendrá que redefinir los valores, sin tocar ninguna pantalla.
       colors: {
-        papel: '#F4FAF9',       // fondo — blanco con tinte menta, del logo de Vende Fácil
-        tinta: '#12262A',       // texto principal, casi negro con tinte turquesa oscuro
+        papel: variable('papel'),       // fondo — blanco con tinte menta, del logo de Vende Fácil
+        tinta: {
+          DEFAULT: variable('tinta'),   // texto principal, casi negro con tinte turquesa oscuro
+          suave: variable('tinta-suave'), // texto secundario (contraste 5:1; reemplaza a tinta/40, /50 y /60)
+        },
         bodega: {
-          DEFAULT: '#0C6B7D',  // turquesa oscuro — color de marca (Vende Fácil), botones sólidos
-          oscuro: '#06424D',
-          claro: '#DCF3F1',
+          DEFAULT: variable('bodega'),  // turquesa oscuro — color de marca (Vende Fácil), botones sólidos
+          oscuro: variable('bodega-oscuro'),
+          claro: variable('bodega-claro'),
         },
         acento: {
-          DEFAULT: '#D9A62E',  // dorado — distintivo de funciones Premium
-          oscuro: '#B3841E',
+          DEFAULT: variable('acento'),  // dorado — distintivo Premium / advertencia (fondos y bordes)
+          oscuro: variable('acento-oscuro'), // dorado para TEXTO sobre fondo claro (contraste 5:1)
         },
-        alerta: '#B24C3C',      // alertas de stock bajo / deuda
-        linea: '#D7E6E5',       // hairlines / divisores
+        ok: variable('ok'),             // verde — cobrado, pagado, todo bien
+        alerta: variable('alerta'),     // rojo — deuda, vencido, error
+        linea: variable('linea'),       // hairlines / divisores
       },
       fontFamily: {
         // Pila de fuentes del sistema: geométrica y redondeada donde esté

@@ -14,12 +14,17 @@ import { App } from '@capacitor/app';
  *    su padre lógico es Inicio, no "/ventas".
  *  - Caja y Compras viven en `/caja` y `/compras`, pero solo se entra
  *    a ellas desde Más; el botón atrás debe volver a Más, no saltar a Inicio.
+ *  - Clientes (`/mas/clientes`) es un acceso de la barra inferior: su atrás es Inicio.
+ *    Fiados (`/fiados`) se abre desde Más: su atrás es Más.
  */
 const PADRES_ESPECIALES: Record<string, string> = {
   '/ventas/nueva': '/',
   '/ventas/voz': '/',
   '/caja': '/mas',
   '/compras': '/mas',
+  // «Clientes» es un acceso de la barra inferior (vuelve a Inicio); Fiados se abre desde Más.
+  '/mas/clientes': '/',
+  '/fiados': '/mas',
 };
 
 /**

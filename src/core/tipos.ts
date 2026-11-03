@@ -57,6 +57,10 @@ export interface Cliente {
   direccion: string | null;
   saldoPendiente: number;
   fechaUltimoPago: string | null;
+  /** Cuándo se le envió el último recordatorio de cobro por WhatsApp ('YYYY-MM-DD HH:MM:SS'); null = nunca. */
+  ultimoRecordatorioEn: string | null;
+  /** Fecha ('YYYY-MM-DD') en que se comprometió a pagar su deuda; null = sin compromiso. Se borra al quedar sin deuda. */
+  fechaCompromiso: string | null;
   activo: boolean;
   creadoEn: string;
 }
@@ -361,6 +365,8 @@ export interface DeudaPendienteDetalle {
   /** Lo que todavía falta cobrar de ESTA venta (ya descontados los abonos). */
   saldoPendiente: number;
   lineas: LineaVentaResumen[];
+  /** true si la venta que originó esta deuda fue anulada (la deuda ya no cuenta, aunque su saldo figure en 0). */
+  ventaAnulada?: boolean;
 }
 
 /**

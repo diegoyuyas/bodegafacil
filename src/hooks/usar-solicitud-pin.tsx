@@ -69,7 +69,7 @@ export function usarSolicitudPin(contenedor: ContenedorRepositorios | null) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-6">
       <div className="w-full max-w-xs rounded-2xl bg-papel p-5 text-center shadow-xl">
         <p className="text-base font-extrabold text-bodega-oscuro">Ingresa tu PIN</p>
-        <p className="mt-1 text-xs text-tinta/60">Para {solicitud.accion}.</p>
+        <p className="mt-1 text-xs text-tinta-suave">Para {solicitud.accion}.</p>
 
         <input
           type="password"

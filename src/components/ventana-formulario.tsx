@@ -38,7 +38,7 @@ export function VentanaFormulario({
       >
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="text-base font-extrabold text-bodega-oscuro">{titulo}</h2>
-          <button onClick={onCerrar} aria-label="Cerrar" className="text-xl leading-none text-tinta/50">
+          <button onClick={onCerrar} aria-label="Cerrar" className="text-xl leading-none text-tinta-suave">
             ✕
           </button>
         </div>

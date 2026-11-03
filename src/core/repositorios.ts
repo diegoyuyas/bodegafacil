@@ -124,6 +124,15 @@ export interface ClienteRepositorio {
   crear(nombre: string, documento: string, telefono?: string | null): Cliente;
   /** Edita los datos del cliente, incluyendo si está activo. */
   actualizar(id: number, datos: DatosActualizarCliente): Cliente;
+  /** Guarda solo el teléfono (ej. al recordar una deuda a un cliente que no lo tenía). Valida: 6 a 12 dígitos. */
+  guardarTelefono(id: number, telefono: string): Cliente;
+  /** Anota cuándo se le abrió el recordatorio de cobro por WhatsApp ('YYYY-MM-DD HH:MM:SS', hora local). */
+  registrarRecordatorio(id: number, fechaHora: string): void;
+  /**
+   * Anota (o quita, con null) la fecha en que el cliente se comprometió a pagar ('YYYY-MM-DD').
+   * Solo se puede poner si el cliente debe algo, y no puede ser anterior a hoy.
+   */
+  guardarFechaCompromiso(id: number, fecha: string | null): void;
 }
 
 export interface DatosActualizarCliente {

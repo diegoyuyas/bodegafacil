@@ -51,6 +51,8 @@ export interface FilaCliente {
   direccion: string | null;
   saldo_pendiente: number;
   fecha_ultimo_pago: string | null;
+  ultimo_recordatorio_en: string | null;
+  fecha_compromiso: string | null;
   activo: number;
   creado_en: string;
 }
@@ -64,6 +66,8 @@ export function mapearCliente(fila: FilaCliente): Cliente {
     direccion: fila.direccion,
     saldoPendiente: fila.saldo_pendiente,
     fechaUltimoPago: fila.fecha_ultimo_pago,
+    ultimoRecordatorioEn: fila.ultimo_recordatorio_en ?? null,
+    fechaCompromiso: fila.fecha_compromiso ?? null,
     activo: fila.activo === 1,
     creadoEn: fila.creado_en,
   };

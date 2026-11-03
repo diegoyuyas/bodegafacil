@@ -50,6 +50,10 @@ function mapearDeudaConLineas(
           [d.venta_id],
         )
       : [],
+    // Una venta anulada deja su deuda en 0: sin esta marca parecería una compra «pagada».
+    ventaAnulada: d.venta_id
+      ? bd.consultar<{ anulada: number }>('SELECT anulada FROM venta WHERE id = ?', [d.venta_id])[0]?.anulada === 1
+      : false,
   };
 }
 
@@ -229,6 +233,8 @@ export class FiadoRepositorioSqlite implements FiadoRepositorio {
         `UPDATE cliente SET saldo_pendiente = ?, fecha_ultimo_pago = ? WHERE id = ?`,
         [saldoNuevo, ahora, clienteId],
       );
+      // Si ya no debe nada, el compromiso de pago deja de tener sentido.
+      this.bd.ejecutar('UPDATE cliente SET fecha_compromiso = NULL WHERE id = ? AND saldo_pendiente <= 0', [clienteId]);
 
       const concepto =
         ventasCobradas.length > 0

@@ -87,7 +87,7 @@ export function CampoAlias({
               type="button"
               onClick={() => quitar(a)}
               aria-label={`Quitar alias ${a}`}
-              className="px-0.5 text-sm leading-none text-tinta/50 active:text-alerta"
+              className="px-0.5 text-sm leading-none text-tinta-suave active:text-alerta"
             >
               ×
             </button>
@@ -111,11 +111,11 @@ export function CampoAlias({
           />
         )}
       </div>
-      <p className="mt-1 text-xs text-tinta/50">
+      <p className="mt-1 text-xs text-tinta-suave">
         Ingresa una coma después de cada alias. Ej: cobertura, bitter, winter
       </p>
       {llegoAlMaximo && (
-        <p className="mt-1 text-xs text-tinta/50">Máximo {MAXIMO_ALIAS_POR_PRODUCTO} alias por producto.</p>
+        <p className="mt-1 text-xs text-tinta-suave">Máximo {MAXIMO_ALIAS_POR_PRODUCTO} alias por producto.</p>
       )}
       {mensaje && <p className="mt-1 text-xs text-alerta">{mensaje}</p>}
       {avisos.map((aviso) => (

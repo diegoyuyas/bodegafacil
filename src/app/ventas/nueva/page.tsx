@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
+import { usarAvisos } from '@/components/proveedor-avisos';
+import { IconoWhatsApp } from '@/components/ui/iconos';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { construirVenta, ErrorDeNegocio } from '@/core/reglas-negocio';
 import { LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
@@ -50,6 +52,7 @@ const METODOS_PAGO: { valor: MetodoPago; etiqueta: string }[] = [
 
 export default function PaginaNuevaVenta() {
   const { contenedor, cargando, error } = usarContenedor();
+  const { vibrar } = usarAvisos();
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
 
   useEffect(() => {
@@ -399,6 +402,7 @@ export default function PaginaNuevaVenta() {
       setMetodoPagoGuardado(venta.metodoPago);
       setComprobanteGuardado(`${ETIQUETA_COMPROBANTE[venta.tipoComprobante]} ${venta.comprobante}`);
       setEtapa('guardada');
+      vibrar(venta.metodoPago === 'fiado' ? 'guardar' : 'cobrar');
       if (enviarWhatsApp && telefonoFinal) {
         abrirWhatsAppDeVenta(venta, telefonoFinal);
       }
@@ -459,7 +463,7 @@ export default function PaginaNuevaVenta() {
   }
 
   if (cargando) {
-    return <p className="p-5 text-sm text-tinta/60">Cargando…</p>;
+    return <p className="p-5 text-sm text-tinta-suave">Cargando…</p>;
   }
   if (error) {
     return <p className="p-5 text-sm text-alerta">No se pudo abrir la base de datos: {error.message}</p>;
@@ -470,7 +474,7 @@ export default function PaginaNuevaVenta() {
       <div className="mx-auto flex min-h-dvh max-w-app flex-col items-center justify-center gap-4 px-5 text-center">
         <p className="text-5xl">🔒</p>
         <h1 className="text-lg font-extrabold text-tinta">Límite del Plan Gratis alcanzado</h1>
-        <p className="text-sm text-tinta/60">
+        <p className="text-sm text-tinta-suave">
           Ya registraste {ventasUsadas} de {LIMITE_VENTAS_PLAN_GRATIS} pedidos disponibles en el
           Plan Gratis. Contacta a soporte para activar Premium y seguir vendiendo.
         </p>
@@ -487,11 +491,11 @@ export default function PaginaNuevaVenta() {
   if (etapa === 'guardada') {
     return (
       <div className="mx-auto flex min-h-dvh max-w-app flex-col items-center justify-center gap-6 px-5 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-bodega-claro text-3xl">
+        <div className="animar-exito flex h-16 w-16 items-center justify-center rounded-full bg-ok/10 text-3xl text-ok">
           ✓
         </div>
         <div>
-          <p className="text-sm text-tinta/60">Venta guardada</p>
+          <p className="text-sm text-tinta-suave">Venta guardada</p>
           <p className="text-4xl font-extrabold text-tinta">{formatearMonto(totalGuardado, simboloMoneda)}</p>
           {comprobanteGuardado && <p className="mt-1 text-sm font-semibold text-tinta/70">{comprobanteGuardado}</p>}
         </div>
@@ -500,7 +504,7 @@ export default function PaginaNuevaVenta() {
         {esPremium && (metodoPagoGuardado === 'yape' || metodoPagoGuardado === 'plin') && (
           <div className="w-full rounded-xl border border-linea p-4">
             <p className="text-sm font-semibold text-tinta">Foto del comprobante de pago</p>
-            <p className="mt-0.5 text-xs text-tinta/50">Opcional — queda guardada junto a esta venta.</p>
+            <p className="mt-0.5 text-xs text-tinta-suave">Opcional — queda guardada junto a esta venta.</p>
             {fotoComprobanteGuardada ? (
               <p className="mt-2 text-sm text-bodega-oscuro">✓ Foto guardada.</p>
             ) : (
@@ -560,7 +564,7 @@ export default function PaginaNuevaVenta() {
                 </span>
               </div>
               {descripcionActiva && linea.descripcion.trim() !== '' && (
-                <p className="mt-0.5 break-words text-xs text-tinta/50">{linea.descripcion.trim()}</p>
+                <p className="mt-0.5 break-words text-xs text-tinta-suave">{linea.descripcion.trim()}</p>
               )}
             </li>
           ))}
@@ -573,20 +577,21 @@ export default function PaginaNuevaVenta() {
           </span>
         </div>
 
-        <p className="mt-2 text-sm text-tinta/60">
+        <p className="mt-2 text-sm text-tinta-suave">
           Pago: {METODOS_PAGO.find((m) => m.valor === metodoPago)?.etiqueta} ·{' '}
           {clienteSeleccionado ? clienteSeleccionado.nombre : nombreClienteLibre().toLocaleUpperCase('es') || 'Cliente eventual'}
         </p>
         {hayComprobantes && (
-          <p className="mt-1 text-sm text-tinta/60">
+          <p className="mt-1 text-sm text-tinta-suave">
             Comprobante: {ETIQUETA_COMPROBANTE[tipoEfectivo]}
             {numeroPrevisto ? ` ${numeroPrevisto}` : ''}
           </p>
         )}
 
         {enviarWhatsApp && (
-          <p className="mt-1 text-xs text-tinta/50">
-            📲 Al confirmar, se abrirá WhatsApp con el detalle listo para enviar.
+          <p className="mt-1 text-xs text-tinta-suave">
+            <IconoWhatsApp tamano={14} className="mr-1 inline align-text-bottom text-[#25D366]" />
+            Al confirmar, se abrirá WhatsApp con el detalle listo para enviar.
           </p>
         )}
 
@@ -617,7 +622,7 @@ export default function PaginaNuevaVenta() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-[calc(7rem+var(--area-segura-abajo))] pt-6">
       <header className="flex items-center gap-3">
-        <Link href="/" className="text-xl text-tinta/60" aria-label="Volver a inicio">
+        <Link href="/" className="text-xl text-tinta-suave" aria-label="Volver a inicio">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Nueva venta</h1>
@@ -648,7 +653,7 @@ export default function PaginaNuevaVenta() {
                   className="flex w-full items-center justify-between px-4 py-3 text-left text-sm disabled:opacity-40"
                 >
                   <span>{producto.nombre}</span>
-                  <span className="text-tinta/60">
+                  <span className="text-tinta-suave">
                     {producto.controlaStock && producto.stockActual <= 0
                       ? 'Sin stock'
                       : formatearMonto(producto.precioVenta, simboloMoneda)}
@@ -663,7 +668,7 @@ export default function PaginaNuevaVenta() {
       {/* Carrito */}
       <section className="mt-6">
         {carrito.length === 0 ? (
-          <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
+          <p className="border-y border-linea py-6 text-center text-sm text-tinta-suave">
             Busca un producto para empezar
           </p>
         ) : (
@@ -673,7 +678,7 @@ export default function PaginaNuevaVenta() {
                 <div className="flex-1">
                   <p className="text-sm text-tinta">{linea.nombre}</p>
                   {precioEditable ? (
-                    <label className="mt-1 flex items-center gap-1 text-xs text-tinta/50">
+                    <label className="mt-1 flex items-center gap-1 text-xs text-tinta-suave">
                       {simboloMoneda}
                       <input
                         type="number"
@@ -688,7 +693,7 @@ export default function PaginaNuevaVenta() {
                       c/u
                     </label>
                   ) : (
-                    <p className="text-xs text-tinta/50">{formatearMonto(linea.precioVenta, simboloMoneda)} c/u</p>
+                    <p className="text-xs text-tinta-suave">{formatearMonto(linea.precioVenta, simboloMoneda)} c/u</p>
                   )}
                   {avisoCantidad?.productoId === linea.productoId && (
                     <p className="mt-1 text-xs text-alerta">{avisoCantidad.texto}</p>
@@ -746,7 +751,7 @@ export default function PaginaNuevaVenta() {
                 </span>
                 <button
                   onClick={() => quitarProducto(linea.productoId)}
-                  className="text-tinta/40"
+                  className="text-tinta-suave"
                   aria-label={`Quitar ${linea.nombre}`}
                 >
                   ✕
@@ -761,7 +766,7 @@ export default function PaginaNuevaVenta() {
       {/* Comprobante: solo aparece si hay series (Premium). Sin series, todo sale como nota de venta. */}
       {hayComprobantes && (
         <section className="mt-6">
-          <p className="text-sm font-bold text-tinta/60">Comprobante</p>
+          <p className="text-sm font-bold text-tinta-suave">Comprobante</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {comprobantesPosibles.map((t) => (
               <button
@@ -775,9 +780,9 @@ export default function PaginaNuevaVenta() {
               </button>
             ))}
           </div>
-          {numeroPrevisto && <p className="mt-2 text-xs text-tinta/50">Saldrá como {numeroPrevisto}</p>}
+          {numeroPrevisto && <p className="mt-2 text-xs text-tinta-suave">Saldrá como {numeroPrevisto}</p>}
           {tipoEfectivo === 'factura' && (
-            <p className="mt-1 text-xs text-tinta/50">La factura necesita un cliente registrado con RUC (11 dígitos).</p>
+            <p className="mt-1 text-xs text-tinta-suave">La factura necesita un cliente registrado con RUC (11 dígitos).</p>
           )}
           {errorFactura && <p className="mt-1 text-sm text-alerta">{errorFactura}</p>}
         </section>
@@ -785,7 +790,7 @@ export default function PaginaNuevaVenta() {
 
       {/* Método de pago */}
       <section className="mt-6">
-        <p className="text-sm font-bold text-tinta/60">Método de pago</p>
+        <p className="text-sm font-bold text-tinta-suave">Método de pago</p>
         <div className="mt-2 flex flex-wrap gap-2">
           {METODOS_PAGO.map((m) => (
             <button
@@ -805,7 +810,7 @@ export default function PaginaNuevaVenta() {
 
       {/* Cliente: opcional siempre, obligatorio solo si es fiado */}
       <section className="mt-4">
-        <p className="text-sm font-bold text-tinta/60">
+        <p className="text-sm font-bold text-tinta-suave">
           Cliente{' '}
           {tipoEfectivo === 'factura'
             ? '(obligatorio para factura, con RUC)'
@@ -818,11 +823,11 @@ export default function PaginaNuevaVenta() {
           <div className="mt-2 flex items-center justify-between rounded-xl border border-linea bg-white px-4 py-3">
             <div>
               <p className="text-sm text-tinta">{clienteSeleccionado.nombre}</p>
-              <p className="text-xs text-tinta/50">{clienteSeleccionado.documento}</p>
+              <p className="text-xs text-tinta-suave">{clienteSeleccionado.documento}</p>
             </div>
             <button
               onClick={() => setClienteSeleccionado(null)}
-              className="text-tinta/40"
+              className="text-tinta-suave"
               aria-label="Quitar cliente"
             >
               ✕
@@ -845,7 +850,7 @@ export default function PaginaNuevaVenta() {
                       className="flex w-full flex-col items-start px-4 py-2 text-left text-sm"
                     >
                       <span>{cliente.nombre}</span>
-                      <span className="text-xs text-tinta/50">{cliente.documento}</span>
+                      <span className="text-xs text-tinta-suave">{cliente.documento}</span>
                       {tipoEfectivo === 'factura' && !esRucValido(cliente.documento) && (
                         <span className="text-xs text-alerta">Sin RUC válido: no sirve para factura</span>
                       )}
@@ -855,7 +860,7 @@ export default function PaginaNuevaVenta() {
               </ul>
             )}
             {metodoPago === 'fiado' || tipoEfectivo === 'factura' ? (
-              <p className="mt-2 text-xs text-tinta/40">
+              <p className="mt-2 text-xs text-tinta-suave">
                 {tipoEfectivo === 'factura' ? 'La factura necesita un cliente registrado con RUC.' : 'El fiado necesita un cliente registrado.'}{' '}
                 ¿Cliente nuevo? Créalo en{' '}
                 <Link href="/mas/clientes" className="underline">
@@ -864,16 +869,16 @@ export default function PaginaNuevaVenta() {
                 .
               </p>
             ) : (
-              <p className="mt-2 text-xs text-tinta/40">
+              <p className="mt-2 text-xs text-tinta-suave">
                 {nombreClienteLibre() ? (
                   <>
                     Esta venta saldrá a nombre de{' '}
-                    <span className="font-medium text-tinta/60">{nombreClienteLibre()}</span> (sin registrarlo).
+                    <span className="font-medium text-tinta-suave">{nombreClienteLibre()}</span> (sin registrarlo).
                   </>
                 ) : (
                   <>
                     Si no seleccionas ni escribes a nadie, la venta queda como{' '}
-                    <span className="font-medium text-tinta/60">Cliente eventual</span>.
+                    <span className="font-medium text-tinta-suave">Cliente eventual</span>.
                   </>
                 )}{' '}
                 Para guardarlo, créalo en{' '}
@@ -889,9 +894,9 @@ export default function PaginaNuevaVenta() {
 
       {/* Teléfono + WhatsApp */}
       <section className="mt-4">
-        <p className="text-sm font-bold text-tinta/60">Número de celular (opcional)</p>
+        <p className="text-sm font-bold text-tinta-suave">Número de celular (opcional)</p>
         <div className="mt-2 flex gap-2">
-          <span className="flex h-11 shrink-0 items-center rounded-lg border border-linea bg-papel px-3 text-sm text-tinta/60">
+          <span className="flex h-11 shrink-0 items-center rounded-lg border border-linea bg-papel px-3 text-sm text-tinta-suave">
             +{prefijoPais}
           </span>
           <input
@@ -904,7 +909,7 @@ export default function PaginaNuevaVenta() {
           />
         </div>
         {clienteSeleccionado?.telefono && (
-          <p className="mt-1 text-xs text-tinta/40">Se usará el teléfono registrado del cliente.</p>
+          <p className="mt-1 text-xs text-tinta-suave">Se usará el teléfono registrado del cliente.</p>
         )}
         <label className="mt-3 flex items-center gap-2 text-sm text-tinta/80">
           <input
@@ -916,10 +921,11 @@ export default function PaginaNuevaVenta() {
             }}
             className="h-4 w-4 rounded border-linea"
           />
+          <IconoWhatsApp tamano={18} className="text-[#25D366]" />
           Enviar venta a WhatsApp
         </label>
         <label
-          className={`mt-2 flex items-center gap-2 text-sm ${esPremium ? 'text-tinta/80' : 'text-tinta/40'}`}
+          className={`mt-2 flex items-center gap-2 text-sm ${esPremium ? 'text-tinta/80' : 'text-tinta-suave'}`}
         >
           <input
             type="checkbox"
@@ -934,7 +940,7 @@ export default function PaginaNuevaVenta() {
           Guardar ticket como...
           {!esPremium && <span className="text-xs font-semibold text-acento-oscuro">Premium</span>}
         </label>
-        <p className="ml-6 mt-0.5 text-xs text-tinta/40">
+        <p className="ml-6 mt-0.5 text-xs text-tinta-suave">
           Genera una imagen del comprobante y abre "Compartir" — tú eliges si la mandas a tu WhatsApp, a otro contacto, o la guardas.
         </p>
       </section>

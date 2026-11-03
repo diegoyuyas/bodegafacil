@@ -9,9 +9,7 @@ import type { LineaVentaResumen, ResumenDia, VentaListaItem } from '@/core/tipos
 import { LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
 import type { EstadoPlan } from '@/core/plan';
 import {
-  CLAVE_MODO_VENTA_VOZ,
   CLAVE_NOMBRE_TIENDA,
-  modoVentaVozDisponible,
   obtenerNombreTienda,
 } from '@/core/configuracion';
 import { CLAVE_PREFIJO_PAIS, obtenerPrefijoPais } from '@/core/paises';
@@ -21,6 +19,26 @@ import { imprimirComprobanteDeVenta } from '@/infraestructura/impresora-bluetoot
 import { CLAVE_IMPRESORA_ACTIVA, IMPRESION_BLUETOOTH_DISPONIBLE } from '@/core/impresora';
 import { guardarTicketComoImagen } from '@/infraestructura/comprobante-imagen/compartir-ticket';
 import { MenuImprimirTicket } from '@/components/menu-imprimir-ticket';
+import { DetalleVentaSheet } from '@/components/detalle-venta-sheet';
+import { avisoAnulacionFiado } from '@/core/detalle-venta';
+import { EsqueletoLista } from '@/components/ui/esqueleto';
+import { EstadoVacio } from '@/components/ui/estado-vacio';
+import { TarjetaParaHoy } from '@/components/tarjeta-para-hoy';
+import { CLAVE_ULTIMO_RESPALDO_MANUAL, construirParaHoy, estadoRespaldo, type PendienteHoy } from '@/core/para-hoy';
+import { calcularResumenFiados, construirFilasFiado } from '@/core/fiados-resumen';
+import { filtrarCompromisosVencidos, sumarDias } from '@/core/fiados-compromiso';
+import { GraficoVentas } from '@/components/grafico-ventas';
+import {
+  mejorDia,
+  productoMasVendido,
+  textoCantidad,
+  totalDeLosDias,
+  ventasUltimosDias,
+  type DiaVentas,
+  type ProductoMasVendido,
+} from '@/core/ventas-semana';
+import { leerConfigBackupAutomatico } from '@/infraestructura/backup-automatico/config';
+import { Monto } from '@/components/ui/monto';
 import { formatearFechaHora, hoyLocalSql } from '@/core/tiempo';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
@@ -49,7 +67,6 @@ export default function PaginaInicio() {
   const [ventaMenuTicket, setVentaMenuTicket] = useState<VentaListaItem | null>(null);
   const [impresoraActiva, setImpresoraActiva] = useState(false);
   // El botón "Nueva Venta por Voz" solo aparece con el modo voz en ON y plan Premium.
-  const [modoVoz, setModoVoz] = useState(false);
 
   useEffect(() => {
     if (!contenedor) return;
@@ -60,15 +77,21 @@ export default function PaginaInicio() {
   const [pedidosDelRango, setPedidosDelRango] = useState<VentaListaItem[]>([]);
   const [totalHistorico, setTotalHistorico] = useState(0);
   const [estadoPlan, setEstadoPlan] = useState<EstadoPlan | null>(null);
-  const [ventaExpandida, setVentaExpandida] = useState<number | null>(null);
+  // Venta cuyo detalle se muestra en el pop-up del Historial de ventas.
+  const [ventaDetalle, setVentaDetalle] = useState<VentaListaItem | null>(null);
   const [lineasPorVenta, setLineasPorVenta] = useState<Record<number, LineaVentaResumen[]>>({});
   const [pedidosAbiertos, setPedidosAbiertos] = useState(false);
   const [busquedaPedidos, setBusquedaPedidos] = useState('');
-  // "Pedidos Generados": por defecto la fecha de hoy; si se cambia el
+  // "Historial de ventas": por defecto la fecha de hoy; si se cambia el
   // rango, la etiqueta pasa de "Hoy" a "Total" (ver más abajo).
   const [desdePedidos, setDesdePedidos] = useState(hoyLocalSql());
   const [hastaPedidos, setHastaPedidos] = useState(hoyLocalSql());
   const [nombreTienda, setNombreTienda] = useState(obtenerNombreTienda(null));
+  // Tarjeta «Para hoy»: null mientras no se han leído los datos.
+  const [paraHoy, setParaHoy] = useState<PendienteHoy[] | null>(null);
+  // Ventas de los últimos 7 días (gráfico) y producto más vendido de hoy.
+  const [diasSemana, setDiasSemana] = useState<DiaVentas[] | null>(null);
+  const [masVendidoHoy, setMasVendidoHoy] = useState<ProductoMasVendido | null>(null);
 
   // Gesto secreto: tocar 5 veces el título entra al panel de administrador.
   // No aparece en ningún menú a propósito — es solo para el dueño de la app.
@@ -96,9 +119,45 @@ export default function PaginaInicio() {
     setTotalHistorico(contenedor.ventas.contarTotalHistorico());
     const estado = contenedor.plan.obtenerEstado();
     setEstadoPlan(estado);
-    setModoVoz(modoVentaVozDisponible(contenedor.configuracion.obtenerValor(CLAVE_MODO_VENTA_VOZ), estado.tipo === 'premium'));
     setImpresoraActiva(contenedor.configuracion.obtenerValor(CLAVE_IMPRESORA_ACTIVA) === '1');
     setNombreTienda(obtenerNombreTienda(contenedor.configuracion.obtenerValor(CLAVE_NOMBRE_TIENDA)));
+
+    // «Para hoy»: fiados vencidos (F1), compromisos de pago pasados (F4), stock bajo y respaldo pendiente.
+    const hoy = hoyLocalSql();
+
+    // Gráfico de los últimos 7 días y producto más vendido de hoy (solo ventas no anuladas).
+    const ventasSemana = contenedor.ventas.listarPorRangoConDetalle(sumarDias(hoy, -6), hoy);
+    setDiasSemana(ventasUltimosDias(ventasSemana, hoy));
+    setMasVendidoHoy(
+      productoMasVendido(
+        ventasSemana
+          .filter((v) => !v.anulada && v.fechaHora.startsWith(hoy))
+          .flatMap((v) => contenedor.ventas.obtenerLineas(v.id)),
+      ),
+    );
+
+    const deudores = contenedor.fiados.listarClientesConDeuda();
+    const antiguedad = contenedor.fiados.listarDeudasPorAntiguedad(hoy);
+    const resumenFiados = calcularResumenFiados(deudores, antiguedad);
+    const compromisosVencidos = filtrarCompromisosVencidos(construirFilasFiado(deudores, antiguedad), hoy).length;
+    const configBackup = leerConfigBackupAutomatico(contenedor);
+    setParaHoy(
+      construirParaHoy({
+        productosStockBajo: resumenDelDia.productosStockBajo,
+        clientesVencidos: resumenFiados.clientesVencidos,
+        montoVencido: resumenFiados.montoVencido,
+        compromisosVencidos,
+        respaldo: estadoRespaldo({
+          hayDatos: contenedor.ventas.contarTotalHistorico() > 0 || contenedor.productos.listarTodos().length > 0,
+          autoActivo: configBackup.activo,
+          frecuenciaDias: configBackup.frecuenciaDias,
+          ultimaAuto: configBackup.ultimaFecha,
+          ultimoManual: contenedor.configuracion.obtenerValor(CLAVE_ULTIMO_RESPALDO_MANUAL),
+          hoy,
+        }),
+        simboloMoneda: obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)),
+      }),
+    );
   }
 
   useEffect(recargar, [contenedor, desdePedidos, hastaPedidos]);
@@ -138,20 +197,16 @@ export default function PaginaInicio() {
   const rangoEsHoy = desdePedidos === hoyLocalSql() && hastaPedidos === hoyLocalSql();
   const rangoInvalido = desdePedidos > hastaPedidos;
 
-  function alternarExpandida(venta: VentaListaItem) {
-    if (ventaExpandida === venta.id) {
-      setVentaExpandida(null);
-      return;
-    }
-    setVentaExpandida(venta.id);
+  function abrirDetalle(venta: VentaListaItem) {
+    setMensajeImpresion(null);
+    setVentaDetalle(venta);
     if (!lineasPorVenta[venta.id] && contenedor) {
       const lineas = contenedor.ventas.obtenerLineas(venta.id);
       setLineasPorVenta((actual) => ({ ...actual, [venta.id]: lineas }));
     }
   }
 
-  async function anularVenta(venta: VentaListaItem, evento: React.MouseEvent) {
-    evento.stopPropagation();
+  async function anularVenta(venta: VentaListaItem) {
     if (!contenedor) return;
 
     // Venta al fiado con abonos ya cobrados: se anula solo lo que falta por
@@ -160,12 +215,7 @@ export default function PaginaInicio() {
       venta.metodoPago === 'fiado' ? contenedor.ventas.obtenerCobradoDeVentaFiada(venta.id) : 0;
     const montoCobrado = formatearMonto(cobrado, simboloMoneda);
 
-    const confirmar = window.confirm(
-      cobrado > 0
-        ? `El pedido V-${venta.id} es un fiado y ya tiene ${montoCobrado} cobrados.\n\nSe anulará el pedido y solo se cancelará lo que falta por cobrar. ¿Continuar?`
-        : `¿Eliminar el pedido V-${venta.id}?`,
-    );
-    if (!confirmar) return;
+    // La confirmación («¿Seguro que quieres anular esta venta?») ya la dio el usuario en el pop-up.
     if (!(await pedirPermiso('anular_venta', `anular el pedido V-${venta.id}`))) return;
 
     let devolverCobrado = false;
@@ -179,6 +229,7 @@ export default function PaginaInicio() {
     try {
       contenedor.ventas.anularVenta(venta.id, undefined, { devolverCobrado });
       await contenedor.persistir();
+      setVentaDetalle(null);
       recargar();
     } catch (e) {
       setMensajeImpresion(e instanceof Error ? e.message : 'No se pudo anular el pedido.');
@@ -195,8 +246,7 @@ export default function PaginaInicio() {
    * automático: solo abre wa.me con el mensaje ya escrito, el usuario
    * presiona "Enviar".
    */
-  async function enviarWhatsAppDeVenta(venta: VentaListaItem, evento: React.MouseEvent) {
-    evento.stopPropagation();
+  async function enviarWhatsAppDeVenta(venta: VentaListaItem) {
     if (!contenedor) return;
     const ventaCompleta = contenedor.ventas.obtenerPorId(venta.id);
 
@@ -232,8 +282,7 @@ export default function PaginaInicio() {
    * en ticketera / Guardar como..." para reconstruir el ticket de un
    * pedido ya confirmado.
    */
-  function abrirMenuTicket(venta: VentaListaItem, evento: React.MouseEvent) {
-    evento.stopPropagation();
+  function abrirMenuTicket(venta: VentaListaItem) {
     setMensajeImpresion(null);
     setVentaMenuTicket(venta);
   }
@@ -276,13 +325,14 @@ export default function PaginaInicio() {
         >
           {nombreTienda}
         </h1>
-        <span className="text-sm text-tinta/60">
+        <span className="text-sm text-tinta-suave">
           {new Date().toLocaleDateString('es-PE', { day: 'numeric', month: 'long' })}
         </span>
       </header>
 
-      <main className="flex-1 px-5 pb-[calc(8.5rem+var(--area-segura-abajo))] pt-6">
-        {cargando && <p className="text-sm text-tinta/60">Cargando tu bodega…</p>}
+      {/* pb: deja libre el botón flotante «Nueva venta» (vive en el layout: 72 px + 16 px sobre la barra) para que no tape el último elemento */}
+      <main className="flex-1 px-5 pb-[calc(10.5rem+var(--area-segura-abajo))] pt-6">
+        {cargando && <EsqueletoLista filas={3} />}
         {error && (
           <p className="text-sm text-alerta">
             No se pudo abrir la base de datos local: {error.message}
@@ -331,9 +381,9 @@ export default function PaginaInicio() {
           <>
             {/* Hero: lo primero que el bodeguero necesita saber */}
             <section aria-label="Resumen de ventas de hoy">
-              <p className="text-sm text-tinta/60">Ventas de hoy</p>
-              <p className="mt-1 text-5xl font-extrabold leading-none text-tinta">
-                {formatearMonto(resumen.totalVentas, simboloMoneda)}
+              <p className="text-sm text-tinta-suave">Ventas de hoy</p>
+              <p className="mt-1">
+                <Monto valor={resumen.totalVentas} simbolo={simboloMoneda} tamano="enorme" />
               </p>
               <p className="mt-2 text-sm text-bodega-oscuro">
                 Ganancia estimada {formatearMonto(resumen.gananciaEstimada, simboloMoneda)} ·{' '}
@@ -344,9 +394,12 @@ export default function PaginaInicio() {
             {/* Desglose por método de pago */}
             <section aria-label="Ventas por método de pago" className="mt-8">
               {resumen.porMetodoPago.length === 0 ? (
-                <p className="border-y border-linea py-4 text-sm text-tinta/50">
-                  Todavía no registras ventas hoy.
-                </p>
+                <EstadoVacio
+                  titulo="Todavía no registras ventas hoy"
+                  descripcion="Cuando vendas, aquí verás cuánto entró por cada forma de pago."
+                  textoAccion="Hacer una venta"
+                  hrefAccion="/ventas/nueva"
+                />
               ) : (
                 <ul className="divide-y divide-linea border-y border-linea">
                   {resumen.porMetodoPago.map((fila) => (
@@ -366,19 +419,9 @@ export default function PaginaInicio() {
               )}
             </section>
 
-            {/* Alertas: solo lo que requiere atención hoy */}
+            {/* Para hoy: lo que requiere atención (fiados vencidos, stock bajo, respaldo) */}
             <section aria-label="Alertas" className="mt-6 space-y-3">
-              {resumen.productosStockBajo > 0 && (
-                <div className="flex items-start gap-3 text-sm">
-                  <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-alerta" aria-hidden />
-                  <p className="text-tinta/80">
-                    <span className="font-semibold text-tinta">
-                      {resumen.productosStockBajo} productos
-                    </span>{' '}
-                    con stock bajo
-                  </p>
-                </div>
-              )}
+              {paraHoy && <TarjetaParaHoy pendientes={paraHoy} />}
               {resumen.totalPorCobrar > 0 && (
                 <div className="flex items-start gap-3 text-sm">
                   <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-acento" aria-hidden />
@@ -392,14 +435,49 @@ export default function PaginaInicio() {
               )}
             </section>
 
-            {/* Pedidos Generados: rango de fechas + desplegable con buscador, preview y anular */}
-            <section aria-label="Pedidos Generados" className="mt-8">
+            {/* Ventas de los últimos 7 días + producto más vendido de hoy */}
+            {diasSemana && (
+              <section aria-label="Ventas de los últimos 7 días" className="mt-6">
+                <h2 className="text-sm font-bold text-bodega-oscuro">Ventas de los últimos 7 días</h2>
+                {totalDeLosDias(diasSemana) > 0 ? (
+                  <p className="mt-0.5 text-xs text-tinta-suave">
+                    Total {formatearMonto(totalDeLosDias(diasSemana), simboloMoneda)}
+                    {mejorDia(diasSemana) && (
+                      <>
+                        {' '}
+                        · Mejor día: {mejorDia(diasSemana)?.esHoy ? 'hoy' : mejorDia(diasSemana)?.etiqueta}{' '}
+                        {formatearMonto(mejorDia(diasSemana)?.total ?? 0, simboloMoneda)}
+                      </>
+                    )}
+                  </p>
+                ) : (
+                  <p className="mt-0.5 text-xs text-tinta-suave">Aquí verás cómo van tus ventas día a día.</p>
+                )}
+                <div className="mt-3">
+                  <GraficoVentas dias={diasSemana} simboloMoneda={simboloMoneda} />
+                </div>
+                {masVendidoHoy && (
+                  <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-linea px-4 py-3">
+                    <div className="min-w-0">
+                      <p className="text-xs text-tinta-suave">Más vendido hoy</p>
+                      <p className="truncate text-sm font-semibold text-tinta">{masVendidoHoy.producto}</p>
+                    </div>
+                    <p className="shrink-0 text-sm font-bold text-bodega-oscuro">
+                      {textoCantidad(masVendidoHoy.cantidad)} {masVendidoHoy.cantidad === 1 ? 'vendido' : 'vendidos'}
+                    </p>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* Historial de ventas: rango de fechas + desplegable con buscador; al tocar una venta se abre su detalle */}
+            <section aria-label="Historial de ventas" className="mt-8">
               <button
                 onClick={() => setPedidosAbiertos((v) => !v)}
                 className="flex w-full items-center justify-between border-y border-linea py-3 text-sm font-semibold text-tinta"
               >
-                <span>Pedidos Generados ({rangoEsHoy ? 'Hoy' : 'Total'}: {pedidosNoAnulados})</span>
-                <span className={`text-tinta/50 transition-transform ${pedidosAbiertos ? 'rotate-180' : ''}`}>
+                <span>Historial de ventas ({rangoEsHoy ? 'Hoy' : 'Total'}: {pedidosNoAnulados})</span>
+                <span className={`text-tinta-suave transition-transform ${pedidosAbiertos ? 'rotate-180' : ''}`}>
                   ⌄
                 </span>
               </button>
@@ -408,7 +486,7 @@ export default function PaginaInicio() {
                 <div className="pt-3">
                   <div className="flex gap-2">
                     <div className="flex-1">
-                      <label className="mb-1 block text-xs text-tinta/50">Desde</label>
+                      <label className="mb-1 block text-xs text-tinta-suave">Desde</label>
                       <input
                         type="date"
                         value={desdePedidos}
@@ -418,7 +496,7 @@ export default function PaginaInicio() {
                       />
                     </div>
                     <div className="flex-1">
-                      <label className="mb-1 block text-xs text-tinta/50">Hasta</label>
+                      <label className="mb-1 block text-xs text-tinta-suave">Hasta</label>
                       <input
                         type="date"
                         value={hastaPedidos}
@@ -433,7 +511,7 @@ export default function PaginaInicio() {
                           setDesdePedidos(hoyLocalSql());
                           setHastaPedidos(hoyLocalSql());
                         }}
-                        className="mt-6 h-11 shrink-0 rounded-lg border border-linea px-3 text-xs font-semibold text-tinta/60"
+                        className="mt-6 h-11 shrink-0 rounded-lg border border-linea px-3 text-xs font-semibold text-tinta-suave"
                       >
                         Hoy
                       </button>
@@ -452,108 +530,48 @@ export default function PaginaInicio() {
                   {mensajeImpresion && <p className="mt-2 text-xs text-alerta">{mensajeImpresion}</p>}
 
                   {pedidosDelRango.length === 0 ? (
-                    <p className="border-y border-linea py-6 text-center text-sm text-tinta/50 mt-3">
-                      No hay pedidos generados en este rango de fechas.
+                    <p className="border-y border-linea py-6 text-center text-sm text-tinta-suave mt-3">
+                      No hay ventas en este rango de fechas.
                     </p>
                   ) : pedidosFiltrados.length === 0 ? (
-                    <p className="border-y border-linea py-6 text-center text-sm text-tinta/50 mt-3">
-                      Ningún pedido coincide con "{busquedaPedidos}".
+                    <p className="border-y border-linea py-6 text-center text-sm text-tinta-suave mt-3">
+                      Ninguna venta coincide con "{busquedaPedidos}".
                     </p>
                   ) : (
                     <ul className="mt-3 divide-y divide-linea border-y border-linea">
                       {pedidosFiltrados.map((venta) => (
-                          <li key={venta.id}>
-                            {/*
-                              A propósito NO es un <button>: los íconos de WhatsApp,
-
-                              impresora y anular van adentro, y cada uno YA es su propio
-                              elemento interactivo (role="button"). Un <button> dentro de
-                              otro <button> es HTML inválido — en el WebView de Android eso
-                              causaba que el toque en el ícono de impresora se quedara
-                              "pensado", y recién se destrababa con un segundo toque en la
-                              pantalla. Con <div role="button"> se evita esa mala
-                              anidación y el resto del comportamiento (expandir/contraer la
-                              fila) queda igual.
-                            */}
-                            <div
-                              role="button"
-                              tabIndex={0}
-                              onClick={() => alternarExpandida(venta)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter' || e.key === ' ') alternarExpandida(venta);
-                              }}
-                              className={`flex w-full items-center justify-between py-3 text-left ${
-                                venta.anulada ? 'opacity-40' : ''
+                        <li key={venta.id}>
+                          <button
+                            type="button"
+                            onClick={() => abrirDetalle(venta)}
+                            className="flex w-full items-center justify-between gap-3 py-3 text-left"
+                          >
+                            <div className="min-w-0">
+                              <p className="flex flex-wrap items-center gap-x-2 text-xs text-tinta-suave">
+                                <span>
+                                  {venta.comprobante} · {formatearFechaHora(venta.fechaHora)}
+                                </span>
+                                {venta.anulada && (
+                                  <span className="rounded-full bg-linea px-2 py-0.5 text-xs font-semibold text-tinta-suave">
+                                    Anulada
+                                  </span>
+                                )}
+                              </p>
+                              <p className={`truncate text-sm ${venta.anulada ? 'text-tinta-suave' : 'text-tinta/80'}`}>
+                                {ETIQUETAS_METODO_PAGO[venta.metodoPago] ?? venta.metodoPago} —{' '}
+                                {venta.clienteNombre ?? 'Cliente eventual'}
+                              </p>
+                            </div>
+                            <span
+                              className={`shrink-0 text-sm font-semibold ${
+                                venta.anulada ? 'text-tinta-suave line-through' : 'text-tinta'
                               }`}
                             >
-                              <div>
-                                <p className="text-xs text-tinta/40">
-                                  {venta.comprobante} · {formatearFechaHora(venta.fechaHora)}
-                                  {venta.usuarioNombre && ` · ${venta.usuarioNombre}`}
-                                </p>
-                                <p className="text-sm text-tinta/80">
-                                  {ETIQUETAS_METODO_PAGO[venta.metodoPago] ?? venta.metodoPago} —{' '}
-                                  {venta.clienteNombre ?? 'Cliente eventual'}
-                                  {venta.anulada && ' (Anulada)'}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-3">
-                                <span className="text-sm font-semibold text-tinta">
-                                  {formatearMonto(venta.total, simboloMoneda)}
-                                </span>
-                                {!venta.anulada && (
-                                  <>
-                                    <span
-                                      role="button"
-                                      onClick={(e) => enviarWhatsAppDeVenta(venta, e)}
-                                      className="text-lg text-bodega-oscuro"
-                                      aria-label={`Enviar por WhatsApp el pedido V-${venta.id}`}
-                                      title="Enviar por WhatsApp"
-                                    >
-                                      💬
-                                    </span>
-                                    {estadoPlan?.tipo === 'premium' && (
-                                      <span
-                                        role="button"
-                                        onClick={(e) => abrirMenuTicket(venta, e)}
-                                        className={`text-lg text-bodega-oscuro ${imprimiendoVentaId === venta.id ? 'opacity-40' : ''}`}
-                                        aria-label={`Reconstruir el ticket del pedido V-${venta.id}`}
-                                        title="Reconstruir ticket"
-                                      >
-                                        🖨️
-                                      </span>
-                                    )}
-                                    <span
-                                      role="button"
-                                      onClick={(e) => anularVenta(venta, e)}
-                                      className="text-lg text-alerta"
-                                      aria-label={`Anular pedido V-${venta.id}`}
-                                    >
-                                      🗑
-                                    </span>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-
-                            {ventaExpandida === venta.id && (
-                              <div className="-mt-1 mb-3 rounded-lg bg-bodega-claro/40 px-3 py-2 text-xs text-tinta/70">
-                                {(lineasPorVenta[venta.id] ?? []).map((linea, i) => (
-                                  <div key={i} className={i > 0 ? 'mt-1' : ''}>
-                                    <p>
-                                      {linea.cantidad} × {linea.producto}
-                                      {linea.precioUnitario !== undefined &&
-                                        ` — ${formatearMonto(linea.precioUnitario, simboloMoneda)} c/u`}
-                                    </p>
-                                    {linea.descripcion && (
-                                      <p className="break-words text-tinta/50">{linea.descripcion}</p>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </li>
-                        ))}
+                              {formatearMonto(venta.total, simboloMoneda)}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
                       </ul>
                     )}
                     {pedidosNoAnulados > 0 && (
@@ -573,30 +591,25 @@ export default function PaginaInicio() {
         )}
       </main>
 
-      {/* Acción principal, alcanzable con el pulgar (diseño a una mano) */}
-      <div className="fixed inset-x-0 bottom-[calc(4rem+var(--area-segura-abajo))] z-30 mx-auto flex max-w-app gap-3 px-5">
-        <Link
-          href="/ventas/nueva"
-          className="flex h-14 flex-1 items-center justify-center rounded-full bg-bodega text-base font-semibold text-white shadow-sm active:bg-bodega-oscuro"
-        >
-          Nueva venta
-        </Link>
-        {modoVoz && (
-          <Link
-            href="/ventas/voz"
-            className="flex h-14 flex-1 items-center justify-center gap-2 rounded-full border-2 border-bodega bg-white px-2 text-center text-sm font-semibold leading-tight text-bodega-oscuro shadow-sm active:bg-bodega-claro"
-          >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="shrink-0">
-              <rect x="9" y="2" width="6" height="12" rx="3" />
-              <path d="M5 11a7 7 0 0 0 14 0" />
-              <path d="M12 18v4" />
-            </svg>
-            <span>Nueva Venta por Voz</span>
-          </Link>
-        )}
-      </div>
-
-      <BarraNavegacion />
+      {ventaDetalle && (
+        <DetalleVentaSheet
+          venta={ventaDetalle}
+          lineas={lineasPorVenta[ventaDetalle.id] ?? []}
+          etiquetaPago={ETIQUETAS_METODO_PAGO[ventaDetalle.metodoPago] ?? ventaDetalle.metodoPago}
+          simboloMoneda={simboloMoneda}
+          esPremium={estadoPlan?.tipo === 'premium'}
+          avisoAnulacion={
+            contenedor && !ventaDetalle.anulada && ventaDetalle.metodoPago === 'fiado'
+              ? avisoAnulacionFiado(contenedor.ventas.obtenerCobradoDeVentaFiada(ventaDetalle.id), simboloMoneda)
+              : null
+          }
+          onEnviarWhatsApp={() => enviarWhatsAppDeVenta(ventaDetalle)}
+          onReimprimir={() => abrirMenuTicket(ventaDetalle)}
+          onAnular={() => anularVenta(ventaDetalle)}
+          onCerrar={() => setVentaDetalle(null)}
+          reimprimiendo={imprimiendoVentaId === ventaDetalle.id}
+        />
+      )}
 
       {ventaMenuTicket && (
         <MenuImprimirTicket
@@ -608,86 +621,5 @@ export default function PaginaInicio() {
         />
       )}
     </div>
-  );
-}
-
-function BarraNavegacion() {
-  const enlaces = [
-    { href: '/', etiqueta: 'Inicio', icono: IconoInicio },
-    { href: '/productos', etiqueta: 'Productos', icono: IconoProductos },
-    { href: '/fiados', etiqueta: 'Fiados', icono: IconoFiados },
-    { href: '/mas', etiqueta: 'Más', icono: IconoMas },
-  ];
-
-  return (
-    <nav
-      aria-label="Navegación principal"
-      className="fixed inset-x-0 bottom-0 z-30 mx-auto max-w-app border-t border-linea bg-papel pb-[var(--area-segura-abajo)]"
-    >
-      <div className="flex h-16">
-        {enlaces.map(({ href, etiqueta, icono: Icono }) => (
-          <Link
-            key={href}
-            href={href}
-            className="flex flex-1 flex-col items-center justify-center gap-1 text-tinta/60"
-          >
-            <Icono />
-            <span className="text-[11px]">{etiqueta}</span>
-          </Link>
-        ))}
-      </div>
-    </nav>
-  );
-}
-
-function IconoInicio() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M4 11.5 12 5l8 6.5M6 10v8.5h4V14h4v4.5h4V10"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function IconoProductos() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M4 8.5 12 4l8 4.5v7L12 20l-8-4.5v-7Z"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
-      <path d="M4 8.5 12 13l8-4.5M12 13v7" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function IconoFiados() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="12" cy="8" r="3.2" stroke="currentColor" strokeWidth="1.6" />
-      <path
-        d="M5 19c0-3.3 3.1-6 7-6s7 2.7 7 6"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-function IconoMas() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
-      <circle cx="5" cy="12" r="1.6" fill="currentColor" />
-      <circle cx="12" cy="12" r="1.6" fill="currentColor" />
-      <circle cx="19" cy="12" r="1.6" fill="currentColor" />
-    </svg>
   );
 }

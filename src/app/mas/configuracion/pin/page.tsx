@@ -39,7 +39,7 @@ function CampoPin({
 }) {
   return (
     <div>
-      <p className="text-xs text-tinta/50">{etiqueta}</p>
+      <p className="text-xs text-tinta-suave">{etiqueta}</p>
       <input
         type="password"
         inputMode="numeric"
@@ -211,13 +211,13 @@ export default function PaginaConfigurarPin() {
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       <header className="flex items-center gap-3">
-        <Link href="/mas/configuracion" className="text-xl text-tinta/60" aria-label="Volver">
+        <Link href="/mas/configuracion" className="text-xl text-tinta-suave" aria-label="Volver">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Configurar PIN</h1>
       </header>
 
-      {cargando && <p className="mt-4 text-sm text-tinta/60">Cargando…</p>}
+      {cargando && <p className="mt-4 text-sm text-tinta-suave">Cargando…</p>}
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       <p className="mt-4 text-sm text-tinta/70">
@@ -227,7 +227,7 @@ export default function PaginaConfigurarPin() {
       {estadoPlan && !esPremium && (
         <section className="mt-6 rounded-xl border border-linea p-5 text-center">
           <p className="text-sm font-semibold text-tinta">Configurar PIN es una función Premium</p>
-          <p className="mt-2 text-xs text-tinta/60">Actívala desde el panel de administrador.</p>
+          <p className="mt-2 text-xs text-tinta-suave">Actívala desde el panel de administrador.</p>
         </section>
       )}
 
@@ -269,7 +269,7 @@ export default function PaginaConfigurarPin() {
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-tinta">{opcion.titulo}</p>
-                        <p className="mt-0.5 text-xs text-tinta/60">{opcion.descripcion}</p>
+                        <p className="mt-0.5 text-xs text-tinta-suave">{opcion.descripcion}</p>
                       </div>
                       <button
                         type="button"
@@ -353,7 +353,7 @@ export default function PaginaConfigurarPin() {
                   limpiarCampos();
                   setModo(pinActivo ? 'activo' : 'inactivo');
                 }}
-                className="h-11 w-full text-sm font-semibold text-tinta/60"
+                className="h-11 w-full text-sm font-semibold text-tinta-suave"
               >
                 Cancelar
               </button>
@@ -376,7 +376,7 @@ export default function PaginaConfigurarPin() {
                   limpiarCampos();
                   setModo('activo');
                 }}
-                className="h-11 w-full text-sm font-semibold text-tinta/60"
+                className="h-11 w-full text-sm font-semibold text-tinta-suave"
               >
                 Cancelar
               </button>
@@ -403,7 +403,7 @@ export default function PaginaConfigurarPin() {
                   limpiarCampos();
                   setModo('activo');
                 }}
-                className="h-11 w-full text-sm font-semibold text-tinta/60"
+                className="h-11 w-full text-sm font-semibold text-tinta-suave"
               >
                 Cancelar
               </button>

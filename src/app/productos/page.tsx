@@ -5,6 +5,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { usarPermisos } from '@/hooks/usar-permisos';
+import { usarAvisos } from '@/components/proveedor-avisos';
+import { EsqueletoLista } from '@/components/ui/esqueleto';
+import { EstadoVacio } from '@/components/ui/estado-vacio';
+import { IconoProductos } from '@/components/ui/iconos';
+import { AVISOS, estadoLista } from '@/core/avisos';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import type { HistorialProductoItem, Producto, TipoProducto } from '@/core/tipos';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
@@ -25,6 +30,7 @@ const ETIQUETAS_CAMPO_HISTORIAL: Record<HistorialProductoItem['campo'], string> 
 
 export default function PaginaProductos() {
   const { contenedor, cargando, error } = usarContenedor();
+  const { avisar } = usarAvisos();
   const { pedirPermiso, modalPermiso } = usarPermisos(contenedor);
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
   // El campo Alias solo se ve con el modo venta por voz en ON y plan Premium (ver modoVentaVozDisponible).
@@ -84,8 +90,12 @@ export default function PaginaProductos() {
   const [bitacoraId, setBitacoraId] = useState<number | null>(null);
   const [historial, setHistorial] = useState<HistorialProductoItem[]>([]);
 
+  const [listaLista, setListaLista] = useState(false);
+
   function recargar() {
-    if (contenedor) setProductos(contenedor.productos.listarTodos());
+    if (!contenedor) return;
+    setProductos(contenedor.productos.listarTodos());
+    setListaLista(true);
   }
 
   useEffect(recargar, [contenedor]);
@@ -131,6 +141,7 @@ export default function PaginaProductos() {
       setAliasTexto('');
       setMostrarFormulario(false);
       recargar();
+      avisar(AVISOS.productoGuardado, { vibrar: 'guardar' });
     } catch (e) {
       setMensajeError(e instanceof ErrorDeNegocio ? e.message : 'No se pudo guardar el producto.');
     }
@@ -237,6 +248,7 @@ export default function PaginaProductos() {
       await contenedor.persistir();
       setAjustandoId(null);
       recargar();
+      avisar(AVISOS.stockAjustado, { vibrar: 'guardar' });
     } catch (e) {
       setMensajeErrorAjuste(e instanceof ErrorDeNegocio ? e.message : 'No se pudo ajustar el stock.');
     }
@@ -255,6 +267,12 @@ export default function PaginaProductos() {
       return false;
     });
   }, [productos, busqueda, filtroEstado, filtroTipo]);
+
+  const estadoProductos = estadoLista({
+    cargando: cargando || (!listaLista && !error),
+    total: productos.length,
+    visibles: productosFiltrados.length,
+  });
 
   const formularioValido =
     nombre.trim().length > 0 &&
@@ -298,6 +316,7 @@ export default function PaginaProductos() {
       await contenedor.persistir();
       setEditandoId(null);
       recargar();
+      avisar(AVISOS.productoActualizado, { vibrar: 'guardar' });
     } catch (e) {
       setMensajeErrorEdit(e instanceof ErrorDeNegocio ? e.message : 'No se pudo guardar el producto.');
     }
@@ -307,7 +326,7 @@ export default function PaginaProductos() {
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       {modalPermiso}
       <header className="flex items-center gap-3">
-        <Link href="/" className="text-xl text-tinta/60" aria-label="Volver a inicio">
+        <Link href="/" className="text-xl text-tinta-suave" aria-label="Volver a inicio">
           ←
         </Link>
         <h1 className="flex-1 text-lg font-extrabold text-bodega-oscuro">Productos</h1>
@@ -457,7 +476,7 @@ export default function PaginaProductos() {
               <option value="insumo">Solo Insumo (Compras)</option>
             </select>
             {tipoEdit === 'insumo' && productoEditando.tipo !== 'insumo' && (
-              <p className="mt-1 text-xs text-tinta/50">Para pasar a Insumo el stock debe estar en 0.</p>
+              <p className="mt-1 text-xs text-tinta-suave">Para pasar a Insumo el stock debe estar en 0.</p>
             )}
           </div>
           {tipoEdit === 'venta_compra' && (
@@ -575,17 +594,26 @@ export default function PaginaProductos() {
       )}
 
       <main className="mt-6 flex-1">
-        {cargando && <p className="text-sm text-tinta/60">Cargando…</p>}
         {error && <p className="text-sm text-alerta">{error.message}</p>}
 
-        {!cargando && productos.length === 0 && (
-          <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
-            Todavía no tienes productos. Agrega el primero arriba.
-          </p>
+        {estadoProductos === 'cargando' && !error && <EsqueletoLista />}
+
+        {estadoProductos === 'vacia' && (
+          <EstadoVacio
+            icono={<IconoProductos tamano={40} />}
+            titulo="Aún no tienes productos"
+            descripcion="Agrega el primero para empezar a vender."
+            textoAccion="Agregar el primero"
+            onAccion={() => {
+              setEditandoId(null);
+              setMostrarFormulario(true);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          />
         )}
 
-        {!cargando && productos.length > 0 && productosFiltrados.length === 0 && (
-          <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
+        {estadoProductos === 'sin_resultados' && (
+          <p className="border-y border-linea py-6 text-center text-sm text-tinta-suave">
             {busqueda.trim()
               ? `Ningún producto coincide con "${busqueda}".`
               : `No hay productos ${filtroEstado === 'inactivos' ? 'inactivos' : 'activos'}.`}
@@ -616,7 +644,7 @@ export default function PaginaProductos() {
                         <span key={i} className="block">
                           {linea}
                           {i === lineas.length - 1 && producto.tipo === 'insumo' && (
-                            <span className="ml-2 text-xs font-semibold text-tinta/50">(Insumo)</span>
+                            <span className="ml-2 text-xs font-semibold text-tinta-suave">(Insumo)</span>
                           )}
                           {i === lineas.length - 1 && !producto.activo && (
                             <span className="ml-2 rounded-full bg-alerta/10 px-2 py-0.5 text-xs font-semibold text-alerta">
@@ -627,11 +655,11 @@ export default function PaginaProductos() {
                       ))}
                     </span>
                     {producto.tipo === 'insumo' ? null : producto.controlaStock ? (
-                      <span className={`block text-xs ${stockBajo ? 'text-alerta' : 'text-tinta/50'}`}>
+                      <span className={`block text-xs ${stockBajo ? 'text-alerta' : 'text-tinta-suave'}`}>
                         Stock: {producto.stockActual} {stockBajo && '· bajo'}
                       </span>
                     ) : (
-                      <span className="block text-xs text-tinta/40">No controla stock</span>
+                      <span className="block text-xs text-tinta-suave">No controla stock</span>
                     )}
                   </div>
                   <span className="max-w-[45%] shrink-0 text-right text-sm font-semibold text-tinta">
@@ -648,12 +676,12 @@ export default function PaginaProductos() {
 
                 {bitacoraId === producto.id && (
                   <div className="mt-3 space-y-2 rounded-xl border border-linea p-4">
-                    <p className="text-xs text-tinta/50">
+                    <p className="text-xs text-tinta-suave">
                       Cambios manuales a este producto (nombre, precio, costo, stock y stock
                       mínimo) — no incluye los movimientos normales de una venta o una compra.
                     </p>
                     {historial.length === 0 ? (
-                      <p className="text-sm text-tinta/50">Sin cambios registrados todavía.</p>
+                      <p className="text-sm text-tinta-suave">Sin cambios registrados todavía.</p>
                     ) : (
                       <ul className="divide-y divide-linea">
                         {historial.map((item, indice) => (
@@ -662,7 +690,7 @@ export default function PaginaProductos() {
                               <span className="font-semibold text-tinta">
                                 {ETIQUETAS_CAMPO_HISTORIAL[item.campo]}
                               </span>
-                              <span className="text-xs text-tinta/40">{formatearFechaHora(item.fecha)}</span>
+                              <span className="text-xs text-tinta-suave">{formatearFechaHora(item.fecha)}</span>
                             </div>
                             <p className="text-tinta/70">
                               {item.valorAnterior === null ? (
@@ -674,7 +702,7 @@ export default function PaginaProductos() {
                                 </>
                               )}
                             </p>
-                            {item.motivo && <p className="text-xs text-tinta/50">Motivo: {item.motivo}</p>}
+                            {item.motivo && <p className="text-xs text-tinta-suave">Motivo: {item.motivo}</p>}
                           </li>
                         ))}
                       </ul>
@@ -684,7 +712,7 @@ export default function PaginaProductos() {
 
                 {ajustandoId === producto.id && (
                   <div className="mt-3 space-y-3 rounded-xl border border-linea p-4">
-                    <p className="text-xs text-tinta/50">
+                    <p className="text-xs text-tinta-suave">
                       Stock actual: <span className="font-semibold text-tinta">{producto.stockActual}</span>{' '}
                       {producto.unidadMedida}. Usa esto para conteos físicos o mermas — no para
                       reponer stock de una compra (eso va en Compras).
@@ -795,7 +823,7 @@ export default function PaginaProductos() {
                 </button>
                 <button
                   onClick={() => setMenuOpcionesId(null)}
-                  className="min-h-12 w-full rounded-xl px-4 py-2 text-center text-sm font-semibold text-tinta/60"
+                  className="min-h-12 w-full rounded-xl px-4 py-2 text-center text-sm font-semibold text-tinta-suave"
                 >
                   Cancelar
                 </button>

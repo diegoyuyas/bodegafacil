@@ -108,7 +108,7 @@ export function SolicitarPermisosIniciales() {
         ))}
       </ul>
 
-      <p className="text-xs text-tinta/50">
+      <p className="text-xs text-tinta-suave">
         Si prefieres no darlos ahora, puedes seguir usando la app igual — esas funciones puntuales
         quedan sin activar hasta que las habilites desde Ajustes del celular.
       </p>
@@ -121,7 +121,7 @@ export function SolicitarPermisosIniciales() {
         >
           {pidiendo ? 'Un momento…' : 'Continuar'}
         </button>
-        <button onClick={marcarComoPedidos} className="h-10 text-xs font-semibold text-tinta/50">
+        <button onClick={marcarComoPedidos} className="h-10 text-xs font-semibold text-tinta-suave">
           Ahora no
         </button>
       </div>

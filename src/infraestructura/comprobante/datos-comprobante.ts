@@ -44,6 +44,27 @@ function nombreDelVendedor(contenedor: ContenedorRepositorios, usuarioIdDeLaVent
   }
 }
 
+/** Datos de la tienda (nombre, documento, ubicación…), logotipo y moneda, para cualquier documento que se comparta. */
+export function leerDatosTiendaParaDocumentos(contenedor: ContenedorRepositorios): {
+  tienda: DatosComprobante['tienda'];
+  logoParaImagen: string | null;
+  simboloMoneda: string;
+} {
+  const c = contenedor.configuracion;
+  const logo = c.obtenerValor(CLAVE_LOGO_DATOS);
+  return {
+    tienda: {
+      nombre: obtenerNombreTienda(c.obtenerValor(CLAVE_NOMBRE_TIENDA)),
+      documento: c.obtenerValor(CLAVE_TIENDA_DOCUMENTO),
+      ubicacion: c.obtenerValor(CLAVE_TIENDA_UBICACION),
+      contacto: c.obtenerValor(CLAVE_TIENDA_CONTACTO),
+      leyenda: c.obtenerValor(CLAVE_TIENDA_LEYENDA),
+    },
+    logoParaImagen: logoEnImagenActivo(c.obtenerValor(CLAVE_LOGO_EN_IMAGEN)) && esLogoValido(logo) ? logo : null,
+    simboloMoneda: obtenerSimboloMoneda(c.obtenerValor(CLAVE_MONEDA)),
+  };
+}
+
 export function construirDatosComprobanteDeVenta(
   contenedor: ContenedorRepositorios,
   ventaId: number,

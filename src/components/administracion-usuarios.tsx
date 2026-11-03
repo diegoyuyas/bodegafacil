@@ -84,13 +84,13 @@ function FilaUsuario({ usuario, onClick }: { usuario: Usuario; onClick: () => vo
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-bold text-tinta">{usuario.nombre}</span>
-          <span className="block text-xs text-tinta/60">
+          <span className="block text-xs text-tinta-suave">
             {etiquetaDeRol(usuario.rol)}
             {!usuario.activo && ' · Desactivado'}
           </span>
-          <span className="block text-xs text-tinta/40">{formatearAcceso(usuario.ultimoAcceso)}</span>
+          <span className="block text-xs text-tinta-suave">{formatearAcceso(usuario.ultimoAcceso)}</span>
         </span>
-        <span className="text-tinta/40">›</span>
+        <span className="text-tinta-suave">›</span>
       </button>
     </li>
   );
@@ -261,9 +261,9 @@ export function AdministracionUsuarios({
     return (
       <section className="mt-6 rounded-xl border border-linea p-5 text-center">
         <p className="text-sm font-semibold text-tinta">Administración de Usuarios es una función Premium</p>
-        <p className="mt-2 text-xs text-tinta/60">Actívala desde el panel de administrador.</p>
+        <p className="mt-2 text-xs text-tinta-suave">Actívala desde el panel de administrador.</p>
         {controlActivo && lista.length > 0 && (
-          <p className="mt-3 text-xs text-tinta/60">
+          <p className="mt-3 text-xs text-tinta-suave">
             Tus usuarios están guardados. El control de usuarios está suspendido y la app abre sin pedir usuario hasta que
             vuelvas a tener Premium.
           </p>
@@ -355,7 +355,7 @@ export function AdministracionUsuarios({
     return (
       <section className="mt-6 rounded-xl border border-linea p-5 text-center">
         <p className="text-sm font-semibold text-tinta">Solo un administrador puede administrar usuarios.</p>
-        <p className="mt-2 text-xs text-tinta/60">Pídele a un administrador que lo haga, o que entre con su usuario.</p>
+        <p className="mt-2 text-xs text-tinta-suave">Pídele a un administrador que lo haga, o que entre con su usuario.</p>
       </section>
     );
   }
@@ -387,7 +387,7 @@ export function AdministracionUsuarios({
       <section className="flex items-center justify-between gap-4 rounded-xl border border-linea p-4">
         <div>
           <p className="text-sm font-semibold text-tinta">Control de usuarios</p>
-          <p className="mt-0.5 text-xs text-tinta/60">
+          <p className="mt-0.5 text-xs text-tinta-suave">
             {controlActivo
               ? 'Encendido: al abrir la app se pide usuario y contraseña.'
               : 'Apagado: la app abre sin pedir usuario y todos pueden hacer todo.'}
@@ -428,14 +428,14 @@ export function AdministracionUsuarios({
         <p className="mt-2">
           <strong className="text-tinta">Estándar:</strong> {Array.from(PERMISOS_ESTANDAR).map(descripcionDePermiso).join(', ')}.
         </p>
-        <p className="mt-2 text-xs text-tinta/60">
+        <p className="mt-2 text-xs text-tinta-suave">
           Un administrador también puede autorizar una acción puntual a un usuario estándar escribiendo su contraseña.
         </p>
       </section>
 
       <section className="rounded-xl border border-linea p-4">
         <p className="text-sm font-bold text-tinta">Clave de recuperación</p>
-        <p className="mt-1 text-xs text-tinta/60">
+        <p className="mt-1 text-xs text-tinta-suave">
           Sirve para poner una contraseña nueva si un administrador la olvida.{' '}
           {tieneRecuperacion ? 'Ya hay una clave creada.' : 'Todavía no hay una clave creada.'}
         </p>
@@ -510,7 +510,7 @@ export function AdministracionUsuarios({
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm font-bold text-tinta">Usuario activo</p>
-              <p className="text-xs text-tinta/60">Si lo desactivas ya no puede entrar, pero se conserva su historial.</p>
+              <p className="text-xs text-tinta-suave">Si lo desactivas ya no puede entrar, pero se conserva su historial.</p>
             </div>
             <Interruptor activado={activo} onChange={() => setActivo((a) => !a)} />
           </div>
@@ -534,7 +534,7 @@ export function AdministracionUsuarios({
           >
             Cambiar contraseña
           </button>
-          <button type="button" onClick={cerrar} className="h-10 w-full text-sm font-semibold text-tinta/60">
+          <button type="button" onClick={cerrar} className="h-10 w-full text-sm font-semibold text-tinta-suave">
             Cancelar
           </button>
         </VentanaFormulario>
@@ -550,7 +550,7 @@ export function AdministracionUsuarios({
             <EtiquetaCampo>Repite la contraseña nueva:</EtiquetaCampo>
             <CampoClave valor={clave2} onChange={setClave2} etiquetaAccesible="Repite la contraseña nueva" />
           </div>
-          <p className="text-xs text-tinta/60">Si estaba bloqueado por intentos fallidos, se desbloquea.</p>
+          <p className="text-xs text-tinta-suave">Si estaba bloqueado por intentos fallidos, se desbloquea.</p>
           {error && (
             <p role="alert" className="text-sm font-semibold text-alerta">
               {error}

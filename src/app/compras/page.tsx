@@ -12,6 +12,10 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
+import { EsqueletoLista } from '@/components/ui/esqueleto';
+import { EstadoVacio } from '@/components/ui/estado-vacio';
+import { IconoCompras } from '@/components/ui/iconos';
+import { estadoLista } from '@/core/avisos';
 import { usarPermisos } from '@/hooks/usar-permisos';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
@@ -38,9 +42,12 @@ export default function PaginaListadoCompras() {
     setSimboloMoneda(obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)));
   }, [contenedor]);
 
+  const [listaLista, setListaLista] = useState(false);
+
   function recargar() {
     if (!contenedor || rangoInvalido) return;
     setCompras(contenedor.compras.listarPorRango(desde || undefined, hasta || undefined));
+    setListaLista(true);
   }
 
   useEffect(recargar, [contenedor, desde, hasta, rangoInvalido]);
@@ -56,6 +63,12 @@ export default function PaginaListadoCompras() {
         `c-${c.id}`.includes(texto),
     );
   }, [busqueda, compras]);
+
+  const estadoCompras = estadoLista({
+    cargando: cargando || (!listaLista && !error),
+    total: compras.length,
+    visibles: comprasFiltradas.length,
+  });
 
   async function anular(compra: CompraListaItem) {
     if (!contenedor) return;
@@ -79,7 +92,7 @@ export default function PaginaListadoCompras() {
       {modalPermiso}
       <header className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver a Más">
+          <Link href="/mas" className="text-xl text-tinta-suave" aria-label="Volver a Más">
             ←
           </Link>
           <h1 className="text-lg font-extrabold text-bodega-oscuro">Compras</h1>
@@ -96,7 +109,7 @@ export default function PaginaListadoCompras() {
         <p className="text-xs font-semibold text-tinta/70">Rango de fechas (opcional)</p>
         <div className="mt-2 flex gap-2">
           <div className="flex-1">
-            <label className="mb-1 block text-xs text-tinta/50">Desde</label>
+            <label className="mb-1 block text-xs text-tinta-suave">Desde</label>
             <input
               type="date"
               value={desde}
@@ -106,7 +119,7 @@ export default function PaginaListadoCompras() {
             />
           </div>
           <div className="flex-1">
-            <label className="mb-1 block text-xs text-tinta/50">Hasta</label>
+            <label className="mb-1 block text-xs text-tinta-suave">Hasta</label>
             <input
               type="date"
               value={hasta}
@@ -121,7 +134,7 @@ export default function PaginaListadoCompras() {
                 setDesde('');
                 setHasta('');
               }}
-              className="mt-6 h-11 shrink-0 rounded-lg border border-linea px-3 text-xs font-semibold text-tinta/60"
+              className="mt-6 h-11 shrink-0 rounded-lg border border-linea px-3 text-xs font-semibold text-tinta-suave"
             >
               Quitar
             </button>
@@ -142,17 +155,22 @@ export default function PaginaListadoCompras() {
       {mensajeError && <p className="mt-3 text-sm text-alerta">{mensajeError}</p>}
 
       <main className="mt-4 flex-1">
-        {cargando && <p className="text-sm text-tinta/60">Cargando…</p>}
         {error && <p className="text-sm text-alerta">{error.message}</p>}
 
-        {!cargando && compras.length === 0 && (
-          <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
-            Todavía no registras compras.
-          </p>
+        {estadoCompras === 'cargando' && !error && <EsqueletoLista />}
+
+        {estadoCompras === 'vacia' && (
+          <EstadoVacio
+            icono={<IconoCompras tamano={40} />}
+            titulo="Todavía no registras compras"
+            descripcion="Anota lo que compras a tus proveedores y el stock se actualiza solo."
+            textoAccion="Registrar una compra"
+            hrefAccion="/compras/nueva"
+          />
         )}
 
-        {!cargando && compras.length > 0 && comprasFiltradas.length === 0 && (
-          <p className="border-y border-linea py-6 text-center text-sm text-tinta/50">
+        {estadoCompras === 'sin_resultados' && (
+          <p className="border-y border-linea py-6 text-center text-sm text-tinta-suave">
             Ninguna compra coincide con "{busqueda}".
           </p>
         )}
@@ -164,14 +182,14 @@ export default function PaginaListadoCompras() {
               <li key={compra.id} className="py-3">
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-bodega-oscuro">C-{compra.id}</span>
-                  <span className={`text-sm font-semibold ${anulada ? 'text-tinta/40 line-through' : 'text-tinta'}`}>
+                  <span className={`text-sm font-semibold ${anulada ? 'text-tinta-suave line-through' : 'text-tinta'}`}>
                     {formatearMonto(compra.total, simboloMoneda)}
                   </span>
                 </div>
                 <p className="mt-0.5 text-sm text-tinta/80">
                   {compra.proveedorNombre ?? 'Sin proveedor'}
                 </p>
-                <p className="mt-0.5 text-xs text-tinta/40">
+                <p className="mt-0.5 text-xs text-tinta-suave">
                   {new Date(compra.fecha.replace(' ', 'T')).toLocaleDateString('es-PE')}
                   {compra.comprobante ? ` · ${compra.comprobante}` : ''}
                   {anulada ? ' · Anulada' : ''}

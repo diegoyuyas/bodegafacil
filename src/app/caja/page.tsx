@@ -13,6 +13,7 @@ import {
   resumirComprasModificadas,
 } from '@/core/reglas-negocio';
 import { formatearFechaHora, hoyLocalSql } from '@/core/tiempo';
+import { Monto } from '@/components/ui/monto';
 import type { MetodoPagoSinFiado, MovimientoCaja } from '@/core/tipos';
 
 const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
@@ -118,18 +119,20 @@ export default function PaginaCaja() {
     <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-24 pt-6">
       {modalPermiso}
       <header className="flex items-center gap-3">
-        <Link href="/mas" className="text-xl text-tinta/60" aria-label="Volver">
+        <Link href="/mas" className="text-xl text-tinta-suave" aria-label="Volver">
           ←
         </Link>
         <h1 className="text-lg font-extrabold text-bodega-oscuro">Caja</h1>
       </header>
 
-      {cargando && <p className="mt-4 text-sm text-tinta/60">Cargando…</p>}
+      {cargando && <p className="mt-4 text-sm text-tinta-suave">Cargando…</p>}
       {error && <p className="mt-4 text-sm text-alerta">{error.message}</p>}
 
       <section className="mt-6">
-        <p className="text-sm text-tinta/60">Saldo actual</p>
-        <p className="text-4xl font-extrabold text-tinta">{formatearMonto(saldo, simboloMoneda)}</p>
+        <p className="text-sm text-tinta-suave">Saldo actual</p>
+        <p>
+          <Monto valor={saldo} simbolo={simboloMoneda} tamano="enorme" tono={saldo < 0 ? 'alerta' : 'normal'} />
+        </p>
       </section>
 
       <div className="mt-4 flex gap-3">
@@ -196,7 +199,7 @@ export default function PaginaCaja() {
           ingresos/egresos, que siempre usa la fecha de hoy). */}
       <div className="mt-6 flex gap-2">
         <div className="flex-1">
-          <label className="mb-1 block text-xs text-tinta/50">Desde</label>
+          <label className="mb-1 block text-xs text-tinta-suave">Desde</label>
           <input
             type="date"
             value={desde}
@@ -206,7 +209,7 @@ export default function PaginaCaja() {
           />
         </div>
         <div className="flex-1">
-          <label className="mb-1 block text-xs text-tinta/50">Hasta</label>
+          <label className="mb-1 block text-xs text-tinta-suave">Hasta</label>
           <input
             type="date"
             value={hasta}
@@ -221,7 +224,7 @@ export default function PaginaCaja() {
               setDesde(hoyLocalSql());
               setHasta(hoyLocalSql());
             }}
-            className="mt-6 h-11 shrink-0 rounded-lg border border-linea px-3 text-xs font-semibold text-tinta/60"
+            className="mt-6 h-11 shrink-0 rounded-lg border border-linea px-3 text-xs font-semibold text-tinta-suave"
           >
             Hoy
           </button>
@@ -253,7 +256,7 @@ export default function PaginaCaja() {
 
       <section className="mt-4 flex-1">
         {movimientosVisibles.length === 0 ? (
-          <p className="mt-3 border-y border-linea py-6 text-center text-sm text-tinta/50">
+          <p className="mt-3 border-y border-linea py-6 text-center text-sm text-tinta-suave">
             No hay movimientos {vista !== 'todo' ? `de ${vista === 'ingreso' ? 'ingresos' : 'egresos'} ` : ''}
             {rangoEsHoy ? 'hoy' : 'en este rango de fechas'}.
           </p>
@@ -271,25 +274,25 @@ export default function PaginaCaja() {
                 <div className="min-w-0">
                   <p className="text-tinta/80">
                     {etiqueta && (
-                      <span className="mr-1.5 rounded bg-tinta/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-tinta/60">
+                      <span className="mr-1.5 rounded bg-tinta/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-tinta-suave">
                         {etiqueta}
                       </span>
                     )}
                     {mov.referencia}
-                    <span className="text-tinta/40"> — {mov.concepto}</span>
+                    <span className="text-tinta-suave"> — {mov.concepto}</span>
                   </p>
-                  <p className="mt-0.5 text-xs text-tinta/40">
+                  <p className="mt-0.5 text-xs text-tinta-suave">
                     {formatearFechaHora(mov.fechaHora)}
                     {mov.usuarioNombre && ` · ${mov.usuarioNombre}`}
                   </p>
                   {vista !== 'todo' && comprasModificadas.montos.has(mov.id) && (
-                    <p className="mt-0.5 text-xs text-tinta/50">
+                    <p className="mt-0.5 text-xs text-tinta-suave">
                       Modificada: de {formatearMonto(comprasModificadas.montos.get(mov.id)!.original, simboloMoneda)} a{' '}
                       {formatearMonto(comprasModificadas.montos.get(mov.id)!.final, simboloMoneda)}
                     </p>
                   )}
                   {!etiqueta && mov.montoAnulado > 0 && (
-                    <p className="mt-0.5 text-xs text-tinta/50">
+                    <p className="mt-0.5 text-xs text-tinta-suave">
                       Pago de {formatearMonto(mov.monto, simboloMoneda)}; {formatearMonto(mov.montoAnulado, simboloMoneda)}{' '}
                       corresponden a ventas anuladas
                     </p>
@@ -297,7 +300,7 @@ export default function PaginaCaja() {
                 </div>
                 <span
                   className={`shrink-0 font-semibold ${
-                    apagado ? 'text-tinta/60' : mov.tipo === 'ingreso' ? 'text-bodega-oscuro' : 'text-alerta'
+                    apagado ? 'text-tinta-suave' : mov.tipo === 'ingreso' ? 'text-bodega-oscuro' : 'text-alerta'
                   }`}
                 >
                   {mov.tipo === 'ingreso' ? '+' : '−'}{' '}
