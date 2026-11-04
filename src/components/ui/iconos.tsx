@@ -34,11 +34,12 @@ export const IconoInicio = (p: PropsIcono) => (
   </Svg>
 );
 
-export const IconoVenta = (p: PropsIcono) => (
+/** Pedidos: tablilla con lista (reemplaza al carrito del antiguo acceso «Venta»). */
+export const IconoPedidos = (p: PropsIcono) => (
   <Svg {...p}>
-    <path d="M3 4h2l2.2 10.2a1 1 0 0 0 1 .8h8.6a1 1 0 0 0 1-.8L19.5 8H6.2" />
-    <circle cx="9" cy="19" r="1.3" />
-    <circle cx="17" cy="19" r="1.3" />
+    <path d="M9 4h6a1 1 0 0 1 1 1v1.5H8V5a1 1 0 0 1 1-1Z" />
+    <path d="M8 6H6.5A1.5 1.5 0 0 0 5 7.5v11A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5v-11A1.5 1.5 0 0 0 17.5 6H16" />
+    <path d="M9 11h6M9 14.5h6M9 18h3" />
   </Svg>
 );
 
@@ -133,6 +134,13 @@ export const IconoImpresora = (p: PropsIcono) => (
   <Svg {...p}>
     <path d="M7 9V4h10v5M7 17H5a1 1 0 0 1-1-1v-5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v5a1 1 0 0 1-1 1h-2" />
     <rect x="7" y="14" width="10" height="6" />
+  </Svg>
+);
+
+/** Anular / eliminar: tacho de basura. */
+export const IconoTacho = (p: PropsIcono) => (
+  <Svg {...p}>
+    <path d="M4 7h16M9 7V4.5h6V7M6.5 7l.9 12a1 1 0 0 0 1 .9h7.2a1 1 0 0 0 1-.9l.9-12M10 11v5.5M14 11v5.5" />
   </Svg>
 );
 

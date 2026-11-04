@@ -29,7 +29,7 @@ const fab = componente.slice(iFab);
 // ---- Dónde vive: en el layout raíz, no dentro de la pantalla
 afirmar(layout.includes('<AccionesFlotantesInicio />') && layout.indexOf('<AccionesFlotantesInicio />') > layout.indexOf('<BarraInferior />'), 'Se dibuja en el layout raíz, junto a la barra inferior (fuera de la pantalla con animación)');
 afirmar(!inicio.includes('fab-halo') && !inicio.includes('href="/ventas/nueva"') && !inicio.includes('href="/ventas/voz"'), 'Inicio ya no dibuja el botón flotante ni el de voz dentro de la pantalla');
-afirmar(componente.includes("normalizarRuta(pathname) !== '/'") && componente.includes('usarEscribiendo'), 'Solo aparece en Inicio y se oculta mientras se escribe (teclado abierto)');
+afirmar(componente.includes('!mostrarBotonNuevaVenta(pathname)') && componente.includes('usarEscribiendo'), 'Solo aparece en Inicio y en Pedidos (no en Productos ni Clientes) y se oculta mientras se escribe (teclado abierto)');
 afirmar(fab.includes('var(--desfase-viewport-abajo,0px)') && fab.includes('var(--area-segura-abajo)'), 'Su posición suma el área segura de Android y el ajuste al borde visible');
 afirmar(fab.includes('href="/ventas/nueva"') && fab.includes('aria-label="Nueva venta"'), 'Al tocarlo abre la pantalla de Nueva venta (y tiene nombre para lectores de pantalla)');
 afirmar(fab.includes('h-[72px] w-[72px]') && fab.includes('rounded-full'), 'Es un círculo de 72 px');
@@ -38,7 +38,7 @@ afirmar(/Nueva\s*<br \/>\s*Venta/.test(fab) && fab.includes('text-[11px]') && fa
 afirmar(fab.includes('bg-[#4ADE80]') && fab.includes('text-[#14532D]'), 'Verde claro #4ADE80 con texto e ícono en verde oscuro #14532D');
 afirmar(fab.includes('fixed') && fab.includes('bottom-[calc(5rem+var(--area-segura-abajo)') && fab.includes('justify-end'), 'Está fijo, abajo a la derecha, 16 px sobre la barra (4 rem de barra + 1 rem) y sobre el área segura de Android');
 afirmar(fab.includes('max-w-app') && fab.includes('pointer-events-none') && fab.includes('pointer-events-auto'), 'Sigue el ancho de la app y solo el círculo recibe toques (no bloquea lo que hay detrás)');
-afirmar(fab.includes('z-30') && leer('src/components/detalle-venta-sheet.tsx').includes('z-50'), 'Queda por encima del contenido (z-30, como la barra) y por debajo de los pop-ups (z-50)');
+afirmar(fab.includes('z-30') && leer('src/components/detalle-venta-sheet.tsx').includes('z-40'), 'Queda por encima del contenido (z-30, como la barra) y por debajo del pop-up de detalle (z-40), que lo tapa mientras está abierto');
 afirmar(fab.includes('fab-halo') && fab.includes('aria-hidden="true"') && fab.indexOf('fab-halo') < fab.indexOf('href="/ventas/nueva"'), 'El halo va detrás del botón y se oculta a lectores de pantalla');
 
 // ---- Contraste del texto sobre el verde (nivel AA = 4.5:1)
@@ -66,7 +66,14 @@ const main = inicio.match(/<main className="([^"]+)"/)?.[1] ?? '';
 afirmar(main.includes('pb-[calc(10.5rem+var(--area-segura-abajo))]'), 'El contenido tiene espacio abajo (10.5 rem) para que el botón no tape el último elemento');
 afirmar(!/h-14 flex-1 items-center justify-center rounded-full bg-bodega/.test(inicio) && !inicio.includes('>\n          Nueva venta\n        </Link>'), 'El botón ancho «Nueva venta» del final ya no existe');
 afirmar(componente.includes('href="/ventas/voz"') && componente.includes('{modoVoz && (') && componente.includes('modoVentaVozDisponible'), 'El botón de «Nueva Venta por Voz» se conserva (solo si está disponible la venta por voz)');
-afirmar(componente.includes('pr-[7rem]'), 'El botón de voz deja libre el lugar del botón flotante');
-afirmar((inicio.match(/"\/ventas\/nueva"/g) ?? []).length === 1, 'En Inicio queda un solo enlace a Nueva venta: el estado vacío «Hacer una venta»');
+const iJsxFab = componente.indexOf('{/* Botón flotante «Nueva venta»');
+const voz = componente.slice(componente.indexOf('{modoVoz && ('), iJsxFab);
+afirmar(voz.includes('pr-[6.25rem]') && voz.includes('h-[72px] w-[72px]') && voz.includes('rounded-full') && voz.includes('bg-bodega') && voz.includes('text-white'), 'El botón de voz es un círculo de 72 px, turquesa con letras blancas, y deja libre el lugar del «+ Nueva venta» (queda a su izquierda)');
+afirmar(voz.includes('<rect x="9" y="2" width="6" height="12" rx="3" />') && voz.indexOf('<svg') < voz.indexOf('leading-[1.05]') && /Nueva\s*<br \/>\s*Venta\s*<br \/>\s*por Voz/.test(voz), 'Lleva el micrófono arriba y debajo «Nueva Venta» y «por Voz»');
+afirmar(voz.includes('bottom-[calc(5rem+') && componente.includes('href="/ventas/nueva"') && componente.indexOf('{modoVoz && (') < iJsxFab, 'Voz y «+ Nueva venta» van a la misma altura y se muestran los dos a la vez (el de voz solo suma, no reemplaza)');
+afirmar((inicio.match(/"\/ventas\/nueva"/g) ?? []).length === 0, 'Inicio ya no tiene su propio enlace a Nueva venta (solo el botón flotante)');
+const pedidos = leer('src/app/pedidos/page.tsx');
+const mainPedidos = pedidos.match(/<main className="([^"]+)"/)?.[1] ?? '';
+afirmar(mainPedidos.includes('pb-[calc(10.5rem+var(--area-segura-abajo))]') && !pedidos.includes('href="/ventas/nueva"'), 'Pedidos deja espacio abajo para el botón flotante y no dibuja uno propio');
 
 console.log('🎉 Todas las pruebas del botón flotante «Nueva venta» pasaron.');

@@ -163,9 +163,7 @@ export default function PaginaListadoCompras() {
           <EstadoVacio
             icono={<IconoCompras tamano={40} />}
             titulo="Todavía no registras compras"
-            descripcion="Anota lo que compras a tus proveedores y el stock se actualiza solo."
-            textoAccion="Registrar una compra"
-            hrefAccion="/compras/nueva"
+            descripcion="Toca «Nueva compra» arriba para anotar lo que compras a tus proveedores; el stock se actualiza solo."
           />
         )}
 

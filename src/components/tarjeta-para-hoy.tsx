@@ -1,42 +1,59 @@
+'use client';
+
 import Link from 'next/link';
-import { Tarjeta } from '@/components/ui/tarjeta';
-import type { PendienteHoy } from '@/core/para-hoy';
+import { useState } from 'react';
+import { textoResumenPendientes, type PendienteHoy } from '@/core/para-hoy';
 
 /**
- * Tarjeta «Para hoy» de Inicio: lo que pide atención (fiados vencidos, stock bajo, respaldo) con un
- * acceso directo a cada cosa. Si no hay nada pendiente, una línea tranquila de «Todo al día».
+ * «Pendientes» de Inicio (fiados vencidos, lo pendiente de cobro, stock bajo, respaldo). Todo va dentro de las dos
+ * líneas horizontales de la sección: el título «Pendientes» (turquesa) y debajo «Tienes N pendientes». Viene
+ * PLEGADO; el detalle (cada pendiente con su acceso directo) aparece al desplegarlo, igual que el Historial de
+ * ventas de antes. Sin pendientes queda «Todo al día ✓» (no hay nada que abrir).
  */
 export function TarjetaParaHoy({ pendientes }: { pendientes: PendienteHoy[] }) {
-  if (pendientes.length === 0) {
-    return (
-      <Tarjeta tono="ok" aria-label="Para hoy">
-        <p className="text-sm font-bold text-ok">Todo al día ✓</p>
-        <p className="mt-0.5 text-xs text-tinta-suave">No tienes nada pendiente por hoy.</p>
-      </Tarjeta>
-    );
-  }
+  const [abierto, setAbierto] = useState(false);
+
   return (
-    <Tarjeta role="region" aria-label="Para hoy" className="p-0">
-      <p className="px-4 pt-3 text-sm font-bold text-bodega-oscuro">Para hoy</p>
-      <ul className="mt-1 divide-y divide-linea">
-        {pendientes.map((p) => (
-          <li key={p.id}>
-            <Link href={p.href} className="flex items-center gap-3 px-4 py-3">
-              <span
-                className={`h-2.5 w-2.5 shrink-0 rounded-full ${p.tono === 'alerta' ? 'bg-alerta' : 'bg-acento'}`}
-                aria-hidden="true"
-              />
-              <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold text-tinta">{p.titulo}</span>
-                <span className="block text-xs text-tinta-suave">{p.detalle}</span>
-              </span>
-              <span className="text-tinta-suave" aria-hidden="true">
-                ›
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </Tarjeta>
+    <section aria-label="Pendientes" className="border-y border-linea py-3">
+      <h2 className="text-sm font-bold text-bodega-oscuro">Pendientes</h2>
+      {pendientes.length === 0 ? (
+        <p className="mt-1 text-sm font-semibold text-ok">{textoResumenPendientes(0)}</p>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={() => setAbierto((v) => !v)}
+            aria-expanded={abierto}
+            className="mt-1 flex w-full items-center justify-between text-sm font-semibold text-tinta"
+          >
+            <span>{textoResumenPendientes(pendientes.length)}</span>
+            <span className={`text-tinta-suave transition-transform ${abierto ? 'rotate-180' : ''}`} aria-hidden="true">
+              ⌄
+            </span>
+          </button>
+          {abierto && (
+            <ul className="mt-2 divide-y divide-linea">
+              {pendientes.map((p) => (
+                <li key={p.id}>
+                  <Link href={p.href} className="flex items-center gap-3 py-3">
+                    <span
+                      className={`h-2.5 w-2.5 shrink-0 rounded-full ${p.tono === 'alerta' ? 'bg-alerta' : 'bg-acento'}`}
+                      aria-hidden="true"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-tinta">{p.titulo}</span>
+                      <span className="block text-xs text-tinta-suave">{p.detalle}</span>
+                    </span>
+                    <span className="text-tinta-suave" aria-hidden="true">
+                      ›
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </section>
   );
 }

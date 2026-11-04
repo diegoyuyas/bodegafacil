@@ -11,8 +11,8 @@ import { diasEntre, esFechaValida } from './fiados-compromiso';
 /** Fecha 'YYYY-MM-DD' del último respaldo manual (Más > Respaldo > Descargar respaldo completo). */
 export const CLAVE_ULTIMO_RESPALDO_MANUAL = 'ultimo_respaldo_manual_fecha';
 
-/** Sin respaldo automático, se avisa cuando pasaron 7 días o más desde el último respaldo. */
-export const DIAS_SIN_RESPALDO_AVISO = 7;
+/** Se avisa cuando pasaron 2 días o más desde el último respaldo (automático o manual). */
+export const DIAS_SIN_RESPALDO_AVISO = 2;
 
 export interface EstadoRespaldo {
   pendiente: boolean;
@@ -24,14 +24,11 @@ export interface EstadoRespaldo {
 
 /**
  * ¿Falta hacer un respaldo? Cuenta el más reciente entre el automático y el manual.
- *  - Con respaldo automático activo solo avisa si se pasó de su frecuencia (si no, la app lo hace sola al abrirse).
- *  - Sin automático avisa a los 7 días.
+ *  - Avisa a los 2 días o más sin respaldo (ayer todavía no), tenga o no el respaldo automático activado.
  *  - Una app sin datos todavía (`hayDatos` falso) no avisa nada.
  */
 export function estadoRespaldo(datos: {
   hayDatos: boolean;
-  autoActivo: boolean;
-  frecuenciaDias: number;
   ultimaAuto: string | null;
   ultimoManual: string | null;
   hoy: string;
@@ -40,12 +37,11 @@ export function estadoRespaldo(datos: {
   const ultimo = fechas.length > 0 ? fechas.reduce((a, b) => (a >= b ? a : b)) : null;
   if (ultimo === null) return { pendiente: datos.hayDatos, nunca: true, dias: null };
   const dias = Math.max(0, diasEntre(ultimo, datos.hoy)); // un reloj atrasado no da días negativos
-  const frecuencia = Number.isFinite(datos.frecuenciaDias) && datos.frecuenciaDias >= 1 ? datos.frecuenciaDias : 1;
-  const pendiente = datos.hayDatos && (datos.autoActivo ? dias > frecuencia : dias >= DIAS_SIN_RESPALDO_AVISO);
+  const pendiente = datos.hayDatos && dias >= DIAS_SIN_RESPALDO_AVISO;
   return { pendiente, nunca: false, dias };
 }
 
-export type IdPendiente = 'fiados' | 'stock' | 'respaldo';
+export type IdPendiente = 'cobro' | 'stock' | 'respaldo';
 
 export interface PendienteHoy {
   id: IdPendiente;
@@ -67,32 +63,23 @@ function textoDias(dias: number): string {
   return `hace ${dias} días`;
 }
 
-/** Lo que hay para hoy, en orden de importancia: fiados, stock y respaldo. Vacío si todo está al día. */
+/** Lo que hay para hoy, en orden de importancia: lo pendiente de cobro, stock y respaldo. Vacío si todo está al día. */
 export function construirParaHoy(datos: {
   productosStockBajo: number;
-  clientesVencidos: number;
-  montoVencido: number;
-  compromisosVencidos: number;
+  /** Total que los clientes deben (fiados pendientes de cobro). 0 o sin dato = no hay pendiente. */
+  totalPorCobrar?: number;
   respaldo: EstadoRespaldo;
   simboloMoneda: string;
 }): PendienteHoy[] {
   const lista: PendienteHoy[] = [];
 
-  if (datos.clientesVencidos > 0 || datos.compromisosVencidos > 0) {
-    const partes: string[] = [];
-    if (datos.clientesVencidos > 0) partes.push(`${plural(datos.clientesVencidos, 'cliente', 'clientes')} con deuda vencida`);
-    if (datos.compromisosVencidos > 0) {
-      partes.push(`${plural(datos.compromisosVencidos, 'compromiso de pago pasado', 'compromisos de pago pasados')}`);
-    }
+  if ((datos.totalPorCobrar ?? 0) > 0) {
     lista.push({
-      id: 'fiados',
-      titulo: partes.join(' y '),
-      detalle:
-        datos.clientesVencidos > 0
-          ? `Vencido: ${formatearMonto(datos.montoVencido, datos.simboloMoneda)}. Toca para cobrar.`
-          : 'Toca para recordarles su pago.',
+      id: 'cobro',
+      titulo: `${formatearMonto(datos.totalPorCobrar ?? 0, datos.simboloMoneda)} pendientes de cobro`,
+      detalle: 'Toca para cobrar.',
       href: '/fiados',
-      tono: 'alerta',
+      tono: 'aviso',
     });
   }
 
@@ -119,4 +106,10 @@ export function construirParaHoy(datos: {
   }
 
   return lista;
+}
+
+/** Texto de la fila cerrada de «Para hoy»: «Tienes 3 pendientes», «Tienes 1 pendiente» o «Todo al día ✓». */
+export function textoResumenPendientes(cantidad: number): string {
+  if (cantidad <= 0) return 'Todo al día ✓';
+  return cantidad === 1 ? 'Tienes 1 pendiente' : `Tienes ${cantidad} pendientes`;
 }

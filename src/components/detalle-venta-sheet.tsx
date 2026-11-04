@@ -1,16 +1,25 @@
 'use client';
 
-import { useState } from 'react';
-import { IconoWhatsApp } from '@/components/ui/iconos';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { IconoImpresora, IconoTacho, IconoWhatsApp } from '@/components/ui/iconos';
+import { usarCapaAtras } from '@/hooks/usar-capa-atras';
 import { TEXTO_CONFIRMAR_ANULACION, accionesDeVenta, construirDetalleVenta } from '@/core/detalle-venta';
 import { formatearMonto } from '@/core/moneda';
 import { formatearFechaHora } from '@/core/tiempo';
 import type { LineaVentaResumen, VentaListaItem } from '@/core/tipos';
 
 /**
- * Pop-up (bottom sheet) con el detalle de una venta del Historial de ventas: sus productos con cantidad, precio
- * unitario y subtotal, el total, la forma de pago, el cliente y la fecha; y abajo tres botones grandes:
- * «Enviar por WhatsApp», «Reimprimir» y «Anular venta» (que pide confirmación).
+ * Pop-up (bottom sheet) con el detalle de un pedido de la pantalla Pedidos: sus productos con cantidad, precio
+ * unitario y subtotal, el total, la forma de pago, el cliente y la fecha; y abajo tres botones compactos en fila,
+ * cada uno con su ícono encima del texto: «Enviar» (WhatsApp), «Reimprimir» (impresora) y «Anular pedido» (tacho;
+ * pide confirmación). El botón «Atrás» de Android cierra este pop-up (o la confirmación, si está abierta) y deja
+ * viendo la lista de pedidos.
+ *
+ * Se dibuja en un portal sobre <body> y SE APOYA SOBRE LA BARRA INFERIOR (termina donde empieza la barra: 4 rem
+ * + área segura + ajuste del borde visible, igual que el botón flotante). Así la barra de opciones sigue a la
+ * vista, el botón flotante queda tapado por el pop-up y los 3 botones de abajo nunca quedan escondidos: lo que
+ * se desplaza es el detalle de arriba, no los botones. Va en z-40 (por encima de la barra, que es z-30).
  * Una venta ya anulada se muestra solo para consulta, con su etiqueta «Anulada».
  */
 export function DetalleVentaSheet({
@@ -42,12 +51,20 @@ export function DetalleVentaSheet({
   reimprimiendo?: boolean;
 }) {
   const [confirmando, setConfirmando] = useState(false);
+  // «Atrás» de Android: primero cierra la confirmación (si está abierta) y luego este pop-up; no cambia de pantalla.
+  usarCapaAtras(true, onCerrar);
+  usarCapaAtras(confirmando, () => setConfirmando(false));
+  // Portal a <body>: `document` no existe en el render del servidor, así que se monta tras el primer render.
+  const [montado, setMontado] = useState(false);
+  useEffect(() => setMontado(true), []);
+  if (!montado) return null;
+
   const filas = construirDetalleVenta(lineas);
   const acciones = accionesDeVenta(venta, esPremium);
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+      className="fixed inset-x-0 top-0 bottom-[calc(4rem+var(--area-segura-abajo)+var(--desfase-viewport-abajo,0px))] z-40 flex items-end justify-center bg-black/40"
       onClick={onCerrar}
       role="presentation"
     >
@@ -55,7 +72,7 @@ export function DetalleVentaSheet({
         role="dialog"
         aria-modal="true"
         aria-label={`Detalle del pedido ${venta.comprobante}`}
-        className="flex max-h-[90dvh] w-full max-w-app flex-col rounded-t-2xl bg-papel"
+        className="flex max-h-full w-full max-w-app flex-col rounded-t-2xl bg-papel"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3 px-5 pt-5">
@@ -125,40 +142,43 @@ export function DetalleVentaSheet({
         </div>
 
         {(acciones.whatsapp || acciones.reimprimir !== 'oculto' || acciones.anular) && (
-          <div className="space-y-3 border-t border-linea px-5 pb-[calc(1rem+var(--area-segura-abajo))] pt-4">
-            {acciones.whatsapp && (
-              <button
-                type="button"
-                onClick={onEnviarWhatsApp}
-                className="flex h-14 w-full items-center justify-center gap-2 rounded-xl border-2 border-[#25D366] bg-white text-base font-semibold text-tinta"
-              >
-                <IconoWhatsApp tamano={26} className="text-[#25D366]" />
-                Enviar por WhatsApp
-              </button>
-            )}
-            {acciones.reimprimir !== 'oculto' && (
-              <div>
+          <div className="border-t border-linea px-5 pb-4 pt-3">
+            <div className="grid auto-cols-fr grid-flow-col gap-2">
+              {acciones.whatsapp && (
+                <button
+                  type="button"
+                  onClick={onEnviarWhatsApp}
+                  aria-label="Enviar por WhatsApp"
+                  className="flex h-16 flex-col items-center justify-center gap-1 rounded-xl border-2 border-[#25D366] bg-white text-xs font-semibold text-tinta"
+                >
+                  <IconoWhatsApp tamano={24} className="text-[#25D366]" />
+                  Enviar
+                </button>
+              )}
+              {acciones.reimprimir !== 'oculto' && (
                 <button
                   type="button"
                   onClick={onReimprimir}
                   disabled={acciones.reimprimir === 'premium' || reimprimiendo}
-                  className="flex h-14 w-full items-center justify-center rounded-xl border-2 border-bodega text-base font-semibold text-bodega disabled:opacity-40"
+                  className="flex h-16 flex-col items-center justify-center gap-1 rounded-xl border-2 border-bodega text-xs font-semibold text-bodega disabled:opacity-40"
                 >
+                  <IconoImpresora tamano={24} />
                   Reimprimir
                 </button>
-                {acciones.reimprimir === 'premium' && (
-                  <p className="mt-1 text-center text-xs font-semibold text-acento-oscuro">Función Premium</p>
-                )}
-              </div>
-            )}
-            {acciones.anular && (
-              <button
-                type="button"
-                onClick={() => setConfirmando(true)}
-                className="flex h-14 w-full items-center justify-center rounded-xl bg-alerta text-base font-semibold text-white"
-              >
-                Anular venta
-              </button>
+              )}
+              {acciones.anular && (
+                <button
+                  type="button"
+                  onClick={() => setConfirmando(true)}
+                  className="flex h-16 flex-col items-center justify-center gap-1 rounded-xl bg-alerta text-xs font-semibold text-white"
+                >
+                  <IconoTacho tamano={24} />
+                  Anular pedido
+                </button>
+              )}
+            </div>
+            {acciones.reimprimir === 'premium' && (
+              <p className="mt-1 text-center text-xs font-semibold text-acento-oscuro">Reimprimir: función Premium</p>
             )}
           </div>
         )}
@@ -204,6 +224,7 @@ export function DetalleVentaSheet({
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

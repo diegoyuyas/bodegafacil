@@ -602,13 +602,7 @@ export default function PaginaProductos() {
           <EstadoVacio
             icono={<IconoProductos tamano={40} />}
             titulo="Aún no tienes productos"
-            descripcion="Agrega el primero para empezar a vender."
-            textoAccion="Agregar el primero"
-            onAccion={() => {
-              setEditandoId(null);
-              setMostrarFormulario(true);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
+            descripcion="Toca «Nuevo producto» arriba para agregar el primero y empezar a vender."
           />
         )}
 

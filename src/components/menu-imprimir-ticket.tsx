@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { usarCapaAtras } from '@/hooks/usar-capa-atras';
 
 /**
  * Vende Fácil — Menú flotante "Imprimir en ticketera / Guardar como..."
@@ -38,6 +39,7 @@ export function MenuImprimirTicket({
   // se monta tras el primer render en el navegador.
   const [montado, setMontado] = useState(false);
   useEffect(() => setMontado(true), []);
+  usarCapaAtras(true, onCerrar); // «Atrás» de Android cierra este menú y deja abierto el detalle
   if (!montado) return null;
 
   return createPortal(

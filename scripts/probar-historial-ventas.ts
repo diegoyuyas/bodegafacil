@@ -1,5 +1,5 @@
 /**
- * Prueba del Historial de ventas de Inicio: detalle de la venta (subtotales), acciones del pop-up, aviso al anular,
+ * Prueba de la pantalla Pedidos (antes Historial de ventas de Inicio): detalle de la venta (subtotales), acciones del pop-up, aviso al anular,
  * que las filas ya no tengan íconos, que el logo de WhatsApp reemplace al ícono de mensaje en toda la app y,
  * con una base de datos real, que ANULAR no borre la venta: queda marcada y se descuenta de totales y Caja.
  *
@@ -46,15 +46,15 @@ afirmar(avisoAnulacionFiado(25, 'S/') === 'Es un fiado y ya tiene S/ 25.00 cobra
 // ================= Código de las pantallas =================
 const raiz = path.join(__dirname, '..');
 const leer = (ruta: string) => readFileSync(path.join(raiz, ruta), 'utf8').replace(/\r\n/g, '\n');
-const inicio = leer('src/app/page.tsx');
+const inicio = leer('src/app/pedidos/page.tsx');
 const hoja = leer('src/components/detalle-venta-sheet.tsx');
 
-afirmar(inicio.includes('Historial de ventas (') && !inicio.includes('>Pedidos Generados') && !inicio.includes('<span>Pedidos Generados'), 'Inicio: la sección se llama «Historial de ventas»');
+afirmar(inicio.includes('>Pedidos</h1>') && !inicio.includes('Historial de ventas (') && !inicio.includes('pedidosAbiertos'), 'Pedidos: es una pantalla fija llamada «Pedidos» (sin desplegable)');
 const iInicio = inicio.indexOf('pedidosFiltrados.map(');
-const iFin = inicio.indexOf('pedidosNoAnulados > 0 && (', iInicio);
+const iFin = inicio.indexOf('resumen.cantidad > 0 && (', iInicio);
 const filaJsx = inicio.slice(iInicio, iFin);
 afirmar(!filaJsx.includes('💬') && !filaJsx.includes('🖨') && !filaJsx.includes('🗑') && !filaJsx.includes('role="button"'), 'Las filas ya no tienen los 3 íconos (mensaje, impresora, tacho)');
-afirmar(['venta.comprobante', 'formatearFechaHora(venta.fechaHora)', 'ETIQUETAS_METODO_PAGO[venta.metodoPago]', 'venta.clienteNombre', 'formatearMonto(venta.total'].every((p) => filaJsx.includes(p)), 'Cada fila muestra número, fecha/hora, forma de pago, cliente y monto');
+afirmar(['venta.comprobante', 'formatearFechaHora(venta.fechaHora)', 'etiquetaMetodoPago(venta.metodoPago)', 'venta.clienteNombre', 'formatearMonto(venta.total'].every((p) => filaJsx.includes(p)), 'Cada fila muestra número, fecha/hora, forma de pago, cliente y monto');
 afirmar(!filaJsx.includes('usuarioNombre'), 'La fila no muestra nada más (ni el usuario)');
 afirmar(filaJsx.includes('onClick={() => abrirDetalle(venta)}') && filaJsx.includes('<button'), 'Tocar una fila abre el detalle (es un botón real, sin botones anidados)');
 afirmar(filaJsx.includes('Anulada') && filaJsx.includes('line-through'), 'Una venta anulada se ve con la etiqueta «Anulada» y el monto tachado');
@@ -62,12 +62,13 @@ afirmar(!inicio.includes('ventaExpandida') && inicio.includes('<DetalleVentaShee
 afirmar(!inicio.includes('¿Eliminar el pedido'), 'El viejo cuadro «¿Eliminar el pedido…?» se reemplazó por la confirmación del pop-up');
 afirmar(inicio.includes("pedirPermiso('anular_venta'") && inicio.includes('devolverCobrado'), 'Se conservan el permiso de anular y la pregunta de devolver lo cobrado en fiados');
 
-afirmar(['Detalle del pedido', 'Enviar por WhatsApp', 'Reimprimir', 'Anular venta', 'Cancelar', 'TEXTO_CONFIRMAR_ANULACION', 'IconoWhatsApp'].every((p) => hoja.includes(p)), 'El pop-up tiene el detalle, los 3 botones y la confirmación (Cancelar / Anular)');
+afirmar(['Detalle del pedido', 'Enviar', 'Reimprimir', 'Anular pedido', 'Cancelar', 'TEXTO_CONFIRMAR_ANULACION', 'IconoWhatsApp'].every((p) => hoja.includes(p)), 'El pop-up tiene el detalle, los 3 botones y la confirmación (Cancelar / Anular)');
 afirmar(['Fecha y hora', 'Forma de pago', 'Cliente', 'Total', 'construirDetalleVenta'].every((p) => hoja.includes(p)), 'El pop-up muestra fecha/hora, forma de pago, cliente, productos y total');
-afirmar((hoja.match(/h-14 w-full/g) ?? []).length === 3 && hoja.includes('space-y-3'), 'Los 3 botones son grandes (h-14, ancho completo) y van separados entre sí');
+afirmar((hoja.match(/flex h-16 flex-col items-center justify-center gap-1/g) ?? []).length === 3 && hoja.includes('grid auto-cols-fr grid-flow-col gap-2'), 'Los 3 botones van en una sola fila, compactos (h-16) y de igual ancho, con el ícono arriba y el texto debajo');
+afirmar(hoja.indexOf('<IconoWhatsApp') < hoja.indexOf('Enviar\n') && hoja.indexOf('<IconoImpresora') < hoja.indexOf('Reimprimir\n') && hoja.indexOf('<IconoTacho') < hoja.indexOf('Anular pedido\n') && hoja.indexOf('Enviar\n') < hoja.indexOf('<IconoImpresora') && hoja.indexOf('Reimprimir\n') < hoja.indexOf('<IconoTacho'), 'Orden: WhatsApp «Enviar», impresora «Reimprimir» y tacho «Anular pedido»');
 const inicioAnular = hoja.indexOf('onClick={() => setConfirmando(true)}');
-const botonAnular = hoja.slice(inicioAnular, hoja.indexOf('Anular venta', inicioAnular) + 12);
-afirmar(botonAnular.includes('bg-alerta') && botonAnular.includes('text-white') && hoja.includes('border-[#25D366]'), '«Anular venta» va en rojo y «WhatsApp» con el verde de WhatsApp');
+const botonAnular = hoja.slice(inicioAnular, hoja.indexOf('Anular pedido', inicioAnular) + 13);
+afirmar(botonAnular.includes('bg-alerta') && botonAnular.includes('text-white') && hoja.includes('border-[#25D366]'), '«Anular pedido» va en rojo y «WhatsApp» con el verde de WhatsApp');
 
 // ---- Logo de WhatsApp en toda la app
 function archivos(dir: string): string[] {
@@ -130,7 +131,7 @@ async function conBaseDeDatos() {
 }
 
 conBaseDeDatos()
-  .then(() => console.log('🎉 Todas las pruebas del Historial de ventas pasaron.'))
+  .then(() => console.log('🎉 Todas las pruebas de Pedidos (antes Historial de ventas) pasaron.'))
   .catch((e) => {
     console.error(e instanceof Error ? e.message : e);
     process.exit(1);

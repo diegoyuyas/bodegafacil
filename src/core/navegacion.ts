@@ -5,7 +5,7 @@
  * porque el usuario está escribiendo. Sin React ni rutas reales: se prueba con `tsx`.
  */
 
-export type IdAcceso = 'inicio' | 'venta' | 'productos' | 'clientes' | 'mas';
+export type IdAcceso = 'inicio' | 'pedidos' | 'productos' | 'clientes' | 'mas';
 
 export interface AccesoBarra {
   id: IdAcceso;
@@ -14,12 +14,13 @@ export interface AccesoBarra {
 }
 
 /**
- * Los 5 accesos fijos. «Clientes» abre el directorio de clientes (`/mas/clientes`); la pantalla de
+ * Los 5 accesos fijos. «Pedidos» abre la lista de pedidos (antes «Venta»; la venta nueva se abre con el botón
+ * flotante «Nueva venta»). «Clientes» abre el directorio de clientes (`/mas/clientes`); la pantalla de
  * fiados (quién debe, cobrar, recordar) se abre desde Más > Fiados.
  */
 export const ACCESOS_BARRA: AccesoBarra[] = [
   { id: 'inicio', href: '/', etiqueta: 'Inicio' },
-  { id: 'venta', href: '/ventas/nueva', etiqueta: 'Venta' },
+  { id: 'pedidos', href: '/pedidos', etiqueta: 'Pedidos' },
   { id: 'productos', href: '/productos', etiqueta: 'Productos' },
   { id: 'clientes', href: '/mas/clientes', etiqueta: 'Clientes' },
   { id: 'mas', href: '/mas', etiqueta: 'Más' },
@@ -29,7 +30,10 @@ export const ACCESOS_BARRA: AccesoBarra[] = [
  * Pantallas principales, donde la barra se muestra. En cualquier otra (formularios, venta en curso,
  * compras, subpantallas de Más…) queda oculta: ahí manda la acción de la propia pantalla.
  */
-const RUTAS_CON_BARRA = ['/', '/productos', '/mas/clientes', '/mas'];
+const RUTAS_CON_BARRA = ['/', '/pedidos', '/productos', '/mas/clientes', '/mas'];
+
+/** El botón flotante «Nueva venta» solo se ve en Inicio y en Pedidos (no en Productos, Clientes ni Más). */
+const RUTAS_CON_BOTON_NUEVA_VENTA = ['/', '/pedidos'];
 
 /** '/productos/' y '/productos.html' (según cómo sirva la app) se tratan como '/productos'. */
 export function normalizarRuta(ruta: string): string {
@@ -42,6 +46,11 @@ export function normalizarRuta(ruta: string): string {
 export function mostrarBarraInferior(pathname: string | null): boolean {
   if (pathname === null) return false;
   return RUTAS_CON_BARRA.includes(normalizarRuta(pathname));
+}
+
+export function mostrarBotonNuevaVenta(pathname: string | null): boolean {
+  if (pathname === null) return false;
+  return RUTAS_CON_BOTON_NUEVA_VENTA.includes(normalizarRuta(pathname));
 }
 
 /**
@@ -71,7 +80,12 @@ export function calcularDesfaseAbajo(alturaLayout: number, alturaVisible: number
   return Math.round(diferencia);
 }
 
-const TIPOS_DE_TEXTO = new Set(['', 'text', 'search', 'tel', 'url', 'email', 'password', 'number', 'date', 'datetime-local', 'time', 'month', 'week']);
+/**
+ * Tipos de campo que abren el teclado. Los de fecha y hora (date, time, month, week, datetime-local) NO están: en
+ * Android abren un calendario/reloj, no el teclado, y como el campo conserva el foco después de elegir la fecha, la
+ * barra inferior y el botón flotante se quedaban escondidos (p. ej. al filtrar Pedidos por fechas).
+ */
+const TIPOS_DE_TEXTO = new Set(['', 'text', 'search', 'tel', 'url', 'email', 'password', 'number']);
 
 /**
  * ¿El elemento enfocado abre el teclado? Mientras sea así la barra se oculta (en Android el teclado

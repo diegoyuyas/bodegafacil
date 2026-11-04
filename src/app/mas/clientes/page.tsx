@@ -18,6 +18,7 @@ import { construirEnlaceChatWhatsApp } from '@/infraestructura/whatsapp/enlace';
 import type { Cliente } from '@/core/tipos';
 import { SelectorEstado, filtrarPorEstado, type FiltroEstado } from '@/components/selector-estado';
 import { EtiquetaCampo, VentanaFormulario } from '@/components/ventana-formulario';
+import { HojaOpciones } from '@/components/hoja-opciones';
 
 export default function PaginaClientes() {
   const { contenedor, cargando, error } = usarContenedor();
@@ -42,6 +43,9 @@ export default function PaginaClientes() {
   const [activoEdit, setActivoEdit] = useState(true);
   const [mensajeErrorEdit, setMensajeErrorEdit] = useState<string | null>(null);
 
+  // Cliente cuyo pop-up de opciones (Editar / Contactar) está abierto.
+  const [clienteOpcionesId, setClienteOpcionesId] = useState<number | null>(null);
+
   const [listaLista, setListaLista] = useState(false);
 
   function recargar() {
@@ -54,6 +58,7 @@ export default function PaginaClientes() {
   }
 
   const esPremium = estadoPlan?.tipo === 'premium';
+  const clienteOpciones = clientes.find((c) => c.id === clienteOpcionesId) ?? null;
 
   // Abre el chat de WhatsApp de ese cliente (sin mensaje escrito). Solo Premium.
   function abrirChatWhatsApp(telefonoCliente: string) {
@@ -284,6 +289,44 @@ export default function PaginaClientes() {
         </VentanaFormulario>
       )}
 
+      {clienteOpciones && (
+        <HojaOpciones
+          titulo={clienteOpciones.nombre}
+          subtitulo={clienteOpciones.telefono ?? clienteOpciones.documento ?? undefined}
+          onCerrar={() => setClienteOpcionesId(null)}
+        >
+          <button
+            type="button"
+            onClick={() => {
+              const cliente = clienteOpciones;
+              setClienteOpcionesId(null);
+              abrirEdicion(cliente);
+            }}
+            className="flex h-12 w-full items-center justify-center rounded-xl border-2 border-bodega text-sm font-semibold text-bodega"
+          >
+            Editar
+          </button>
+          {clienteOpciones.telefono && (
+            <button
+              type="button"
+              onClick={() => {
+                const telefonoCliente = clienteOpciones.telefono as string;
+                setClienteOpcionesId(null);
+                abrirChatWhatsApp(telefonoCliente);
+              }}
+              disabled={!esPremium}
+              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border-2 border-[#25D366] bg-white text-sm font-semibold text-tinta disabled:opacity-40"
+            >
+              <IconoWhatsApp tamano={22} className="text-[#25D366]" />
+              Contactar
+            </button>
+          )}
+          {clienteOpciones.telefono && !esPremium && (
+            <p className="text-center text-xs font-semibold text-acento-oscuro">Contactar: función Premium</p>
+          )}
+        </HojaOpciones>
+      )}
+
       {clientes.length > 0 && (
         <div className="mt-4 flex gap-2">
           <input
@@ -305,13 +348,7 @@ export default function PaginaClientes() {
           <EstadoVacio
             icono={<IconoClientes tamano={40} />}
             titulo="Aún no tienes clientes guardados"
-            descripcion="Guárdalos con su documento y teléfono para venderles al fiado."
-            textoAccion="Agregar el primero"
-            onAccion={() => {
-              setEditandoId(null);
-              setMostrarFormulario(true);
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            }}
+            descripcion="Toca «Nuevo cliente» arriba para guardarlos con su documento y teléfono y venderles al fiado."
           />
         )}
 
@@ -325,8 +362,12 @@ export default function PaginaClientes() {
 
         <ul className="divide-y divide-linea border-y border-linea">
           {clientesFiltrados.map((cliente) => (
-            <li key={cliente.id} className="py-3">
-              <div className="flex items-center justify-between gap-3">
+            <li key={cliente.id}>
+              <button
+                type="button"
+                onClick={() => setClienteOpcionesId(cliente.id)}
+                className="flex w-full items-center justify-between gap-3 py-3 text-left"
+              >
                 <div className="min-w-0">
                   <p className="text-sm text-tinta">
                     {cliente.nombre}
@@ -344,27 +385,10 @@ export default function PaginaClientes() {
                     )}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  {cliente.telefono && (
-                    <button
-                      onClick={() => abrirChatWhatsApp(cliente.telefono as string)}
-                      disabled={!esPremium}
-                      title={!esPremium ? 'Función Premium' : undefined}
-                      className="group inline-flex items-center gap-1 text-sm font-semibold text-bodega-oscuro disabled:text-tinta/30"
-                    >
-                      <IconoWhatsApp tamano={18} className="text-[#25D366] group-disabled:opacity-40" />
-                      {esPremium ? 'WhatsApp' : '🔒 WhatsApp'}
-                    </button>
-                  )}
-                  <button
-                    onClick={() => abrirEdicion(cliente)}
-                    className="text-sm font-semibold text-bodega-oscuro"
-                  >
-                    Editar
-                  </button>
-                </div>
-              </div>
-
+                <span className="shrink-0 text-tinta-suave" aria-hidden="true">
+                  ›
+                </span>
+              </button>
             </li>
           ))}
         </ul>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
+import { EnCuerpo } from '@/components/en-cuerpo';
 import { PuertaAdministrador } from '@/components/puerta-administrador';
 import { usarSesion } from '@/components/sesion-usuario';
 import { categoriaPinDe, esAutorizablePuntualmente, mensajeSoloAdministrador, type Permiso } from '@/core/permisos';
@@ -67,8 +68,9 @@ export function usarPermisos(contenedor: ContenedorRepositorios | null) {
     setAviso(null);
   }
 
+  // En <body>, por encima de cualquier pop-up abierto (z-50 > z-40).
   const modalPermiso = (
-    <>
+    <EnCuerpo>
       {modalPin}
       {autorizacion && contenedor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
@@ -101,7 +103,7 @@ export function usarPermisos(contenedor: ContenedorRepositorios | null) {
           </div>
         </div>
       )}
-    </>
+    </EnCuerpo>
   );
 
   return { pedirPermiso, modalPermiso };
