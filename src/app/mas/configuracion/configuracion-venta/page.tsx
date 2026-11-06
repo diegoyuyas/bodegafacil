@@ -13,8 +13,6 @@ import {
   valorParaGuardar,
 } from '@/core/configuracion';
 import type { EstadoPlan } from '@/core/plan';
-import { CLAVE_VIBRACION, vibracionActiva } from '@/core/vibracion';
-import { usarAvisos } from '@/components/proveedor-avisos';
 import { solicitarPermisoNotificaciones } from '@/infraestructura/notificaciones/notificaciones-navegador';
 
 export default function PaginaConfiguracionVenta() {
@@ -26,8 +24,6 @@ export default function PaginaConfiguracionVenta() {
   const [mensajePermiso, setMensajePermiso] = useState<string | null>(null);
   const [descripcionLineas, setDescripcionLineas] = useState(false);
   const [modoVentaVoz, setModoVentaVoz] = useState(false);
-  const [vibracion, setVibracion] = useState(true);
-  const { vibrar } = usarAvisos();
 
   useEffect(() => {
     if (!contenedor) return;
@@ -38,7 +34,6 @@ export default function PaginaConfiguracionVenta() {
     );
     setDescripcionLineas(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_DESCRIPCION_LINEAS)));
     setModoVentaVoz(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_MODO_VENTA_VOZ)));
-    setVibracion(vibracionActiva(contenedor.configuracion.obtenerValor(CLAVE_VIBRACION)));
   }, [contenedor]);
 
   const esPremium = estadoPlan?.tipo === 'premium';
@@ -49,16 +44,6 @@ export default function PaginaConfiguracionVenta() {
     setPrecioEditable(nuevoValor);
     contenedor.configuracion.establecerValor(CLAVE_PRECIO_EDITABLE_VENTA, valorParaGuardar(nuevoValor));
     await contenedor.persistir();
-  }
-
-  async function alternarVibracion() {
-    if (!contenedor) return;
-    const nuevoValor = !vibracion;
-    setVibracion(nuevoValor);
-    contenedor.configuracion.establecerValor(CLAVE_VIBRACION, valorParaGuardar(nuevoValor));
-    await contenedor.persistir();
-    // Al activarla se siente un toque de muestra (solo en la app instalada).
-    if (nuevoValor) vibrar('guardar');
   }
 
   async function alternarNotificarStockBajo() {
@@ -122,16 +107,6 @@ export default function PaginaConfiguracionVenta() {
             </p>
           </div>
           <Interruptor activado={precioEditable} onChange={alternarPrecioEditable} disabled={!contenedor} />
-        </li>
-
-        <li className="flex items-center justify-between gap-4 py-4">
-          <div>
-            <p className="text-sm font-semibold text-tinta">Vibrar al cobrar o guardar</p>
-            <p className="mt-0.5 text-xs text-tinta-suave">
-              Una vibración corta al registrar una venta, un cobro o al guardar. Solo en la app instalada (Android).
-            </p>
-          </div>
-          <Interruptor activado={vibracion} onChange={alternarVibracion} disabled={!contenedor} />
         </li>
 
         <li className="py-4">

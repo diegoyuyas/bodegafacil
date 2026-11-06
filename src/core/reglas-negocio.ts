@@ -44,7 +44,8 @@ export function calcularGananciaLinea(
   costo: number,
   cantidad: number,
 ): number {
-  return redondear(calcularGananciaUnitaria(precioVenta, costo) * cantidad);
+  // Sin redondear antes la ganancia por unidad: con un precio de 4 decimales (0.1667) el error se multiplicaría.
+  return redondear((precioVenta - costo) * cantidad);
 }
 
 /**

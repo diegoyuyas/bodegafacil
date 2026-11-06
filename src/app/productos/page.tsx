@@ -141,7 +141,7 @@ export default function PaginaProductos() {
       setAliasTexto('');
       setMostrarFormulario(false);
       recargar();
-      avisar(AVISOS.productoGuardado, { vibrar: 'guardar' });
+      avisar(AVISOS.productoGuardado);
     } catch (e) {
       setMensajeError(e instanceof ErrorDeNegocio ? e.message : 'No se pudo guardar el producto.');
     }
@@ -248,7 +248,7 @@ export default function PaginaProductos() {
       await contenedor.persistir();
       setAjustandoId(null);
       recargar();
-      avisar(AVISOS.stockAjustado, { vibrar: 'guardar' });
+      avisar(AVISOS.stockAjustado);
     } catch (e) {
       setMensajeErrorAjuste(e instanceof ErrorDeNegocio ? e.message : 'No se pudo ajustar el stock.');
     }
@@ -316,7 +316,7 @@ export default function PaginaProductos() {
       await contenedor.persistir();
       setEditandoId(null);
       recargar();
-      avisar(AVISOS.productoActualizado, { vibrar: 'guardar' });
+      avisar(AVISOS.productoActualizado);
     } catch (e) {
       setMensajeErrorEdit(e instanceof ErrorDeNegocio ? e.message : 'No se pudo guardar el producto.');
     }

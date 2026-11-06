@@ -99,7 +99,7 @@ export default function PaginaClientes() {
       setTelefono('');
       setMostrarFormulario(false);
       recargar();
-      avisar(AVISOS.clienteGuardado, { vibrar: 'guardar' });
+      avisar(AVISOS.clienteGuardado);
     } catch (e) {
       setMensajeError(e instanceof ErrorDeNegocio ? e.message : 'No se pudo guardar el cliente.');
     }
@@ -137,7 +137,7 @@ export default function PaginaClientes() {
       await contenedor.persistir();
       setEditandoId(null);
       recargar();
-      avisar(AVISOS.clienteActualizado, { vibrar: 'guardar' });
+      avisar(AVISOS.clienteActualizado);
     } catch (e) {
       setMensajeErrorEdit(e instanceof ErrorDeNegocio ? e.message : 'No se pudo guardar el cliente.');
     }

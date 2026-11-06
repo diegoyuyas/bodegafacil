@@ -3,10 +3,13 @@
 import Link from 'next/link';
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
-import { usarAvisos } from '@/components/proveedor-avisos';
-import { IconoWhatsApp } from '@/components/ui/iconos';
+import { IconoImpresora, IconoTicket, IconoWhatsApp } from '@/components/ui/iconos';
+import { imprimirComprobanteDeVenta } from '@/infraestructura/impresora-bluetooth/imprimir-venta';
+import { CLAVE_IMPRESORA_ACTIVA, IMPRESION_BLUETOOTH_DISPONIBLE } from '@/core/impresora';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
-import { construirVenta, ErrorDeNegocio } from '@/core/reglas-negocio';
+import { construirVenta, ErrorDeNegocio, redondear } from '@/core/reglas-negocio';
+import { calcularPrecioDesdeSubtotal, textoPrecioUnitario } from '@/core/precio-por-subtotal';
+import { HojaOpciones } from '@/components/hoja-opciones';
 import { LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
 import { CLAVE_DESCRIPCION_LINEAS, CLAVE_NOMBRE_TIENDA, CLAVE_NOTIFICAR_STOCK_BAJO, CLAVE_PRECIO_EDITABLE_VENTA, estaActivado, obtenerNombreTienda } from '@/core/configuracion';
 import { CLAVE_PREFIJO_PAIS, obtenerPrefijoPais } from '@/core/paises';
@@ -14,6 +17,7 @@ import { construirMensajeVenta } from '@/core/whatsapp';
 import { construirEnlaceWhatsApp } from '@/infraestructura/whatsapp/enlace';
 import type { Cliente, MetodoPago, Producto, Venta } from '@/core/tipos';
 import { LIMITE_DESCRIPCION_LINEA, limpiarNumeroEscrito, mayusculasAlEscribir } from '@/core/texto';
+import { textoCantidad } from '@/core/ventas-semana';
 import { guardarTicketComoImagen } from '@/infraestructura/comprobante-imagen/compartir-ticket';
 import { capturarFotoComprobantePago } from '@/infraestructura/comprobante-pago/capturar-foto';
 import {
@@ -52,7 +56,6 @@ const METODOS_PAGO: { valor: MetodoPago; etiqueta: string }[] = [
 
 export default function PaginaNuevaVenta() {
   const { contenedor, cargando, error } = usarContenedor();
-  const { vibrar } = usarAvisos();
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
 
   useEffect(() => {
@@ -79,17 +82,14 @@ export default function PaginaNuevaVenta() {
   const [clientesEncontrados, setClientesEncontrados] = useState<Cliente[]>([]);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<Cliente | null>(null);
 
-  // Teléfono para WhatsApp: se precarga con el del cliente si tiene uno
-  // registrado; si no (o si es cliente eventual), queda editable.
+  // WhatsApp, ticket e impresión se ofrecen DESPUÉS de cobrar, en la pantalla «Venta guardada».
   const [telefonoCelular, setTelefonoCelular] = useState('');
-  const [enviarWhatsApp, setEnviarWhatsApp] = useState(false);
-  const [guardarTicket, setGuardarTicket] = useState(false);
+  const [pidiendoCelular, setPidiendoCelular] = useState(false);
+  const [accionOcupada, setAccionOcupada] = useState<'ticket' | 'imprimir' | null>(null);
   const [mensajeTicket, setMensajeTicket] = useState<string | null>(null);
+  const [impresoraActiva, setImpresoraActiva] = useState(false);
+  const [ventaGuardada, setVentaGuardada] = useState<Venta | null>(null);
   const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
-
-  useEffect(() => {
-    setTelefonoCelular(clienteSeleccionado?.telefono ?? '');
-  }, [clienteSeleccionado]);
 
   const [etapa, setEtapa] = useState<'armando' | 'revisando' | 'guardada'>('armando');
   const [totalGuardado, setTotalGuardado] = useState(0);
@@ -110,6 +110,10 @@ export default function PaginaNuevaVenta() {
   const [ventasUsadas, setVentasUsadas] = useState(0);
   const [precioEditable, setPrecioEditable] = useState(false);
   const [descripcionActiva, setDescripcionActiva] = useState(false);
+  // Línea cuyo precio y nota se están editando (cerrado por defecto: la mayoría de las ventas no los necesitan).
+  const [lineaEditandoId, setLineaEditandoId] = useState<number | null>(null);
+  // Pop-up «Editar subtotal»: la línea y lo que se va escribiendo.
+  const [editandoSubtotal, setEditandoSubtotal] = useState<{ productoId: number; texto: string } | null>(null);
   const [esPremium, setEsPremium] = useState(false);
   const [notificarStockBajo, setNotificarStockBajo] = useState(false);
   // Series y comprobantes (Premium): sin series solo hay nota de venta; con series, Boleta por defecto.
@@ -134,6 +138,7 @@ export default function PaginaNuevaVenta() {
       estaActivado(contenedor.configuracion.obtenerValor(CLAVE_NOTIFICAR_STOCK_BAJO)),
     );
     setPrefijoPais(obtenerPrefijoPais(contenedor.configuracion.obtenerValor(CLAVE_PREFIJO_PAIS)));
+    setImpresoraActiva(contenedor.configuracion.obtenerValor(CLAVE_IMPRESORA_ACTIVA) === '1');
   }, [contenedor]);
 
   useEffect(() => {
@@ -173,6 +178,12 @@ export default function PaginaNuevaVenta() {
   }, [carrito, productos, precioEditable]);
 
   const calculoValido = calculo && typeof calculo !== 'string' ? calculo : null;
+  const totalUnidades = carrito.reduce((suma, l) => suma + l.cantidad, 0);
+  const lineaSubtotal = editandoSubtotal ? (carrito.find((l) => l.productoId === editandoSubtotal.productoId) ?? null) : null;
+  const precioDelSubtotal =
+    editandoSubtotal && lineaSubtotal && editandoSubtotal.texto.trim() !== ''
+      ? calcularPrecioDesdeSubtotal(Number(editandoSubtotal.texto), lineaSubtotal.cantidad)
+      : null;
   const errorCalculo = typeof calculo === 'string' ? calculo : null;
 
   const comprobantesPosibles = comprobantesDisponibles(esPremium, seriesActivas);
@@ -290,6 +301,22 @@ export default function PaginaNuevaVenta() {
     );
   }
 
+  /** «Editar subtotal»: abre el pop-up con el subtotal actual de la línea. Solo con «Precio editable al vender». */
+  function abrirEdicionSubtotal(linea: LineaCarrito) {
+    setEditandoSubtotal({ productoId: linea.productoId, texto: redondear(linea.precioVenta * linea.cantidad).toFixed(2) });
+  }
+
+  /** Aplica el subtotal escrito: recalcula el precio por unidad de ESA línea (el del producto no cambia). */
+  function aplicarSubtotal() {
+    if (!editandoSubtotal || editandoSubtotal.texto.trim() === '') return;
+    const linea = carrito.find((l) => l.productoId === editandoSubtotal.productoId);
+    if (!linea) return;
+    const precio = calcularPrecioDesdeSubtotal(Number(editandoSubtotal.texto), linea.cantidad);
+    if (precio === null) return;
+    setCarrito((actual) => actual.map((l) => (l.productoId === linea.productoId ? { ...l, precioVenta: precio } : l)));
+    setEditandoSubtotal(null);
+  }
+
   function quitarProducto(productoId: number) {
     setCarrito((actual) => actual.filter((l) => l.productoId !== productoId));
   }
@@ -346,10 +373,56 @@ export default function PaginaNuevaVenta() {
     }
   }
 
-  /** Teléfono a usar: el del cliente si tiene uno registrado, si no el escrito a mano. */
-  function telefonoWhatsAppFinal(): string {
-    if (clienteSeleccionado?.telefono) return clienteSeleccionado.telefono;
-    return telefonoCelular.trim();
+  /** Después de cobrar: WhatsApp con el teléfono del cliente; si no tiene (o es cliente eventual), lo pide en el momento. */
+  function enviarWhatsAppGuardada() {
+    if (!ventaGuardada) return;
+    setMensajeTicket(null);
+    if (ventaGuardada.telefonoWhatsapp) {
+      abrirWhatsAppDeVenta(ventaGuardada, ventaGuardada.telefonoWhatsapp);
+      return;
+    }
+    setPidiendoCelular(true);
+  }
+
+  async function enviarWhatsAppConCelular() {
+    if (!contenedor || !ventaGuardada) return;
+    const telefono = telefonoCelular.trim();
+    if (!telefono) {
+      setMensajeTicket('Ingresa un número de celular para enviar la venta por WhatsApp.');
+      return;
+    }
+    setMensajeTicket(null);
+    // Se guarda en la venta para no volver a pedirlo al reenviarla desde Pedidos.
+    contenedor.ventas.actualizarTelefonoWhatsapp(ventaGuardada.id, telefono);
+    await contenedor.persistir();
+    setPidiendoCelular(false);
+    abrirWhatsAppDeVenta({ ...ventaGuardada, telefonoWhatsapp: telefono }, telefono);
+  }
+
+  async function guardarTicketGuardada() {
+    if (!contenedor || !ventaGuardada || !esPremium) return;
+    setMensajeTicket(null);
+    setAccionOcupada('ticket');
+    try {
+      await guardarTicketComoImagen(contenedor, ventaGuardada.id);
+    } catch {
+      setMensajeTicket('No se pudo generar la imagen del ticket.');
+    } finally {
+      setAccionOcupada(null);
+    }
+  }
+
+  async function imprimirGuardada() {
+    if (!contenedor || !ventaGuardada) return;
+    setMensajeTicket(null);
+    setAccionOcupada('imprimir');
+    try {
+      await imprimirComprobanteDeVenta(contenedor, ventaGuardada.id);
+    } catch {
+      setMensajeTicket('No está correctamente configurada la impresora.');
+    } finally {
+      setAccionOcupada(null);
+    }
   }
 
   function abrirWhatsAppDeVenta(venta: Venta, telefono: string) {
@@ -372,12 +445,6 @@ export default function PaginaNuevaVenta() {
       return;
     }
 
-    const telefonoFinal = telefonoWhatsAppFinal();
-    if (enviarWhatsApp && !telefonoFinal) {
-      setMensajeError('Ingresa un número de celular para enviar la venta por WhatsApp.');
-      return;
-    }
-
     setGuardando(true);
     setMensajeError(null);
     try {
@@ -391,7 +458,7 @@ export default function PaginaNuevaVenta() {
         metodoPago,
         clienteId: clienteSeleccionado?.id ?? null,
         clienteNombreLibre: nombreClienteLibre() || null,
-        telefonoWhatsapp: telefonoFinal || null,
+        telefonoWhatsapp: clienteSeleccionado?.telefono ?? null,
         tipoComprobante: tipoEfectivo,
         serieId: serieElegida?.id ?? null,
       });
@@ -399,21 +466,10 @@ export default function PaginaNuevaVenta() {
       notificarStockBajoTrasVenta(carrito);
       setTotalGuardado(venta.total);
       setVentaGuardadaId(venta.id);
+      setVentaGuardada(venta);
       setMetodoPagoGuardado(venta.metodoPago);
       setComprobanteGuardado(`${ETIQUETA_COMPROBANTE[venta.tipoComprobante]} ${venta.comprobante}`);
       setEtapa('guardada');
-      vibrar(venta.metodoPago === 'fiado' ? 'guardar' : 'cobrar');
-      if (enviarWhatsApp && telefonoFinal) {
-        abrirWhatsAppDeVenta(venta, telefonoFinal);
-      }
-      if (guardarTicket && esPremium) {
-        setMensajeTicket(null);
-        try {
-          await guardarTicketComoImagen(contenedor, venta.id);
-        } catch {
-          setMensajeTicket('No se pudo generar la imagen del ticket.');
-        }
-      }
     } catch (e) {
       setMensajeError(e instanceof ErrorDeNegocio ? e.message : 'No se pudo guardar la venta.');
     } finally {
@@ -444,10 +500,10 @@ export default function PaginaNuevaVenta() {
     setBusquedaCliente('');
     setMetodoPago('efectivo');
     setTelefonoCelular('');
-    setEnviarWhatsApp(false);
-    setGuardarTicket(false);
+    setPidiendoCelular(false);
     setMensajeTicket(null);
     setVentaGuardadaId(null);
+    setVentaGuardada(null);
     setFotoComprobanteGuardada(false);
     setMensajeFotoPago(null);
     setMensajeError(null);
@@ -529,6 +585,74 @@ export default function PaginaNuevaVenta() {
           </div>
         )}
 
+        <div className="w-full">
+          <div className="grid auto-cols-fr grid-flow-col gap-2">
+            <button
+              type="button"
+              onClick={enviarWhatsAppGuardada}
+              className="flex h-16 flex-col items-center justify-center gap-1 rounded-xl border-2 border-[#25D366] bg-white text-xs font-semibold text-tinta"
+            >
+              <IconoWhatsApp tamano={24} className="text-[#25D366]" />
+              WhatsApp
+            </button>
+            <button
+              type="button"
+              onClick={guardarTicketGuardada}
+              disabled={!esPremium || accionOcupada !== null}
+              className="flex h-16 flex-col items-center justify-center gap-1 rounded-xl border-2 border-bodega text-xs font-semibold text-bodega disabled:opacity-40"
+            >
+              <IconoTicket tamano={24} />
+              {accionOcupada === 'ticket' ? 'Generando…' : 'Ticket'}
+            </button>
+            {IMPRESION_BLUETOOTH_DISPONIBLE && impresoraActiva && esPremium && (
+              <button
+                type="button"
+                onClick={imprimirGuardada}
+                disabled={accionOcupada !== null}
+                className="flex h-16 flex-col items-center justify-center gap-1 rounded-xl border-2 border-bodega text-xs font-semibold text-bodega disabled:opacity-40"
+              >
+                <IconoImpresora tamano={24} />
+                {accionOcupada === 'imprimir' ? 'Imprimiendo…' : 'Imprimir'}
+              </button>
+            )}
+          </div>
+          {!esPremium && <p className="mt-1.5 text-xs text-tinta-suave">Ticket e imprimir son <span className="font-semibold text-acento-oscuro">Premium</span></p>}
+          {pidiendoCelular && (
+            <div className="mt-3 space-y-2 rounded-xl border border-linea p-3 text-left">
+              <p className="text-sm font-bold text-tinta-suave">Número de celular</p>
+              <div className="flex gap-2">
+                <span className="flex h-11 shrink-0 items-center rounded-lg border border-linea bg-papel px-3 text-sm text-tinta-suave">
+                  +{prefijoPais}
+                </span>
+                <input
+                  autoFocus
+                  value={telefonoCelular}
+                  onChange={(e) => setTelefonoCelular(e.target.value)}
+                  placeholder="Celular para WhatsApp"
+                  inputMode="numeric"
+                  className="h-11 flex-1 rounded-lg border border-linea px-3 text-sm"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={enviarWhatsAppConCelular}
+                  className="h-11 flex-1 rounded-full bg-bodega text-sm font-semibold text-white"
+                >
+                  Enviar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPidiendoCelular(false)}
+                  className="h-11 flex-1 rounded-full border border-linea text-sm font-semibold text-tinta"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="flex w-full flex-col gap-3">
           <button
             onClick={empezarNuevaVenta}
@@ -588,13 +712,6 @@ export default function PaginaNuevaVenta() {
           </p>
         )}
 
-        {enviarWhatsApp && (
-          <p className="mt-1 text-xs text-tinta-suave">
-            <IconoWhatsApp tamano={14} className="mr-1 inline align-text-bottom text-[#25D366]" />
-            Al confirmar, se abrirá WhatsApp con el detalle listo para enviar.
-          </p>
-        )}
-
         {mensajeError && <p className="mt-3 text-sm text-alerta">{mensajeError}</p>}
 
         <div className="mt-auto flex flex-col gap-3 pt-8">
@@ -620,7 +737,7 @@ export default function PaginaNuevaVenta() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-[calc(7rem+var(--area-segura-abajo))] pt-6">
+    <div className="mx-auto flex min-h-dvh max-w-app flex-col px-5 pb-[calc(10rem+var(--area-segura-abajo))] pt-6">
       <header className="flex items-center gap-3">
         <Link href="/" className="text-xl text-tinta-suave" aria-label="Volver a inicio">
           ←
@@ -673,91 +790,135 @@ export default function PaginaNuevaVenta() {
           </p>
         ) : (
           <ul className="divide-y divide-linea border-y border-linea">
-            {carrito.map((linea) => (
-              <li key={linea.productoId} className="flex items-center gap-3 py-3">
-                <div className="flex-1">
-                  <p className="text-sm text-tinta">{linea.nombre}</p>
-                  {precioEditable ? (
-                    <label className="mt-1 flex items-center gap-1 text-xs text-tinta-suave">
-                      {simboloMoneda}
+            {carrito.map((linea) => {
+              const editando = lineaEditandoId === linea.productoId;
+              return (
+                <li key={linea.productoId} className="py-3.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-lg font-bold text-tinta">{linea.nombre}</p>
+                      <p className="text-xs text-tinta-suave">{formatearMonto(linea.precioVenta, simboloMoneda)} c/u</p>
+                    </div>
+                    <button
+                      onClick={() => quitarProducto(linea.productoId)}
+                      className="-mr-2.5 -mt-2 flex h-11 w-11 shrink-0 items-center justify-center text-xl text-tinta-suave"
+                      aria-label={`Quitar ${linea.nombre}`}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="mt-2.5 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <button
+                        onClick={() => cambiarCantidad(linea.productoId, -1)}
+                        className="flex h-11 w-11 items-center justify-center rounded-full border-[1.5px] border-bodega bg-white text-2xl text-bodega"
+                        aria-label="Quitar uno"
+                      >
+                        −
+                      </button>
                       <input
-                        type="number"
-                        inputMode="decimal"
-                        min={0}
-                        step="0.1"
-                        value={linea.precioVenta}
-                        onChange={(e) => cambiarPrecioLinea(linea.productoId, limpiarNumeroEscrito(e.target.value))}
-                        aria-label={`Precio de ${linea.nombre}`}
-                        className="h-7 w-20 rounded-md border border-linea px-2 text-xs text-tinta outline-none focus:border-bodega"
+                        type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        enterKeyHint="done"
+                        value={
+                          borradoCantidad?.productoId === linea.productoId
+                            ? borradoCantidad.texto
+                            : String(linea.cantidad)
+                        }
+                        onChange={(e) => escribirCantidad(linea, e.target.value)}
+                        onFocus={(e) => e.target.select()}
+                        onBlur={terminarEscrituraCantidad}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') e.currentTarget.blur();
+                        }}
+                        aria-label={`Cantidad de ${linea.nombre}`}
+                        className="h-11 w-14 rounded-lg border border-linea text-center text-xl font-bold text-tinta outline-none focus:border-bodega"
                       />
-                      c/u
-                    </label>
-                  ) : (
-                    <p className="text-xs text-tinta-suave">{formatearMonto(linea.precioVenta, simboloMoneda)} c/u</p>
-                  )}
+                      <button
+                        onClick={() => cambiarCantidad(linea.productoId, 1)}
+                        disabled={linea.cantidad >= linea.stockDisponible}
+                        className="flex h-11 w-11 items-center justify-center rounded-full border-[1.5px] border-bodega bg-white text-2xl text-bodega disabled:opacity-30"
+                        aria-label="Agregar uno"
+                      >
+                        +
+                      </button>
+                    </div>
+                    {precioEditable ? (
+                      <button
+                        type="button"
+                        onClick={() => abrirEdicionSubtotal(linea)}
+                        aria-label={`Editar subtotal de ${linea.nombre}`}
+                        className="flex h-11 items-center gap-2 rounded-xl border-[1.5px] border-dashed border-bodega bg-white px-3.5 text-xl font-extrabold text-tinta"
+                      >
+                        {formatearMonto(linea.precioVenta * linea.cantidad, simboloMoneda)}
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-bodega" aria-hidden="true">
+                          <path d="M4 20h4L19 9l-4-4L4 16v4zM13 7l4 4" />
+                        </svg>
+                      </button>
+                    ) : (
+                      <span className="text-xl font-extrabold text-tinta">
+                        {formatearMonto(linea.precioVenta * linea.cantidad, simboloMoneda)}
+                      </span>
+                    )}
+                  </div>
+                  {precioEditable && <p className="mt-1.5 text-right text-xs text-tinta-suave">Toca el monto para cambiarlo</p>}
                   {avisoCantidad?.productoId === linea.productoId && (
                     <p className="mt-1 text-xs text-alerta">{avisoCantidad.texto}</p>
                   )}
-                  {descripcionActiva && (
-                    <input
-                      type="text"
-                      value={linea.descripcion}
-                      maxLength={LIMITE_DESCRIPCION_LINEA}
-                      onChange={(e) => cambiarDescripcion(linea.productoId, e.target.value)}
-                      placeholder="Descripción (opcional)"
-                      aria-label={`Descripción de ${linea.nombre}`}
-                      className="mt-1.5 h-8 w-full rounded-md border border-linea px-2 text-xs text-tinta outline-none placeholder:text-tinta/30 focus:border-bodega"
-                    />
+                  {!editando && linea.descripcion.trim() !== '' && (
+                    <p className="mt-1.5 text-xs italic text-tinta-suave">{linea.descripcion}</p>
                   )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => cambiarCantidad(linea.productoId, -1)}
-                    className="flex h-8 w-8 items-center justify-center rounded-full border border-linea text-tinta"
-                    aria-label="Quitar uno"
-                  >
-                    −
-                  </button>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    enterKeyHint="done"
-                    value={
-                      borradoCantidad?.productoId === linea.productoId
-                        ? borradoCantidad.texto
-                        : String(linea.cantidad)
-                    }
-                    onChange={(e) => escribirCantidad(linea, e.target.value)}
-                    onFocus={(e) => e.target.select()}
-                    onBlur={terminarEscrituraCantidad}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') e.currentTarget.blur();
-                    }}
-                    aria-label={`Cantidad de ${linea.nombre}`}
-                    className="h-8 w-12 rounded-md border border-linea text-center text-sm font-semibold text-tinta outline-none focus:border-bodega"
-                  />
-                  <button
-                    onClick={() => cambiarCantidad(linea.productoId, 1)}
-                    disabled={linea.cantidad >= linea.stockDisponible}
-                    className="flex h-8 w-8 items-center justify-center rounded-full border border-linea text-tinta disabled:opacity-30"
-                    aria-label="Agregar uno"
-                  >
-                    +
-                  </button>
-                </div>
-                <span className="w-16 text-right text-sm font-semibold">
-                  {formatearMonto(linea.precioVenta * linea.cantidad, simboloMoneda)}
-                </span>
-                <button
-                  onClick={() => quitarProducto(linea.productoId)}
-                  className="text-tinta-suave"
-                  aria-label={`Quitar ${linea.nombre}`}
-                >
-                  ✕
-                </button>
-              </li>
-            ))}
+                  {(precioEditable || descripcionActiva) && (
+                    <button
+                      type="button"
+                      onClick={() => setLineaEditandoId(editando ? null : linea.productoId)}
+                      aria-expanded={editando}
+                      className="mt-2 text-xs font-semibold text-bodega"
+                    >
+                      {editando
+                        ? 'Ocultar'
+                        : precioEditable && descripcionActiva
+                          ? 'Editar precio o nota'
+                          : precioEditable
+                            ? 'Editar precio'
+                            : 'Agregar nota'}
+                    </button>
+                  )}
+                  {editando && (
+                    <div className="mt-2 space-y-2">
+                      {precioEditable && (
+                        <label className="flex items-center gap-2 text-sm text-tinta-suave">
+                          {simboloMoneda}
+                          <input
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            step="0.1"
+                            value={linea.precioVenta}
+                            onChange={(e) => cambiarPrecioLinea(linea.productoId, limpiarNumeroEscrito(e.target.value))}
+                            aria-label={`Precio de ${linea.nombre}`}
+                            className="h-10 w-28 rounded-lg border border-linea px-3 text-sm text-tinta outline-none focus:border-bodega"
+                          />
+                          c/u
+                        </label>
+                      )}
+                      {descripcionActiva && (
+                        <input
+                          type="text"
+                          value={linea.descripcion}
+                          maxLength={LIMITE_DESCRIPCION_LINEA}
+                          onChange={(e) => cambiarDescripcion(linea.productoId, e.target.value)}
+                          placeholder="Descripción (opcional)"
+                          aria-label={`Descripción de ${linea.nombre}`}
+                          className="h-10 w-full rounded-lg border border-linea px-3 text-sm text-tinta outline-none placeholder:text-tinta/40 focus:border-bodega"
+                        />
+                      )}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
         {errorCalculo && <p className="mt-2 text-sm text-alerta">{errorCalculo}</p>}
@@ -872,93 +1033,107 @@ export default function PaginaNuevaVenta() {
               <p className="mt-2 text-xs text-tinta-suave">
                 {nombreClienteLibre() ? (
                   <>
-                    Esta venta saldrá a nombre de{' '}
-                    <span className="font-medium text-tinta-suave">{nombreClienteLibre()}</span> (sin registrarlo).
+                    Saldrá a nombre de <span className="font-medium text-tinta">{nombreClienteLibre()}</span> (sin
+                    registrarlo). Guárdalo en{' '}
+                    <Link href="/mas/clientes" className="underline">
+                      Más → Clientes
+                    </Link>
+                    .
                   </>
                 ) : (
                   <>
-                    Si no seleccionas ni escribes a nadie, la venta queda como{' '}
-                    <span className="font-medium text-tinta-suave">Cliente eventual</span>.
+                    Sin cliente: <span className="font-medium text-tinta">Cliente eventual</span>.
                   </>
-                )}{' '}
-                Para guardarlo, créalo en{' '}
-                <Link href="/mas/clientes" className="underline">
-                  Más → Clientes
-                </Link>
-                .
+                )}
               </p>
             )}
           </div>
         )}
       </section>
 
-      {/* Teléfono + WhatsApp */}
-      <section className="mt-4">
-        <p className="text-sm font-bold text-tinta-suave">Número de celular (opcional)</p>
-        <div className="mt-2 flex gap-2">
-          <span className="flex h-11 shrink-0 items-center rounded-lg border border-linea bg-papel px-3 text-sm text-tinta-suave">
-            +{prefijoPais}
-          </span>
-          <input
-            value={telefonoCelular}
-            onChange={(e) => setTelefonoCelular(e.target.value)}
-            placeholder="Celular para WhatsApp"
-            inputMode="numeric"
-            disabled={Boolean(clienteSeleccionado?.telefono)}
-            className="h-11 flex-1 rounded-lg border border-linea px-3 text-sm disabled:bg-papel disabled:text-tinta/50"
-          />
-        </div>
-        {clienteSeleccionado?.telefono && (
-          <p className="mt-1 text-xs text-tinta-suave">Se usará el teléfono registrado del cliente.</p>
-        )}
-        <label className="mt-3 flex items-center gap-2 text-sm text-tinta/80">
-          <input
-            type="checkbox"
-            checked={enviarWhatsApp}
-            onChange={(e) => {
-              setEnviarWhatsApp(e.target.checked);
-              if (e.target.checked) setGuardarTicket(false);
-            }}
-            className="h-4 w-4 rounded border-linea"
-          />
-          <IconoWhatsApp tamano={18} className="text-[#25D366]" />
-          Enviar venta a WhatsApp
-        </label>
-        <label
-          className={`mt-2 flex items-center gap-2 text-sm ${esPremium ? 'text-tinta/80' : 'text-tinta-suave'}`}
-        >
-          <input
-            type="checkbox"
-            checked={guardarTicket}
-            disabled={!esPremium}
-            onChange={(e) => {
-              setGuardarTicket(e.target.checked);
-              if (e.target.checked) setEnviarWhatsApp(false);
-            }}
-            className="h-4 w-4 rounded border-linea disabled:opacity-40"
-          />
-          Guardar ticket como...
-          {!esPremium && <span className="text-xs font-semibold text-acento-oscuro">Premium</span>}
-        </label>
-        <p className="ml-6 mt-0.5 text-xs text-tinta-suave">
-          Genera una imagen del comprobante y abre "Compartir" — tú eliges si la mandas a tu WhatsApp, a otro contacto, o la guardas.
-        </p>
-      </section>
-
       {/* Acción principal */}
       {calculoValido && (
-        <div className="fixed inset-x-0 bottom-0 mx-auto max-w-app border-t border-linea bg-papel px-5 pt-4 pb-[calc(1rem+var(--area-segura-abajo))]">
+        <div className="fixed inset-x-0 bottom-0 mx-auto max-w-app border-t border-linea bg-papel px-5 pt-2.5 pb-[calc(1.25rem+var(--area-segura-abajo))]">
+          <p className="mb-2 text-center text-[13px] text-tinta-suave">
+            {carrito.length} {carrito.length === 1 ? 'producto' : 'productos'} · {textoCantidad(totalUnidades)}{' '}
+            {totalUnidades === 1 ? 'unidad' : 'unidades'}
+          </p>
           <button
             onClick={() => {
               setMensajeError(null);
               setEtapa('revisando');
             }}
             disabled={Boolean(errorFactura)}
-            className="flex h-14 w-full items-center justify-center rounded-full bg-bodega text-base font-semibold text-white active:bg-bodega-oscuro disabled:opacity-60"
+            className="flex h-[60px] w-full items-center justify-center gap-3 rounded-full bg-bodega text-white active:bg-bodega-oscuro disabled:opacity-60"
           >
-            Revisar y cobrar {formatearMonto(calculoValido.total, simboloMoneda)}
+            <span className="text-lg font-bold">Revisar y cobrar</span>
+            <span className="text-[22px] font-extrabold">{formatearMonto(calculoValido.total, simboloMoneda)}</span>
           </button>
         </div>
+      )}
+
+      {editandoSubtotal && lineaSubtotal && (
+        <HojaOpciones
+          titulo="Editar subtotal"
+          subtitulo={`${lineaSubtotal.nombre} · ${textoCantidad(lineaSubtotal.cantidad)} ${lineaSubtotal.cantidad === 1 ? 'unidad' : 'unidades'}`}
+          onCerrar={() => setEditandoSubtotal(null)}
+        >
+          <div className="space-y-3">
+            <div>
+              <label htmlFor="subtotal-linea" className="mb-1.5 block text-xs font-medium text-tinta-suave">
+                Subtotal de la línea
+              </label>
+              <div className="flex h-16 items-center gap-2 rounded-xl border-2 border-bodega px-4 text-3xl font-extrabold text-tinta">
+                <span>{simboloMoneda}</span>
+                <input
+                  id="subtotal-linea"
+                  autoFocus
+                  type="text"
+                  inputMode="decimal"
+                  enterKeyHint="done"
+                  value={editandoSubtotal.texto}
+                  onChange={(e) => setEditandoSubtotal({ ...editandoSubtotal, texto: limpiarNumeroEscrito(e.target.value) })}
+                  onFocus={(e) => e.target.select()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') aplicarSubtotal();
+                  }}
+                  className="w-full bg-transparent outline-none"
+                />
+              </div>
+            </div>
+            <div className="rounded-xl bg-bodega-claro px-3.5 py-3 text-sm leading-snug text-tinta">
+              {precioDelSubtotal === null ? (
+                'Escribe cuánto quieres cobrar por este producto.'
+              ) : (
+                <>
+                  Precio por unidad en esta venta:{' '}
+                  <b>
+                    {simboloMoneda} {textoPrecioUnitario(precioDelSubtotal)}
+                  </b>
+                  {redondear(precioDelSubtotal) !== precioDelSubtotal && ` (se verá ${formatearMonto(precioDelSubtotal, simboloMoneda)})`}. El
+                  precio de {lineaSubtotal.nombre} en tu lista <b>no cambia</b>.
+                </>
+              )}
+            </div>
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={() => setEditandoSubtotal(null)}
+                className="h-[54px] flex-1 rounded-full border-[1.5px] border-bodega bg-white text-[17px] font-bold text-bodega"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={aplicarSubtotal}
+                disabled={precioDelSubtotal === null}
+                className="h-[54px] flex-[1.4] rounded-full bg-bodega text-[17px] font-bold text-white disabled:opacity-50"
+              >
+                Aplicar
+              </button>
+            </div>
+          </div>
+        </HojaOpciones>
       )}
     </div>
   );

@@ -46,7 +46,7 @@ const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
  */
 export default function PaginaFiados() {
   const { contenedor, cargando, error } = usarContenedor();
-  const { avisar, vibrar } = usarAvisos();
+  const { avisar } = usarAvisos();
   const { pedirPermiso, modalPermiso } = usarPermisos(contenedor);
   const [estadoPlan, setEstadoPlan] = useState<EstadoPlan | null>(null);
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
@@ -193,7 +193,7 @@ export default function PaginaFiados() {
       setPidiendoTelefono(false);
       setTelefonoNuevo('');
       recargar();
-      avisar(AVISOS.telefonoGuardado, { vibrar: 'guardar' });
+      avisar(AVISOS.telefonoGuardado);
       if (telefonoGuardado) void enviarMensajeDeuda(cliente.id, telefonoGuardado);
     } catch (e) {
       setErrorTelefono(e instanceof ErrorDeNegocio ? e.message : 'No se pudo guardar el teléfono.');
@@ -240,7 +240,6 @@ export default function PaginaFiados() {
         texto: resultado.texto,
       });
       window.scrollTo({ top: 0, behavior: 'smooth' });
-      vibrar('cobrar');
       cerrarCliente();
       recargar();
     } catch (e) {

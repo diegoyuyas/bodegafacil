@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
-import { usarAvisos } from '@/components/proveedor-avisos';
 import { usarPermisos } from '@/hooks/usar-permisos';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
@@ -27,7 +26,6 @@ const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
 
 export default function PaginaCompras() {
   const { contenedor, cargando, error } = usarContenedor();
-  const { vibrar } = usarAvisos();
   const { pedirPermiso, modalPermiso } = usarPermisos(contenedor);
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
   const [descripcionActiva, setDescripcionActiva] = useState(false);
@@ -140,7 +138,6 @@ export default function PaginaCompras() {
       await contenedor.persistir();
       setActualizoStock(carrito.some((l) => !l.esInsumo));
       setTotalGuardado(compra.total);
-      vibrar('guardar');
       setCarrito([]);
       setProveedorSeleccionado(null);
       setProveedorNombreLibre('');

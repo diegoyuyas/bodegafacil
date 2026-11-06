@@ -1,12 +1,10 @@
 /**
- * Prueba de los avisos de éxito, los estados de las listas y la vibración (Etapa V3).
+ * Prueba de los avisos de éxito y los estados de las listas (Etapa V3).
  * Lógica pura: no necesita celular.
  *
  * Uso: npx tsx scripts/probar-avisos.ts
  */
 import { AVISOS, duracionAvisoMs, estadoLista, textoExito } from '../src/core/avisos';
-import { PATRONES_VIBRACION, vibracionActiva } from '../src/core/vibracion';
-import { estaActivado, valorParaGuardar } from '../src/core/configuracion';
 
 function afirmar(condicion: boolean, mensaje: string): void {
   if (!condicion) throw new Error(`❌ Falló: ${mensaje}`);
@@ -38,13 +36,5 @@ afirmar(estadoLista({ cargando: false, total: 8, visibles: 0 }) === 'sin_resulta
 afirmar(estadoLista({ cargando: false, total: 8, visibles: 3 }) === 'lista', 'Lista: con algo para mostrar es la lista');
 afirmar(estadoLista({ cargando: false, total: 1, visibles: 1 }) === 'lista', 'Lista: un solo elemento también es lista');
 
-// ---- Vibración
-afirmar(vibracionActiva(null) === true, 'Vibración: sin valor guardado viene activada');
-afirmar(vibracionActiva('1') === true && vibracionActiva('true') === true, 'Vibración: «1» y «true» la activan');
-afirmar(vibracionActiva('0') === false && vibracionActiva('false') === false && vibracionActiva('') === false, 'Vibración: «0», «false» o vacío la apagan');
-afirmar(vibracionActiva(valorParaGuardar(true)) === true && vibracionActiva(valorParaGuardar(false)) === false, 'Vibración: lo que guarda el interruptor se lee igual');
-afirmar(estaActivado(valorParaGuardar(false)) === false, 'El interruptor guarda y lee de la misma forma que el resto de opciones');
-afirmar(typeof PATRONES_VIBRACION.guardar === 'number' && PATRONES_VIBRACION.guardar <= 50, 'Vibración al guardar: un toque corto (50 ms o menos)');
-afirmar(Array.isArray(PATRONES_VIBRACION.cobrar) && PATRONES_VIBRACION.cobrar.reduce((a, b) => a + b, 0) <= 200, 'Vibración al cobrar: dos toques cortos (200 ms en total o menos)');
 
 console.log('🎉 Todas las pruebas de V3 pasaron.');

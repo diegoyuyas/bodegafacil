@@ -144,6 +144,14 @@ export const IconoTacho = (p: PropsIcono) => (
   </Svg>
 );
 
+/** Ticket / comprobante: recibo con líneas. */
+export const IconoTicket = (p: PropsIcono) => (
+  <Svg {...p}>
+    <path d="M6 3h12v18l-2.2-1.5L13.6 21 12 19.5 10.4 21l-2.2-1.5L6 21V3z" />
+    <path d="M9 8h6M9 12h6" />
+  </Svg>
+);
+
 export const IconoPreferencias = (p: PropsIcono) => (
   <Svg {...p}>
     <circle cx="12" cy="12" r="8" />
