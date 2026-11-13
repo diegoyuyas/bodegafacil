@@ -41,8 +41,8 @@ function mapearDeudaConLineas(
     montoOriginal: d.monto,
     saldoPendiente: d.saldo_pendiente,
     lineas: d.venta_id
-      ? bd.consultar<{ producto: string; cantidad: number }>(
-          `SELECT p.nombre AS producto, dv.cantidad AS cantidad
+      ? bd.consultar<{ producto: string; cantidad: number; unidad: string | null }>(
+          `SELECT p.nombre AS producto, dv.cantidad AS cantidad, dv.unidad AS unidad
            FROM detalle_venta dv
            JOIN producto p ON p.id = dv.producto_id
            WHERE dv.venta_id = ?

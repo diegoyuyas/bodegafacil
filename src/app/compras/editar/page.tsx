@@ -18,7 +18,18 @@ import { usarContenedor } from '@/hooks/usar-contenedor';
 import { usarPermisos } from '@/hooks/usar-permisos';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
-import { CLAVE_DESCRIPCION_LINEAS, estaActivado } from '@/core/configuracion';
+import { CLAVE_DESCRIPCION_LINEAS, CLAVE_VENTA_ENTERO_FRACCION, estaActivado } from '@/core/configuracion';
+import { textoUnidad } from '@/core/unidades';
+import {
+  configuracionFraccionDeProducto,
+  costoPorFraccion,
+  formatearPrecioFraccion,
+  importeCompraFraccion,
+  textoStockDeProducto,
+  type ConfiguracionFraccion,
+} from '@/core/venta-fraccion';
+import { CantidadCompraFraccion } from '@/components/cantidad-compra-fraccion';
+import { CasillaNumero } from '@/components/casilla-numero';
 import { LIMITE_DESCRIPCION_LINEA, mayusculasAlEscribir } from '@/core/texto';
 import type { LineaCompraEntrada } from '@/core/repositorios';
 import type { MetodoPagoSinFiado, Producto, Proveedor } from '@/core/tipos';
@@ -27,6 +38,18 @@ interface LineaCarritoCompra extends LineaCompraEntrada {
   nombre: string;
   /** Insumo: no maneja cantidad ni stock, solo el monto que costó. */
   esInsumo: boolean;
+  /**
+   * Producto por fracciones: cómo se parte. Entonces `cantidad` está en la unidad MÁS PEQUEÑA (60 = 5 cajas de 12) y
+   * `costoUnitario` es el costo de UN entero (la caja); el de cada unidad se calcula.
+   */
+  fraccion?: Pick<ConfiguracionFraccion, 'unidadEntera' | 'unidadFraccion' | 'factor'>;
+  /** Interruptor apagado: la cantidad se escribe solo en cajas (si no hay unidades sueltas). */
+  soloEnteros?: boolean;
+}
+
+/** Lo que cuesta una línea, sin redondear (por fracciones suma sus cajas y sus unidades). */
+function importeLinea(linea: LineaCarritoCompra): number {
+  return linea.fraccion ? importeCompraFraccion(linea.fraccion, linea.costoUnitario, linea.cantidad) : linea.cantidad * linea.costoUnitario;
 }
 
 const METODOS: { valor: MetodoPagoSinFiado; etiqueta: string }[] = [
@@ -58,6 +81,8 @@ function ContenidoEditarCompra() {
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
   const [cargandoCompra, setCargandoCompra] = useState(true);
   const [descripcionActiva, setDescripcionActiva] = useState(false);
+  // Venta Entero/Fracción: con el interruptor apagado los productos por fracciones se compran solo en cajas.
+  const [ventaFraccionActiva, setVentaFraccionActiva] = useState(false);
 
   const [productos, setProductos] = useState<Producto[]>([]);
   const [texto, setTexto] = useState('');
@@ -79,6 +104,7 @@ function ContenidoEditarCompra() {
     setSimboloMoneda(obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)));
     setProductos(contenedor.productos.listarActivos());
     setDescripcionActiva(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_DESCRIPCION_LINEAS)));
+    setVentaFraccionActiva(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_VENTA_ENTERO_FRACCION)));
   }, [contenedor]);
 
   // Precarga la compra a modificar.
@@ -92,15 +118,26 @@ function ContenidoEditarCompra() {
         setCargandoCompra(false);
         return;
       }
+      const fraccionActiva = estaActivado(contenedor.configuracion.obtenerValor(CLAVE_VENTA_ENTERO_FRACCION));
       setCarrito(
-        lineas.map((l) => ({
-          productoId: l.productoId,
-          nombre: l.nombreProducto,
-          cantidad: l.cantidad,
-          costoUnitario: l.costoUnitario,
-          descripcion: l.descripcion ?? '',
-          esInsumo: contenedor.productos.obtenerPorId(l.productoId).tipo === 'insumo',
-        })),
+        lineas.map((l) => {
+          const producto = contenedor.productos.obtenerPorId(l.productoId);
+          // Producto por fracciones: la cantidad viene en la unidad más pequeña y el costo es el de UN entero.
+          const configuracion = producto.formaVenta === 'fraccion' ? configuracionFraccionDeProducto(producto, true) : null;
+          return {
+            productoId: l.productoId,
+            nombre: l.nombreProducto,
+            cantidad: l.cantidad,
+            costoUnitario: l.costoUnitario,
+            descripcion: l.descripcion ?? '',
+            esInsumo: producto.tipo === 'insumo',
+            fraccion: configuracion
+              ? { unidadEntera: configuracion.unidadEntera, unidadFraccion: configuracion.unidadFraccion, factor: configuracion.factor }
+              : undefined,
+            // Apagado se escribe en cajas, salvo que esta compra ya tenga unidades sueltas (no se pueden perder).
+            soloEnteros: configuracion ? !fraccionActiva && l.cantidad % configuracion.factor === 0 : false,
+          };
+        }),
       );
       setMetodoPago(compra.metodoPago ?? 'efectivo');
       setComprobante(compra.comprobante ?? '');
@@ -130,12 +167,14 @@ function ContenidoEditarCompra() {
   }, [texto, productos]);
 
   const total = useMemo(
-    () => carrito.reduce((suma, l) => suma + l.cantidad * l.costoUnitario, 0),
+    () => carrito.reduce((suma, l) => suma + importeLinea(l), 0),
     [carrito],
   );
 
   function agregarProducto(producto: Producto) {
     setTexto('');
+    // Producto por fracciones: entra con una caja (en la unidad más pequeña) y el costo de UNA caja.
+    const configuracion = producto.formaVenta === 'fraccion' ? configuracionFraccionDeProducto(producto, true) : null;
     setCarrito((actual) => {
       if (actual.some((l) => l.productoId === producto.id)) return actual;
       return [
@@ -143,9 +182,13 @@ function ContenidoEditarCompra() {
         {
           productoId: producto.id,
           nombre: producto.nombre,
-          cantidad: 1,
+          cantidad: configuracion ? configuracion.factor : 1,
           costoUnitario: producto.costo,
           esInsumo: producto.tipo === 'insumo',
+          fraccion: configuracion
+            ? { unidadEntera: configuracion.unidadEntera, unidadFraccion: configuracion.unidadFraccion, factor: configuracion.factor }
+            : undefined,
+          soloEnteros: configuracion ? !ventaFraccionActiva : false,
         },
       ];
     });
@@ -244,7 +287,7 @@ function ContenidoEditarCompra() {
                     >
                       <span>{producto.nombre}</span>
                       <span className="text-tinta-suave">
-                        {producto.tipo === 'insumo' ? 'Insumo' : `Stock: ${producto.stockActual}`}
+                        {producto.tipo === 'insumo' ? 'Insumo' : `Stock: ${textoStockDeProducto(producto)}`}
                       </span>
                     </button>
                   </li>
@@ -278,37 +321,46 @@ function ContenidoEditarCompra() {
                       </button>
                     </div>
                     <div className="flex items-center gap-3">
-                      {!linea.esInsumo && (
+                      {!linea.esInsumo && linea.fraccion && (
+                        <CantidadCompraFraccion
+                          fraccion={linea.fraccion}
+                          cantidad={linea.cantidad}
+                          soloEnteros={linea.soloEnteros === true}
+                          onCambiar={(cantidadBase) => actualizarLinea(linea.productoId, 'cantidad', cantidadBase)}
+                        />
+                      )}
+                      {!linea.esInsumo && !linea.fraccion && (
                       <label className="flex-1 text-xs text-tinta-suave">
                         Cantidad
-                        <input
-                          type="number"
-                          min={1}
-                          value={linea.cantidad}
-                          onChange={(e) =>
-                            actualizarLinea(linea.productoId, 'cantidad', Number(e.target.value))
-                          }
+                        <CasillaNumero
+                          valor={linea.cantidad}
+                          decimales
+                          onCambiar={(numero) => actualizarLinea(linea.productoId, 'cantidad', numero)}
                           className="mt-1 h-10 w-full rounded-lg border border-linea px-3 text-sm"
                         />
                       </label>
                       )}
                       <label className="flex-1 text-xs text-tinta-suave">
-                        {linea.esInsumo ? 'Monto' : 'Costo unitario'}
-                        <input
-                          type="number"
-                          min={0}
-                          step="0.1"
-                          value={linea.costoUnitario}
-                          onChange={(e) =>
-                            actualizarLinea(linea.productoId, 'costoUnitario', Number(e.target.value))
-                          }
+                        {linea.esInsumo ? 'Monto' : linea.fraccion ? `Costo por ${linea.fraccion.unidadEntera}` : 'Costo unitario'}
+                        <CasillaNumero
+                          valor={linea.costoUnitario}
+                          decimales
+                          onCambiar={(numero) => actualizarLinea(linea.productoId, 'costoUnitario', numero)}
                           className="mt-1 h-10 w-full rounded-lg border border-linea px-3 text-sm"
                         />
                       </label>
                       <span className="w-16 pt-4 text-right text-sm font-semibold">
-                        {formatearMonto(linea.cantidad * linea.costoUnitario, simboloMoneda)}
+                        {formatearMonto(importeLinea(linea), simboloMoneda)}
                       </span>
                     </div>
+                    {linea.fraccion && linea.costoUnitario > 0 && (
+                          <p className="text-xs text-tinta-suave">
+                        Cada {textoUnidad(linea.fraccion.unidadFraccion, 1)} sale a{' '}
+                        {formatearPrecioFraccion(costoPorFraccion(linea.costoUnitario, linea.fraccion.factor), simboloMoneda)} · 1{' '}
+                        {textoUnidad(linea.fraccion.unidadEntera, 1)} = {linea.fraccion.factor}{' '}
+                        {textoUnidad(linea.fraccion.unidadFraccion, linea.fraccion.factor)}
+                      </p>
+                    )}
                     {descripcionActiva ? (
                       <input
                         type="text"

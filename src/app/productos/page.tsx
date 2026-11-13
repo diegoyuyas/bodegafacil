@@ -14,7 +14,22 @@ import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moned
 import type { HistorialProductoItem, Producto, TipoProducto } from '@/core/tipos';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
 import { limpiarNumeroEscrito, mayusculasAlEscribir, partirAlias, partirEnLineas, unirAlias } from '@/core/texto';
-import { CLAVE_MODO_VENTA_VOZ, modoVentaVozDisponible } from '@/core/configuracion';
+import { CLAVE_MODO_VENTA_VOZ, CLAVE_VENTA_ENTERO_FRACCION, estaActivado, modoVentaVozDisponible } from '@/core/configuracion';
+import { textoUnidad } from '@/core/unidades';
+import {
+  aUnidadesBase,
+  configuracionFraccionDeProducto,
+  enteroDeTexto,
+  formatearPrecioFraccion,
+  textoCantidadFraccion,
+} from '@/core/venta-fraccion';
+import { usarFormularioFraccion } from '@/hooks/usar-formulario-fraccion';
+import {
+  CampoCantidadFraccion,
+  CampoPrecioFraccion,
+  CamposUnidadesFraccion,
+  SelectorFormaVenta,
+} from '@/components/campos-fraccion';
 import { formatearFechaHora } from '@/core/tiempo';
 import { SelectorEstado, filtrarPorEstado, type FiltroEstado } from '@/components/selector-estado';
 import { EtiquetaCampo, VentanaFormulario } from '@/components/ventana-formulario';
@@ -35,10 +50,13 @@ export default function PaginaProductos() {
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
   // El campo Alias solo se ve con el modo venta por voz en ON y plan Premium (ver modoVentaVozDisponible).
   const [modoVoz, setModoVoz] = useState(false);
+  // Venta Entero/Fracción (Más > Configuración > Configuración de Venta): con OFF no aparece "Forma de Venta".
+  const [ventaFraccion, setVentaFraccion] = useState(false);
 
   useEffect(() => {
     if (!contenedor) return;
     setSimboloMoneda(obtenerSimboloMoneda(contenedor.configuracion.obtenerValor(CLAVE_MONEDA)));
+    setVentaFraccion(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_VENTA_ENTERO_FRACCION)));
     setModoVoz(
       modoVentaVozDisponible(
         contenedor.configuracion.obtenerValor(CLAVE_MODO_VENTA_VOZ),
@@ -64,6 +82,7 @@ export default function PaginaProductos() {
   const [alias, setAlias] = useState<string[]>([]);
   const [aliasTexto, setAliasTexto] = useState('');
   const [mensajeError, setMensajeError] = useState<string | null>(null);
+  const fraccionNuevo = usarFormularioFraccion(precioVenta);
 
   const [editandoId, setEditandoId] = useState<number | null>(null);
   const [nombreEdit, setNombreEdit] = useState('');
@@ -76,12 +95,18 @@ export default function PaginaProductos() {
   const [aliasEdit, setAliasEdit] = useState<string[]>([]);
   const [aliasTextoEdit, setAliasTextoEdit] = useState('');
   const [mensajeErrorEdit, setMensajeErrorEdit] = useState<string | null>(null);
+  const fraccionEdit = usarFormularioFraccion(precioVentaEdit);
+  // Un producto con ventas o compras no puede cambiar su forma de venta (ver puedeCambiarFormaVenta).
+  const [puedeCambiarFormaEdit, setPuedeCambiarFormaEdit] = useState(true);
 
   // Ajuste manual de stock (conteo físico, merma, corrección) — no pasa
   // por una compra. Se registra en movimiento_inventario con trazabilidad.
   const [ajustandoId, setAjustandoId] = useState<number | null>(null);
   const [tipoAjuste, setTipoAjuste] = useState<'sumar' | 'restar'>('sumar');
   const [cantidadAjuste, setCantidadAjuste] = useState('');
+  // Productos por fracciones: el ajuste se escribe en dos casillas (cajas y unidades).
+  const [ajusteEnteros, setAjusteEnteros] = useState('');
+  const [ajusteSueltas, setAjusteSueltas] = useState('');
   const [motivoAjuste, setMotivoAjuste] = useState('');
   const [mensajeErrorAjuste, setMensajeErrorAjuste] = useState<string | null>(null);
 
@@ -118,18 +143,22 @@ export default function PaginaProductos() {
     }
     if (!(await pedirPermiso('gestionar_productos', 'crear el producto', { sinPin: true }))) return;
     try {
+      // Por fracciones, el stock se guarda en la unidad más pequeña (20 cajas y 8 unidades de 12 → 248).
+      const esFraccion = fraccionNuevoActiva;
       contenedor.productos.crear({
         nombre: nombre.trim(),
         precioVenta: esInsumo ? 0 : Number(precioVenta),
         costo: Number(costo),
-        stockActual: esInsumo ? 0 : Number(stockActual || 0),
-        stockMinimo: esInsumo ? 0 : Number(stockMinimo || 0),
+        stockActual: esInsumo ? 0 : esFraccion ? (controlaStock ? fraccionNuevo.stockEnUnidadesBase() : 0) : Number(stockActual || 0),
+        stockMinimo: esInsumo ? 0 : esFraccion ? (controlaStock ? fraccionNuevo.minimoEnUnidadesBase() : 0) : Number(stockMinimo || 0),
         controlaStock: esInsumo ? false : controlaStock,
         unidadMedida: 'unidad',
         tipo,
         alias: modoVoz && !esInsumo ? unirAlias(partirAlias([...alias, aliasTexto].join(','))) : null,
+        ...(esFraccion ? fraccionNuevo.datos() : {}),
       });
       await contenedor.persistir();
+      fraccionNuevo.reiniciar();
       setNombre('');
       setTipo('venta_compra');
       setPrecioVenta('');
@@ -162,6 +191,8 @@ export default function PaginaProductos() {
     setAliasEdit(partirAlias(producto.alias));
     setAliasTextoEdit('');
     setMensajeErrorEdit(null);
+    fraccionEdit.cargarDesdeProducto(producto);
+    setPuedeCambiarFormaEdit(contenedor ? contenedor.productos.puedeCambiarFormaVenta(producto.id) : true);
   }
 
   function cancelarEdicion() {
@@ -176,6 +207,8 @@ export default function PaginaProductos() {
     setAjustandoId(producto.id);
     setTipoAjuste('sumar');
     setCantidadAjuste('');
+    setAjusteEnteros('');
+    setAjusteSueltas('');
     setMotivoAjuste('');
     setMensajeErrorAjuste(null);
   }
@@ -236,14 +269,23 @@ export default function PaginaProductos() {
     return valor;
   }
 
-  const formularioAjusteValido = Number(cantidadAjuste) > 0 && motivoAjuste.trim().length > 0;
+  const productoAjustando = productos.find((p) => p.id === ajustandoId) ?? null;
+  // El stock de un producto por fracciones se ajusta siempre en cajas y unidades (esté o no activado el interruptor).
+  const configuracionAjuste = productoAjustando ? configuracionFraccionDeProducto(productoAjustando, true) : null;
+  const cantidadAjusteValida = configuracionAjuste
+    ? enteroDeTexto(ajusteEnteros) * configuracionAjuste.factor + enteroDeTexto(ajusteSueltas) > 0
+    : Number(cantidadAjuste) > 0;
+  const formularioAjusteValido = cantidadAjusteValida && motivoAjuste.trim().length > 0;
 
   async function confirmarAjuste() {
     if (!contenedor || ajustandoId === null) return;
     setMensajeErrorAjuste(null);
     if (!(await pedirPermiso('gestionar_productos', 'ajustar el stock'))) return;
     try {
-      const delta = tipoAjuste === 'sumar' ? Number(cantidadAjuste) : -Number(cantidadAjuste);
+      const cantidad = configuracionAjuste
+        ? aUnidadesBase(enteroDeTexto(ajusteEnteros), enteroDeTexto(ajusteSueltas), configuracionAjuste.factor)
+        : Number(cantidadAjuste);
+      const delta = tipoAjuste === 'sumar' ? cantidad : -cantidad;
       contenedor.productos.ajustarStock(ajustandoId, delta, motivoAjuste.trim());
       await contenedor.persistir();
       setAjustandoId(null);
@@ -274,15 +316,26 @@ export default function PaginaProductos() {
     visibles: productosFiltrados.length,
   });
 
+  // Venta por fracciones en el formulario: solo con el interruptor en ON, un producto de Venta y Compra y la forma elegida.
+  const fraccionNuevoActiva = ventaFraccion && tipo === 'venta_compra' && fraccionNuevo.formaVenta === 'fraccion';
+  const fraccionEditActiva = ventaFraccion && tipoEdit === 'venta_compra' && fraccionEdit.formaVenta === 'fraccion';
+  // Cambiar la forma de venta de un producto ya creado: el stock y el mínimo se convierten solos.
+  const cambiaFormaEdit =
+    ventaFraccion && tipoEdit === 'venta_compra' && productoEditando !== null && fraccionEdit.formaVenta !== productoEditando.formaVenta;
+  // Producto por fracciones con el interruptor apagado: se edita todo menos el stock mínimo (que está en otra unidad).
+  const fraccionSinInterruptor = !ventaFraccion && productoEditando !== null && productoEditando.formaVenta === 'fraccion';
+
   const formularioValido =
     nombre.trim().length > 0 &&
     Number(costo) >= 0 &&
-    (tipo === 'insumo' || Number(precioVenta) >= 0);
+    (tipo === 'insumo' || Number(precioVenta) >= 0) &&
+    (!fraccionNuevoActiva || fraccionNuevo.valido);
 
   const formularioEditValido =
     nombreEdit.trim().length > 0 &&
     Number(costoEdit) >= 0 &&
-    (tipoEdit === 'insumo' || Number(precioVentaEdit) >= 0);
+    (tipoEdit === 'insumo' || Number(precioVentaEdit) >= 0) &&
+    (!fraccionEditActiva || fraccionEdit.valido);
 
   async function guardarEdicion() {
     if (!contenedor || editandoId === null) return;
@@ -299,17 +352,34 @@ export default function PaginaProductos() {
     if (!(await pedirPermiso('gestionar_productos', 'guardar los cambios del producto'))) return;
     try {
       const producto = contenedor.productos.obtenerPorId(editandoId);
+      // Stock mínimo: al cambiar de forma (o con el interruptor apagado) no se toca desde acá: el repositorio lo convierte
+      // o lo conserva. Si sigue por fracciones se lee de las dos casillas; si no, es el número de siempre.
+      const conservaMinimo = cambiaFormaEdit || fraccionSinInterruptor;
+      const sigueFraccion = fraccionEditActiva && producto.formaVenta === 'fraccion';
+      const minimoGuardar = esInsumoEdit
+        ? 0
+        : conservaMinimo
+          ? producto.stockMinimo
+          : sigueFraccion
+            ? fraccionEdit.minimoEnUnidadesBase()
+            : Number(stockMinimoEdit || 0);
       contenedor.productos.actualizar(editandoId, {
         nombre: nombreEdit.trim(),
         categoriaId: producto.categoriaId,
         codigo: producto.codigo,
         precioVenta: esInsumoEdit ? 0 : Number(precioVentaEdit),
         costo: Number(costoEdit),
-        stockMinimo: esInsumoEdit ? 0 : Number(stockMinimoEdit || 0),
+        stockMinimo: minimoGuardar,
         controlaStock: esInsumoEdit ? false : controlaStockEdit,
         unidadMedida: producto.unidadMedida,
         activo: activoEdit,
         tipo: tipoEdit,
+        // Con el interruptor apagado (o un insumo) no se manda la forma: se conserva la que tiene.
+        ...(ventaFraccion && !esInsumoEdit
+          ? fraccionEdit.formaVenta === 'fraccion'
+            ? fraccionEdit.datos()
+            : { formaVenta: 'entero' as const }
+          : {}),
         // Con el modo voz en OFF no se manda alias: así los ya guardados se conservan intactos.
         alias: modoVoz && !esInsumoEdit ? unirAlias(partirAlias([...aliasEdit, aliasTextoEdit].join(','))) : undefined,
       });
@@ -363,19 +433,48 @@ export default function PaginaProductos() {
               <option value="insumo">Solo Insumo (Compras)</option>
             </select>
           </div>
+          {tipo === 'venta_compra' && ventaFraccion && (
+            <SelectorFormaVenta valor={fraccionNuevo.formaVenta} onCambiar={fraccionNuevo.setFormaVenta} />
+          )}
+          {fraccionNuevoActiva && (
+            <CamposUnidadesFraccion
+              unidadEntera={fraccionNuevo.unidadEntera}
+              unidadFraccion={fraccionNuevo.unidadFraccion}
+              factorTexto={fraccionNuevo.factorTexto}
+              onUnidadEntera={fraccionNuevo.cambiarUnidadEntera}
+              onUnidadFraccion={fraccionNuevo.cambiarUnidadFraccion}
+              onFactor={fraccionNuevo.cambiarFactor}
+            />
+          )}
           {tipo === 'venta_compra' && (
-            <div>
-              <EtiquetaCampo>Precio de Venta:</EtiquetaCampo>
-              <input
-                value={precioVenta}
-                onChange={(e) => setPrecioVenta(limpiarNumeroEscrito(e.target.value))}
-                inputMode="decimal"
-                className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
-              />
-            </div>
+            <>
+              <div>
+                <EtiquetaCampo>
+                  {fraccionNuevoActiva ? `Precio por ${fraccionNuevo.unidadEntera}:` : 'Precio de Venta:'}
+                </EtiquetaCampo>
+                <input
+                  value={precioVenta}
+                  onChange={(e) => setPrecioVenta(limpiarNumeroEscrito(e.target.value))}
+                  inputMode="decimal"
+                  className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+                />
+              </div>
+              {fraccionNuevoActiva && (
+                <CampoPrecioFraccion
+                  unidadFraccion={fraccionNuevo.unidadFraccion}
+                  valor={fraccionNuevo.precioFraccionTexto}
+                  automatico={fraccionNuevo.precioAutomatico}
+                  onCambiar={fraccionNuevo.cambiarPrecioFraccion}
+                  onTerminar={fraccionNuevo.terminarPrecioFraccion}
+                  onRestablecer={fraccionNuevo.restablecerPrecioAutomatico}
+                />
+              )}
+            </>
           )}
           <div>
-            <EtiquetaCampo>Costo (opcional):</EtiquetaCampo>
+            <EtiquetaCampo>
+              {fraccionNuevoActiva ? `Costo por ${fraccionNuevo.unidadEntera} (opcional):` : 'Costo (opcional):'}
+            </EtiquetaCampo>
             <input
               value={costo}
               onChange={(e) => setCosto(limpiarNumeroEscrito(e.target.value))}
@@ -401,26 +500,53 @@ export default function PaginaProductos() {
                 />
                 Control Stock
               </label>
-              <div>
-                <EtiquetaCampo>Stock Inicial (opcional):</EtiquetaCampo>
-                <input
-                  value={controlaStock ? stockActual : '0'}
-                  onChange={(e) => setStockActual(limpiarNumeroEscrito(e.target.value))}
-                  disabled={!controlaStock}
-                  inputMode="numeric"
-                  className="h-11 w-full rounded-lg border border-linea px-3 text-sm disabled:bg-papel disabled:text-tinta/40"
-                />
-              </div>
-              <div>
-                <EtiquetaCampo>Stock Mínimo (opcional):</EtiquetaCampo>
-                <input
-                  value={controlaStock ? stockMinimo : '0'}
-                  onChange={(e) => setStockMinimo(limpiarNumeroEscrito(e.target.value))}
-                  disabled={!controlaStock}
-                  inputMode="numeric"
-                  className="h-11 w-full rounded-lg border border-linea px-3 text-sm disabled:bg-papel disabled:text-tinta/40"
-                />
-              </div>
+              {fraccionNuevoActiva ? (
+                <>
+                  <CampoCantidadFraccion
+                    etiqueta="Stock Inicial (opcional):"
+                    unidadEntera={fraccionNuevo.unidadEntera}
+                    unidadFraccion={fraccionNuevo.unidadFraccion}
+                    enteros={fraccionNuevo.stockEnteros}
+                    sueltas={fraccionNuevo.stockSueltas}
+                    onEnteros={fraccionNuevo.setStockEnteros}
+                    onSueltas={fraccionNuevo.setStockSueltas}
+                    deshabilitado={!controlaStock}
+                  />
+                  <CampoCantidadFraccion
+                    etiqueta="Stock Mínimo (opcional):"
+                    unidadEntera={fraccionNuevo.unidadEntera}
+                    unidadFraccion={fraccionNuevo.unidadFraccion}
+                    enteros={fraccionNuevo.minimoEnteros}
+                    sueltas={fraccionNuevo.minimoSueltas}
+                    onEnteros={fraccionNuevo.setMinimoEnteros}
+                    onSueltas={fraccionNuevo.setMinimoSueltas}
+                    deshabilitado={!controlaStock}
+                  />
+                </>
+              ) : (
+                <>
+                  <div>
+                    <EtiquetaCampo>Stock Inicial (opcional):</EtiquetaCampo>
+                    <input
+                      value={controlaStock ? stockActual : '0'}
+                      onChange={(e) => setStockActual(limpiarNumeroEscrito(e.target.value))}
+                      disabled={!controlaStock}
+                      inputMode="numeric"
+                      className="h-11 w-full rounded-lg border border-linea px-3 text-sm disabled:bg-papel disabled:text-tinta/40"
+                    />
+                  </div>
+                  <div>
+                    <EtiquetaCampo>Stock Mínimo (opcional):</EtiquetaCampo>
+                    <input
+                      value={controlaStock ? stockMinimo : '0'}
+                      onChange={(e) => setStockMinimo(limpiarNumeroEscrito(e.target.value))}
+                      disabled={!controlaStock}
+                      inputMode="numeric"
+                      className="h-11 w-full rounded-lg border border-linea px-3 text-sm disabled:bg-papel disabled:text-tinta/40"
+                    />
+                  </div>
+                </>
+              )}
             </>
           )}
           {modoVoz && tipo === 'venta_compra' && (
@@ -479,19 +605,80 @@ export default function PaginaProductos() {
               <p className="mt-1 text-xs text-tinta-suave">Para pasar a Insumo el stock debe estar en 0.</p>
             )}
           </div>
-          {tipoEdit === 'venta_compra' && (
+          {tipoEdit === 'venta_compra' && ventaFraccion && (
             <div>
-              <EtiquetaCampo>Precio de Venta:</EtiquetaCampo>
-              <input
-                value={precioVentaEdit}
-                onChange={(e) => setPrecioVentaEdit(limpiarNumeroEscrito(e.target.value))}
-                inputMode="decimal"
-                className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+              <SelectorFormaVenta
+                valor={fraccionEdit.formaVenta}
+                onCambiar={fraccionEdit.setFormaVenta}
+                deshabilitado={!puedeCambiarFormaEdit}
               />
+              {!puedeCambiarFormaEdit && (
+                <p className="mt-1 text-xs text-tinta-suave">
+                  Este producto ya tiene ventas o compras: por ahora no se puede cambiar su forma de venta.
+                </p>
+              )}
             </div>
           )}
+          {fraccionSinInterruptor && (
+            <p className="rounded-xl border border-linea bg-papel p-3 text-xs text-tinta-suave">
+              Este producto se vende por fracciones. Mientras «Activar Venta Entero/Fracción» esté apagado se vende solo en
+              enteros. Para cambiar sus unidades o su stock mínimo, vuelve a activarlo en Configuración de Venta.
+            </p>
+          )}
+          {fraccionEditActiva && (
+            <CamposUnidadesFraccion
+              unidadEntera={fraccionEdit.unidadEntera}
+              unidadFraccion={fraccionEdit.unidadFraccion}
+              factorTexto={fraccionEdit.factorTexto}
+              onUnidadEntera={fraccionEdit.cambiarUnidadEntera}
+              onUnidadFraccion={fraccionEdit.cambiarUnidadFraccion}
+              onFactor={fraccionEdit.cambiarFactor}
+            />
+          )}
+          {cambiaFormaEdit && controlaStockEdit && fraccionEditActiva && fraccionEdit.factor >= 2 && (
+            <p className="text-xs text-tinta-suave">
+              Tu stock actual ({productoEditando.stockActual}) pasará a{' '}
+              <span className="font-semibold text-tinta">
+                {Math.round(productoEditando.stockActual * fraccionEdit.factor)}{' '}
+                {textoUnidad(fraccionEdit.unidadFraccion, Math.round(productoEditando.stockActual * fraccionEdit.factor))}
+              </span>
+              .
+            </p>
+          )}
+          {cambiaFormaEdit && !fraccionEditActiva && (
+            <p className="text-xs text-tinta-suave">
+              Al volver a Entero, el stock pasa a enteros completos. Solo se puede si no hay unidades sueltas.
+            </p>
+          )}
+          {tipoEdit === 'venta_compra' && (
+            <>
+              <div>
+                <EtiquetaCampo>
+                  {fraccionEditActiva ? `Precio por ${fraccionEdit.unidadEntera}:` : 'Precio de Venta:'}
+                </EtiquetaCampo>
+                <input
+                  value={precioVentaEdit}
+                  onChange={(e) => setPrecioVentaEdit(limpiarNumeroEscrito(e.target.value))}
+                  inputMode="decimal"
+                  className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+                />
+              </div>
+              {fraccionEditActiva && (
+                <CampoPrecioFraccion
+                  unidadFraccion={fraccionEdit.unidadFraccion}
+                  valor={fraccionEdit.precioFraccionTexto}
+                  automatico={fraccionEdit.precioAutomatico}
+                  onCambiar={fraccionEdit.cambiarPrecioFraccion}
+                  onTerminar={fraccionEdit.terminarPrecioFraccion}
+                  onRestablecer={fraccionEdit.restablecerPrecioAutomatico}
+                />
+              )}
+            </>
+          )}
           <div>
-            <EtiquetaCampo>Costo (opcional):</EtiquetaCampo>
+            <EtiquetaCampo>
+              {fraccionEditActiva ? `Costo por ${fraccionEdit.unidadEntera} (opcional):` : 'Costo (opcional):'}
+            </EtiquetaCampo>
             <input
               value={costoEdit}
               onChange={(e) => setCostoEdit(limpiarNumeroEscrito(e.target.value))}
@@ -514,16 +701,31 @@ export default function PaginaProductos() {
                 />
                 Control Stock
               </label>
-              <div>
-                <EtiquetaCampo>Stock Mínimo (opcional):</EtiquetaCampo>
-                <input
-                  value={controlaStockEdit ? stockMinimoEdit : '0'}
-                  onChange={(e) => setStockMinimoEdit(limpiarNumeroEscrito(e.target.value))}
-                  disabled={!controlaStockEdit}
-                  inputMode="numeric"
-                  className="h-11 w-full rounded-lg border border-linea px-3 text-sm disabled:bg-papel disabled:text-tinta/40"
+              {cambiaFormaEdit ? (
+                <p className="text-xs text-tinta-suave">El stock mínimo también se convierte solo al cambiar la forma de venta.</p>
+              ) : fraccionSinInterruptor ? null : fraccionEditActiva ? (
+                <CampoCantidadFraccion
+                  etiqueta="Stock Mínimo (opcional):"
+                  unidadEntera={fraccionEdit.unidadEntera}
+                  unidadFraccion={fraccionEdit.unidadFraccion}
+                  enteros={fraccionEdit.minimoEnteros}
+                  sueltas={fraccionEdit.minimoSueltas}
+                  onEnteros={fraccionEdit.setMinimoEnteros}
+                  onSueltas={fraccionEdit.setMinimoSueltas}
+                  deshabilitado={!controlaStockEdit}
                 />
-              </div>
+              ) : (
+                <div>
+                  <EtiquetaCampo>Stock Mínimo (opcional):</EtiquetaCampo>
+                  <input
+                    value={controlaStockEdit ? stockMinimoEdit : '0'}
+                    onChange={(e) => setStockMinimoEdit(limpiarNumeroEscrito(e.target.value))}
+                    disabled={!controlaStockEdit}
+                    inputMode="numeric"
+                    className="h-11 w-full rounded-lg border border-linea px-3 text-sm disabled:bg-papel disabled:text-tinta/40"
+                  />
+                </div>
+              )}
             </>
           )}
           <div>
@@ -617,6 +819,8 @@ export default function PaginaProductos() {
         <ul className="divide-y divide-linea border-y border-linea">
           {productosFiltrados.map((producto) => {
             const stockBajo = producto.controlaStock && producto.stockActual <= producto.stockMinimo;
+            // Producto por fracciones: su stock está en la unidad más pequeña y se muestra como "20 cajas y 8 unidades".
+            const configuracionFraccion = configuracionFraccionDeProducto(producto, true);
             const panelAbierto =
               ajustandoId === producto.id || bitacoraId === producto.id;
             return (
@@ -650,7 +854,8 @@ export default function PaginaProductos() {
                     </span>
                     {producto.tipo === 'insumo' ? null : producto.controlaStock ? (
                       <span className={`block text-xs ${stockBajo ? 'text-alerta' : 'text-tinta-suave'}`}>
-                        Stock: {producto.stockActual} {stockBajo && '· bajo'}
+                        Stock: {configuracionFraccion ? textoCantidadFraccion(producto.stockActual, configuracionFraccion) : producto.stockActual}{' '}
+                        {stockBajo && '· bajo'}
                       </span>
                     ) : (
                       <span className="block text-xs text-tinta-suave">No controla stock</span>
@@ -661,6 +866,19 @@ export default function PaginaProductos() {
                       <>
                         Costo:{' '}
                         <span className="whitespace-nowrap">{formatearMonto(producto.costo, simboloMoneda)}</span>
+                      </>
+                    ) : configuracionFraccion ? (
+                      <>
+                        <span className="block whitespace-nowrap">
+                          {formatearMonto(producto.precioVenta, simboloMoneda)}{' '}
+                          <span className="text-xs font-normal text-tinta-suave">
+                            por {textoUnidad(configuracionFraccion.unidadEntera, 1)}
+                          </span>
+                        </span>
+                        <span className="block whitespace-nowrap text-xs font-normal text-tinta-suave">
+                          {formatearPrecioFraccion(configuracionFraccion.precioFraccion, simboloMoneda)} por{' '}
+                          {textoUnidad(configuracionFraccion.unidadFraccion, 1)}
+                        </span>
                       </>
                     ) : (
                       <span className="whitespace-nowrap">{formatearMonto(producto.precioVenta, simboloMoneda)}</span>
@@ -673,6 +891,13 @@ export default function PaginaProductos() {
                     <p className="text-xs text-tinta-suave">
                       Cambios manuales a este producto (nombre, precio, costo, stock y stock
                       mínimo) — no incluye los movimientos normales de una venta o una compra.
+                      {configuracionFraccion && (
+                        <>
+                          {' '}
+                          Desde que se vende por fracciones, el stock se anota en{' '}
+                          {textoUnidad(configuracionFraccion.unidadFraccion, 2)}.
+                        </>
+                      )}
                     </p>
                     {historial.length === 0 ? (
                       <p className="text-sm text-tinta-suave">Sin cambios registrados todavía.</p>
@@ -707,8 +932,11 @@ export default function PaginaProductos() {
                 {ajustandoId === producto.id && (
                   <div className="mt-3 space-y-3 rounded-xl border border-linea p-4">
                     <p className="text-xs text-tinta-suave">
-                      Stock actual: <span className="font-semibold text-tinta">{producto.stockActual}</span>{' '}
-                      {producto.unidadMedida}. Usa esto para conteos físicos o mermas — no para
+                      Stock actual:{' '}
+                      <span className="font-semibold text-tinta">
+                        {configuracionFraccion ? textoCantidadFraccion(producto.stockActual, configuracionFraccion) : producto.stockActual}
+                      </span>
+                      {configuracionFraccion ? '' : ` ${producto.unidadMedida}`}. Usa esto para conteos físicos o mermas — no para
                       reponer stock de una compra (eso va en Compras).
                     </p>
                     <div className="flex gap-2">
@@ -733,13 +961,25 @@ export default function PaginaProductos() {
                         − Restar
                       </button>
                     </div>
-                    <input
-                      value={cantidadAjuste}
-                      onChange={(e) => setCantidadAjuste(limpiarNumeroEscrito(e.target.value))}
-                      inputMode="decimal"
-                      placeholder="Cantidad"
-                      className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
-                    />
+                    {configuracionFraccion ? (
+                      <CampoCantidadFraccion
+                        etiqueta="Cantidad:"
+                        unidadEntera={configuracionFraccion.unidadEntera}
+                        unidadFraccion={configuracionFraccion.unidadFraccion}
+                        enteros={ajusteEnteros}
+                        sueltas={ajusteSueltas}
+                        onEnteros={setAjusteEnteros}
+                        onSueltas={setAjusteSueltas}
+                      />
+                    ) : (
+                      <input
+                        value={cantidadAjuste}
+                        onChange={(e) => setCantidadAjuste(limpiarNumeroEscrito(e.target.value))}
+                        inputMode="decimal"
+                        placeholder="Cantidad"
+                        className="h-11 w-full rounded-lg border border-linea px-3 text-sm"
+                      />
+                    )}
                     <input
                       value={motivoAjuste}
                       onChange={(e) => setMotivoAjuste(e.target.value)}

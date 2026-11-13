@@ -9,6 +9,7 @@
 
 import { etiquetaDeMovimientoCaja } from './reglas-negocio';
 import { partirAlias } from './texto';
+import { etiquetaUnidadProducto, nombreConCantidadEn, nombreConUnidad } from './venta-fraccion';
 import type {
   Cliente,
   ClienteCompradorItem,
@@ -35,6 +36,8 @@ export interface FilaVentaDetallada {
   fecha: string;
   producto: string;
   cantidad: number;
+  /** Venta Entero/Fracción: unidad de la línea ('Caja'). Ausente en las ventas de siempre. */
+  unidad?: string | null;
   precioUnitario: number;
   subtotal: number;
   metodoPago: string;
@@ -106,7 +109,7 @@ export function exportarVentasACsv(filas: FilaVentaDetallada[]): string {
       f.pedido,
       f.comprobante ?? `Nota de venta ${f.pedido}`,
       f.fecha,
-      f.producto,
+      nombreConUnidad(f.producto, f.unidad),
       ...(conDescripcion ? [f.descripcion ?? ''] : []),
       f.cantidad,
       f.precioUnitario,
@@ -120,7 +123,7 @@ export function exportarVentasACsv(filas: FilaVentaDetallada[]): string {
 export function exportarProductosACsv(productos: Producto[]): string {
   return filasACsv(
     ['Nombre', 'Precio de venta', 'Costo', 'Stock actual', 'Stock mínimo', 'Unidad'],
-    productos.map((p) => [p.nombre, p.precioVenta, p.costo, p.stockActual, p.stockMinimo, p.unidadMedida]),
+    productos.map((p) => [p.nombre, p.precioVenta, p.costo, p.stockActual, p.stockMinimo, etiquetaUnidadProducto(p)]),
   );
 }
 
@@ -201,6 +204,8 @@ export interface FilaCompraDetallada {
   proveedor: string;
   producto: string;
   cantidad: number;
+  /** Venta Entero/Fracción: unidad de la línea ('Caja'). Ausente en las compras de siempre. */
+  unidad?: string | null;
   precioUnitario: number;
   subtotal: number;
   /** Total de la compra completa (igual en todas las líneas de una misma compra). */
@@ -234,7 +239,7 @@ export function construirHojaComprasDetallado(filas: FilaCompraDetallada[]): Hoj
       f.compra,
       f.fecha,
       f.proveedor,
-      f.producto,
+      nombreConUnidad(f.producto, f.unidad),
       ...(conDescripcion ? [f.descripcion ?? ''] : []),
       f.cantidad,
       f.precioUnitario,
@@ -251,7 +256,7 @@ export function construirHojaMasVendidos(items: ProductoMasVendidoItem[]): HojaE
   return {
     nombre: 'Más vendidos',
     encabezados: ['Producto', 'Cantidad vendida', 'Total vendido', 'Ganancia'],
-    filas: items.map((i) => [i.nombre, i.cantidadVendida, i.totalVendido, i.gananciaTotal]),
+    filas: items.map((i) => [nombreConCantidadEn(i.nombre, i.unidadEntera), i.cantidadVendida, i.totalVendido, i.gananciaTotal]),
   };
 }
 
@@ -260,7 +265,7 @@ export function construirHojaGananciaProductos(items: GananciaProductoItem[]): H
     nombre: 'Ganancia por producto',
     encabezados: ['Producto', 'Cantidad vendida', 'Total vendido', 'Costo', 'Ganancia', 'Margen %'],
     filas: items.map((i) => [
-      i.nombre,
+      nombreConCantidadEn(i.nombre, i.unidadEntera),
       i.cantidadVendida,
       i.totalVendido,
       i.costoTotal,
@@ -344,7 +349,7 @@ export function construirHojaVentas(filas: FilaVentaDetallada[], nombre = 'Venta
       f.pedido,
       f.comprobante ?? `Nota de venta ${f.pedido}`,
       f.fecha,
-      f.producto,
+      nombreConUnidad(f.producto, f.unidad),
       ...(conDescripcion ? [f.descripcion ?? ''] : []),
       f.cantidad,
       f.precioUnitario,
@@ -366,7 +371,7 @@ export function construirHojaProductos(productos: Producto[]): HojaExcel {
       p.costo,
       p.stockActual,
       p.stockMinimo,
-      p.unidadMedida,
+      etiquetaUnidadProducto(p),
       p.activo ? 'Sí' : 'No',
       p.alias ? partirAlias(p.alias).join(', ') : '',
     ]),
@@ -407,13 +412,15 @@ export function construirHojaHistorialCostos(
 ): HojaExcel {
   return {
     nombre: `Costos - ${nombreProducto}`.slice(0, 31),
-    encabezados: ['Fecha', 'Costo unitario', 'Cantidad', 'Proveedor', 'Compra'],
+    // Un producto por fracciones lleva una columna más: la unidad de cada línea (el costo es por caja o por unidad).
+    encabezados: ['Fecha', 'Costo unitario', 'Cantidad', 'Proveedor', 'Compra', ...(items.some((i) => i.unidad) ? ['Unidad'] : [])],
     filas: items.map((i) => [
       i.fecha,
       i.costoUnitario,
       i.cantidad,
       i.proveedorNombre ?? 'Sin especificar',
       `C-${i.compraId}`,
+      ...(items.some((x) => x.unidad) ? [i.unidad ?? ''] : []),
     ]),
   };
 }
@@ -439,10 +446,15 @@ export function desglosarMovimientoInventario(m: MovimientoInventarioItem): {
   return m.cantidad >= 0 ? { entrada: m.cantidad, salida: null } : { entrada: null, salida: Math.abs(m.cantidad) };
 }
 
-export function construirHojaKardex(nombreProducto: string, movimientos: MovimientoInventarioItem[]): HojaExcel {
+export function construirHojaKardex(
+  nombreProducto: string,
+  movimientos: MovimientoInventarioItem[],
+  /** Producto por fracciones: su unidad más pequeña, en la que van Entrada, Salida y Saldo. Agrega la columna «Unidad». */
+  unidadStock?: string | null,
+): HojaExcel {
   return {
     nombre: `Kardex - ${nombreProducto}`.slice(0, 31),
-    encabezados: ['Fecha y hora', 'Tipo', 'Motivo', 'Documento', 'Cliente / Proveedor', 'Entrada', 'Salida', 'Saldo'],
+    encabezados: ['Fecha y hora', 'Tipo', 'Motivo', 'Documento', 'Cliente / Proveedor', 'Entrada', 'Salida', 'Saldo', ...(unidadStock ? ['Unidad'] : [])],
     filas: movimientos.map((m) => {
       const { entrada, salida } = desglosarMovimientoInventario(m);
       return [
@@ -454,6 +466,7 @@ export function construirHojaKardex(nombreProducto: string, movimientos: Movimie
         entrada,
         salida,
         m.stockResultante,
+        ...(unidadStock ? [unidadStock] : []),
       ];
     }),
   };

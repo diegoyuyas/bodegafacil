@@ -33,6 +33,14 @@ CREATE TABLE producto (
     tipo            TEXT NOT NULL DEFAULT 'venta_compra'
                         CHECK (tipo IN ('venta_compra','insumo')),  -- 'insumo' = solo sirve para Compras: sin stock, sin precio de venta, no sale a vender
     unidad_medida   TEXT NOT NULL DEFAULT 'unidad',   -- unidad, kg, litro, paquete, etc.
+    -- Venta Entero/Fracción. 'fraccion' = se vende en dos unidades (ej. Caja y Unidad): stock_actual y stock_minimo
+    -- quedan en la unidad MÁS PEQUEÑA como número entero; precio_venta y costo son los de UN entero (la caja).
+    forma_venta     TEXT NOT NULL DEFAULT 'entero'
+                        CHECK (forma_venta IN ('entero','fraccion')),
+    unidad_entera   TEXT,                             -- solo 'fraccion': Caja, Kg…
+    unidad_fraccion TEXT,                             -- solo 'fraccion': Unidad, Gramo…
+    factor_fraccion INTEGER CHECK (factor_fraccion IS NULL OR factor_fraccion >= 2),  -- fracciones por entero (12, 1000)
+    precio_fraccion REAL CHECK (precio_fraccion IS NULL OR precio_fraccion >= 0),     -- precio de venta de UNA fracción
     alias           TEXT,                             -- otros nombres del producto para la venta por voz, separados por coma (opcional)
     activo          INTEGER NOT NULL DEFAULT 1,       -- eliminación lógica
     creado_en       TEXT NOT NULL DEFAULT (datetime('now')),
@@ -128,7 +136,9 @@ CREATE TABLE detalle_venta (
     costo_unitario      REAL NOT NULL CHECK (costo_unitario >= 0),   -- costo al momento de la venta
     subtotal            REAL NOT NULL,                               -- precio_unitario * cantidad
     ganancia_linea      REAL NOT NULL,                               -- (precio_unitario - costo_unitario) * cantidad
-    descripcion         TEXT                                         -- nota corta de la línea (hasta 100 caracteres, opcional)
+    descripcion         TEXT,                                        -- nota corta de la línea (hasta 100 caracteres, opcional)
+    unidad              TEXT,                                        -- Venta Entero/Fracción: unidad de la línea ('Caja'); NULL = línea de siempre
+    factor_stock        INTEGER NOT NULL DEFAULT 1 CHECK (factor_stock >= 1)  -- unidades base que mueve UNA unidad de esta línea (12 la caja, 1 la fracción)
 );
 
 CREATE INDEX idx_detalle_venta_venta     ON detalle_venta(venta_id);
@@ -257,7 +267,9 @@ CREATE TABLE detalle_compra (
     cantidad            REAL NOT NULL CHECK (cantidad > 0),
     costo_unitario      REAL NOT NULL CHECK (costo_unitario >= 0),
     subtotal            REAL NOT NULL,
-    descripcion         TEXT                                         -- nota corta de la línea (hasta 100 caracteres, opcional)
+    descripcion         TEXT,                                        -- nota corta de la línea (hasta 100 caracteres, opcional)
+    unidad              TEXT,                                        -- Venta Entero/Fracción: unidad de la línea ('Caja'); NULL = línea de siempre
+    factor_stock        INTEGER NOT NULL DEFAULT 1 CHECK (factor_stock >= 1)  -- unidades base que mueve UNA unidad de esta línea (12 la caja, 1 la fracción)
 );
 
 CREATE INDEX idx_detalle_compra_compra ON detalle_compra(compra_id);

@@ -15,15 +15,7 @@ import { TarjetaParaHoy } from '@/components/tarjeta-para-hoy';
 import { CLAVE_ULTIMO_RESPALDO_MANUAL, construirParaHoy, estadoRespaldo, type PendienteHoy } from '@/core/para-hoy';
 import { sumarDias } from '@/core/fiados-compromiso';
 import { GraficoVentas } from '@/components/grafico-ventas';
-import {
-  mejorDia,
-  productoMasVendido,
-  textoCantidad,
-  totalDeLosDias,
-  ventasUltimosDias,
-  type DiaVentas,
-  type ProductoMasVendido,
-} from '@/core/ventas-semana';
+import { mejorDia, totalDeLosDias, ventasPorMes, ventasUltimosDias, type DiaVentas } from '@/core/ventas-semana';
 import { leerConfigBackupAutomatico } from '@/infraestructura/backup-automatico/config';
 import { Monto } from '@/components/ui/monto';
 import { hoyLocalSql } from '@/core/tiempo';
@@ -53,7 +45,9 @@ export default function PaginaInicio() {
   const [paraHoy, setParaHoy] = useState<PendienteHoy[] | null>(null);
   // Ventas de los últimos 7 días (gráfico) y producto más vendido de hoy.
   const [diasSemana, setDiasSemana] = useState<DiaVentas[] | null>(null);
-  const [masVendidoHoy, setMasVendidoHoy] = useState<ProductoMasVendido | null>(null);
+  const [mesesAnio, setMesesAnio] = useState<DiaVentas[] | null>(null);
+  // Qué muestra el gráfico: los últimos 7 días o los 12 meses del año.
+  const [vistaGrafico, setVistaGrafico] = useState<'dias' | 'meses'>('dias');
 
   // Gesto secreto: tocar 5 veces el título entra al panel de administrador.
   // No aparece en ningún menú a propósito — es solo para el dueño de la app.
@@ -85,16 +79,10 @@ export default function PaginaInicio() {
     // «Para hoy»: fiados vencidos (F1), compromisos de pago pasados (F4), stock bajo y respaldo pendiente.
     const hoy = hoyLocalSql();
 
-    // Gráfico de los últimos 7 días y producto más vendido de hoy (solo ventas no anuladas).
+    // Gráfico de los últimos 7 días y de los 12 meses del año (solo ventas no anuladas).
     const ventasSemana = contenedor.ventas.listarPorRangoConDetalle(sumarDias(hoy, -6), hoy);
     setDiasSemana(ventasUltimosDias(ventasSemana, hoy));
-    setMasVendidoHoy(
-      productoMasVendido(
-        ventasSemana
-          .filter((v) => !v.anulada && v.fechaHora.startsWith(hoy))
-          .flatMap((v) => contenedor.ventas.obtenerLineas(v.id)),
-      ),
-    );
+    setMesesAnio(ventasPorMes(contenedor.ventas.totalesPorMes(hoy.slice(0, 4)), hoy));
 
     const configBackup = leerConfigBackupAutomatico(contenedor);
     setParaHoy(
@@ -113,6 +101,9 @@ export default function PaginaInicio() {
   }
 
   useEffect(recargar, [contenedor]);
+
+  // Las barras que se ven según el periodo elegido.
+  const barras = (vistaGrafico === 'dias' ? diasSemana : mesesAnio) ?? [];
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-app flex-col">
@@ -194,25 +185,43 @@ export default function PaginaInicio() {
               {paraHoy && <TarjetaParaHoy pendientes={paraHoy} />}
             </section>
 
-            {/* Ventas de los últimos 7 días + producto más vendido de hoy */}
-            {diasSemana && (
-              <section aria-label="Ventas de los últimos 7 días" className="mt-6">
-                {/* Título, texto y «Ver gráfico» dentro de las mismas dos líneas horizontales */}
+            {/* Ventas de los últimos 7 días o por mes, a elección */}
+            {diasSemana && mesesAnio && (
+              <section aria-label="Ventas" className="mt-6">
+                {/* Título, texto, selector de periodo y «Ver gráfico» dentro de las mismas dos líneas horizontales */}
                 <div className="border-y border-linea py-3">
-                  <h2 className="text-sm font-bold text-bodega-oscuro">Ventas de los últimos 7 días</h2>
-                  {totalDeLosDias(diasSemana) > 0 ? (
+                  <div className="flex items-start justify-between gap-3">
+                    <h2 className="min-w-0 text-sm font-bold text-bodega-oscuro">
+                      {vistaGrafico === 'dias' ? 'Ventas de los últimos 7 días' : `Ventas por mes de ${hoyLocalSql().slice(0, 4)}`}
+                    </h2>
+                    <select
+                      value={vistaGrafico}
+                      onChange={(e) => setVistaGrafico(e.target.value === 'meses' ? 'meses' : 'dias')}
+                      aria-label="Periodo del gráfico de ventas"
+                      className="h-8 shrink-0 rounded-lg border border-linea bg-papel px-2 text-xs font-semibold text-tinta"
+                    >
+                      <option value="dias">Últimos 7 días</option>
+                      <option value="meses">Ventas por mes</option>
+                    </select>
+                  </div>
+                  {totalDeLosDias(barras) > 0 ? (
                     <p className="mt-0.5 text-xs text-tinta-suave">
-                      Total {formatearMonto(totalDeLosDias(diasSemana), simboloMoneda)}
-                      {mejorDia(diasSemana) && (
+                      Total {formatearMonto(totalDeLosDias(barras), simboloMoneda)}
+                      {mejorDia(barras) && (
                         <>
                           {' '}
-                          · Mejor día: {mejorDia(diasSemana)?.esHoy ? 'hoy' : mejorDia(diasSemana)?.etiqueta}{' '}
-                          {formatearMonto(mejorDia(diasSemana)?.total ?? 0, simboloMoneda)}
+                          · {vistaGrafico === 'dias' ? 'Mejor día' : 'Mejor mes'}:{' '}
+                          {mejorDia(barras)?.esHoy && vistaGrafico === 'dias'
+                            ? 'hoy'
+                            : (mejorDia(barras)?.nombre ?? mejorDia(barras)?.etiqueta)}{' '}
+                          {formatearMonto(mejorDia(barras)?.total ?? 0, simboloMoneda)}
                         </>
                       )}
                     </p>
                   ) : (
-                    <p className="mt-0.5 text-xs text-tinta-suave">Aquí verás cómo van tus ventas día a día.</p>
+                    <p className="mt-0.5 text-xs text-tinta-suave">
+                      {vistaGrafico === 'dias' ? 'Aquí verás cómo van tus ventas día a día.' : 'Aquí verás cómo van tus ventas mes a mes.'}
+                    </p>
                   )}
                   <button
                     type="button"
@@ -226,22 +235,12 @@ export default function PaginaInicio() {
                     </span>
                   </button>
                   {graficoAbierto && (
-                    <div className="mt-3">
-                      <GraficoVentas dias={diasSemana} simboloMoneda={simboloMoneda} />
+                    <div className="mt-3 rounded-xl border border-linea p-3">
+                      {/* key: al cambiar de periodo el gráfico empieza de cero (sin mensaje abierto) */}
+                      <GraficoVentas key={vistaGrafico} barras={barras} simboloMoneda={simboloMoneda} periodo={vistaGrafico} />
                     </div>
                   )}
                 </div>
-                {masVendidoHoy && (
-                  <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-linea px-4 py-3">
-                    <div className="min-w-0">
-                      <p className="text-xs text-tinta-suave">Más vendido hoy</p>
-                      <p className="truncate text-sm font-semibold text-tinta">{masVendidoHoy.producto}</p>
-                    </div>
-                    <p className="shrink-0 text-sm font-bold text-bodega-oscuro">
-                      {textoCantidad(masVendidoHoy.cantidad)} {masVendidoHoy.cantidad === 1 ? 'vendido' : 'vendidos'}
-                    </p>
-                  </div>
-                )}
               </section>
             )}
           </>

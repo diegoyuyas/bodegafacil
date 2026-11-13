@@ -31,24 +31,24 @@ afirmar(pagina.includes('pb-[calc(10rem+var(--area-segura-abajo))]'), 'Queda esp
 const iLista = pagina.indexOf('{carrito.map((linea) => {');
 const iFinLista = pagina.indexOf('{errorCalculo &&', iLista);
 const linea = pagina.slice(iLista, iFinLista);
-afirmar(linea.includes('text-lg font-bold text-tinta">{linea.nombre}') && linea.includes('c/u</p>'), 'La línea muestra el nombre grande y el precio por unidad');
+afirmar(linea.includes('text-lg font-bold text-tinta">{linea.nombre}') && linea.includes("c/u`"), 'La línea muestra el nombre grande y el precio por unidad');
 afirmar((linea.match(/h-11 w-11/g) ?? []).length >= 3, '−, + y ✕ miden 44 px (fáciles de tocar)');
 afirmar(linea.includes('h-11 w-14') && linea.includes("aria-label={`Cantidad de ${linea.nombre}`}") && linea.includes('escribirCantidad(linea, e.target.value)'), 'La cantidad se sigue pudiendo escribir a mano');
-afirmar(linea.includes('text-xl font-extrabold text-tinta') && linea.includes('linea.precioVenta * linea.cantidad'), 'El subtotal de la línea va a la derecha, en grande');
-const iSubtotal = linea.indexOf('linea.precioVenta * linea.cantidad');
+afirmar(linea.includes('text-xl font-extrabold text-tinta') && linea.includes('subtotalLinea(linea)'), 'El subtotal de la línea va a la derecha, en grande');
+const iSubtotal = linea.indexOf('subtotalLinea(linea)');
 const iEditar = linea.indexOf('Editar precio o nota');
 afirmar(iEditar > iSubtotal, 'Debajo del subtotal queda el enlace «Editar precio o nota»');
-afirmar(linea.includes('(precioEditable || descripcionActiva) &&'), 'El enlace solo aparece si «Precio editable al vender» o «Descripción» están activos');
+afirmar(linea.includes('(puedeEditarPrecio || descripcionActiva) &&'), 'El enlace solo aparece si «Precio editable al vender» o «Descripción» están activos');
 afirmar(linea.includes('setLineaEditandoId(editando ? null : linea.productoId)') && linea.includes('{editando && ('), 'El precio y la nota quedan ocultos hasta tocar el enlace');
 const iPanel = linea.indexOf('{editando && (');
 const panel = linea.slice(iPanel);
-afirmar(panel.includes('{precioEditable && (') && panel.includes('cambiarPrecioLinea(linea.productoId') && panel.includes('{descripcionActiva && (') && panel.includes('cambiarDescripcion(linea.productoId'), 'Al abrirlo se puede editar el precio y la descripción, igual que antes');
+afirmar(panel.includes('{puedeEditarPrecio && (') && panel.includes('cambiarPrecioLinea(linea.productoId') && panel.includes('{descripcionActiva && (') && panel.includes('cambiarDescripcion(linea.productoId'), 'Al abrirlo se puede editar el precio y la descripción, igual que antes');
 afirmar(panel.includes('h-10 w-full rounded-lg border border-linea px-3 text-sm') && !panel.includes('mt-1.5 h-8 w-full'), 'La descripción ocupa todo el ancho (ya no se corta «Descripción (opciona…»)');
 afirmar(linea.includes("!editando && linea.descripcion.trim() !== ''"), 'Si la línea ya tiene nota, se ve escrita aunque el panel esté cerrado');
 afirmar(!linea.slice(0, iEditar).includes('type="number"'), 'El campo de precio ya no está siempre visible en la línea');
 
 // ---- Lo demás no se tocó
-afirmar(pagina.includes("construirVenta(") && pagina.includes('precioUnitario: precioEditable ? l.precioVenta : undefined,'), 'El cálculo y el precio por línea siguen igual');
+afirmar(pagina.includes("construirVentaFraccion(") && (pagina.match(/lineasDeVentaDesdeCarrito\(carrito, \{ precioEditable, descripcionActiva \}\)/g) ?? []).length === 2, 'El cálculo y lo que se guarda usan las mismas líneas (precio por línea como siempre)');
 afirmar(pagina.includes('Método de pago') && pagina.includes("'(opcional)'") && pagina.includes('Buscar o escribir el nombre del cliente'), 'Forma de pago y cliente siguen donde estaban');
 
 console.log('🎉 Todas las pruebas de la Etapa 1 de Nueva venta pasaron.');

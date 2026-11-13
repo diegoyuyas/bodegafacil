@@ -5,6 +5,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { usarSesion } from '@/components/sesion-usuario';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
+import { sufijoUnidad, textoUnidad } from '@/core/unidades';
+import {
+  configuracionFraccionDeProducto,
+  formatearPrecioFraccion,
+  textoCantidadFraccion,
+  textoStockConUnidad,
+} from '@/core/venta-fraccion';
 import type { EstadoPlan } from '@/core/plan';
 import type { FotoPagoFiado, RegistroBitacoraAnulacionPago } from '@/core/tipos';
 import type {
@@ -161,6 +168,7 @@ export default function PaginaReportes() {
   // Costos (que solo se muestra con Premium activo).
   const [busquedaProductoKardex, setBusquedaProductoKardex] = useState('');
   const [productoElegidoKardex, setProductoElegidoKardex] = useState<Producto | null>(null);
+  const configuracionKardex = productoElegidoKardex ? configuracionFraccionDeProducto(productoElegidoKardex, true) : null;
   const [movimientosKardex, setMovimientosKardex] = useState<MovimientoInventarioItem[]>([]);
 
   useEffect(() => {
@@ -441,7 +449,11 @@ export default function PaginaReportes() {
     }
     if (pestana === 'kardex') {
       if (!productoElegidoKardex || movimientosKardex.length === 0) return;
-      const hoja = construirHojaKardex(productoElegidoKardex.nombre, movimientosKardex);
+      const hoja = construirHojaKardex(
+        productoElegidoKardex.nombre,
+        movimientosKardex,
+        configuracionKardex ? configuracionKardex.unidadFraccion : null,
+      );
       const libro = generarLibroExcel([hoja]);
       await descargarExcel(`kardex-${productoElegidoKardex.nombre}-${desde}-a-${hasta}.xlsx`, libro);
       return;
@@ -635,7 +647,8 @@ export default function PaginaReportes() {
                         {venta.lineas.map((linea, i) => (
                           <div key={i}>
                             <p className="text-xs text-tinta-suave">
-                              {linea.cantidad} × {linea.producto} —{' '}
+                              {linea.cantidad}
+                              {sufijoUnidad(linea.unidad, linea.cantidad)} × {linea.producto} —{' '}
                               {formatearMonto(linea.subtotal, simboloMoneda)}
                             </p>
                             {linea.descripcion && (
@@ -780,7 +793,8 @@ export default function PaginaReportes() {
                         {compra.lineas.map((linea, i) => (
                           <div key={i}>
                             <p className="text-xs text-tinta-suave">
-                              {linea.cantidad} × {linea.producto} — {formatearMonto(linea.subtotal, simboloMoneda)}
+                              {linea.cantidad}
+                              {sufijoUnidad(linea.unidad, linea.cantidad)} × {linea.producto} — {formatearMonto(linea.subtotal, simboloMoneda)}
                             </p>
                             {linea.descripcion && (
                               <p className="break-words pl-3 text-xs text-tinta-suave">{linea.descripcion}</p>
@@ -858,7 +872,7 @@ export default function PaginaReportes() {
                         <div className="min-w-0">
                           <p className="truncate text-sm text-tinta">{item.nombre}</p>
                           <p className="text-xs text-tinta-suave">
-                            {item.cantidadVendida} vendidas · ganancia {formatearMonto(item.gananciaTotal, simboloMoneda)}
+                            {item.cantidadTexto ?? item.cantidadVendida} vendidas · ganancia {formatearMonto(item.gananciaTotal, simboloMoneda)}
                           </p>
                         </div>
                       </div>
@@ -907,7 +921,7 @@ export default function PaginaReportes() {
                         <div className="min-w-0">
                           <p className="truncate text-sm text-tinta">{item.nombre}</p>
                           <p className="text-xs text-tinta-suave">
-                            {item.cantidadVendida} vendidas · costo {formatearMonto(item.costoTotal, simboloMoneda)} ·
+                            {item.cantidadTexto ?? item.cantidadVendida} vendidas · costo {formatearMonto(item.costoTotal, simboloMoneda)} ·
                             margen {item.margenPorcentaje.toFixed(1)}%
                           </p>
                         </div>
@@ -1189,12 +1203,14 @@ export default function PaginaReportes() {
                                   {item.proveedorNombre ?? 'Proveedor no especificado'}
                                 </span>
                                 <span className="font-semibold text-tinta">
-                                  {formatearMonto(item.costoUnitario, simboloMoneda)} c/u
+                                  {item.unidad
+                                    ? `${formatearPrecioFraccion(item.costoUnitario, simboloMoneda)} por ${textoUnidad(item.unidad, 1)}`
+                                    : `${formatearMonto(item.costoUnitario, simboloMoneda)} c/u`}
                                 </span>
                               </div>
                               <p className="mt-0.5 text-xs text-tinta-suave">
                                 {new Date(item.fecha).toLocaleDateString('es-PE')} · {item.cantidad}{' '}
-                                {productoElegido.unidadMedida} · C-{item.compraId}
+                                {item.unidad ? textoUnidad(item.unidad, item.cantidad) : productoElegido.unidadMedida} · C-{item.compraId}
                               </p>
                             </li>
                           ))}
@@ -1214,7 +1230,7 @@ export default function PaginaReportes() {
                     <div>
                       <p className="text-sm text-tinta">{productoElegidoKardex.nombre}</p>
                       <p className="text-xs text-tinta-suave">
-                        Stock actual: {productoElegidoKardex.stockActual} {productoElegidoKardex.unidadMedida}
+                        Stock actual: {textoStockConUnidad(productoElegidoKardex)}
                       </p>
                     </div>
                     <button
@@ -1242,9 +1258,7 @@ export default function PaginaReportes() {
                               className="flex w-full items-center justify-between px-4 py-3 text-left text-sm"
                             >
                               <span>{producto.nombre}</span>
-                              <span className="text-tinta-suave">
-                                {producto.stockActual} {producto.unidadMedida}
-                              </span>
+                              <span className="text-tinta-suave">{textoStockConUnidad(producto)}</span>
                             </button>
                           </li>
                         ))}
@@ -1270,12 +1284,14 @@ export default function PaginaReportes() {
                     <ul className="mt-4 divide-y divide-linea border-y border-linea">
                       {movimientosKardex.map((m) => {
                         const { entrada, salida } = desglosarMovimientoInventario(m);
+                        // Producto por fracciones: el Kardex está en la unidad más pequeña y se lee en cajas y unidades.
+                        const textoMov = (n: number) => (configuracionKardex ? textoCantidadFraccion(n, configuracionKardex) : String(n));
                         return (
                           <li key={m.id} className="py-3">
                             <div className="flex items-center justify-between text-sm">
                               <span className="text-tinta/80">{ETIQUETAS_TIPO_MOVIMIENTO_KARDEX[m.tipo]}</span>
                               <span className="font-semibold text-tinta">
-                                {entrada !== null ? `+${entrada}` : `-${salida}`} → saldo {m.stockResultante}
+                                {entrada !== null ? `+${textoMov(entrada)}` : `-${textoMov(salida ?? 0)}`} → saldo {textoMov(m.stockResultante)}
                               </span>
                             </div>
                             <p className="mt-0.5 text-xs text-tinta-suave">

@@ -188,6 +188,18 @@ const MIGRACIONES: string[] = [
   // 0040: fecha en que el cliente se comprometió a pagar su deuda ('YYYY-MM-DD'). NULL = sin compromiso.
   // Se borra sola cuando el cliente queda sin deuda. Columna nueva de una tabla existente: SIN REFERENCES.
   `ALTER TABLE cliente ADD COLUMN fecha_compromiso TEXT;`,
+  // 0041: Venta Entero/Fracción — datos de fracción del producto. Todos los productos que ya existían quedan en
+  // forma 'entero' (se venden como siempre). Columnas nuevas de una tabla existente: SIN REFERENCES.
+  `ALTER TABLE producto ADD COLUMN forma_venta TEXT NOT NULL DEFAULT 'entero' CHECK (forma_venta IN ('entero','fraccion'));`,
+  `ALTER TABLE producto ADD COLUMN unidad_entera TEXT;`,
+  `ALTER TABLE producto ADD COLUMN unidad_fraccion TEXT;`,
+  `ALTER TABLE producto ADD COLUMN factor_fraccion INTEGER CHECK (factor_fraccion IS NULL OR factor_fraccion >= 2);`,
+  `ALTER TABLE producto ADD COLUMN precio_fraccion REAL CHECK (precio_fraccion IS NULL OR precio_fraccion >= 0);`,
+  // 0042 y 0043: unidad de cada línea de venta/compra y cuántas unidades base mueve (las líneas de antes: sin unidad, factor 1).
+  `ALTER TABLE detalle_venta ADD COLUMN unidad TEXT;`,
+  `ALTER TABLE detalle_venta ADD COLUMN factor_stock INTEGER NOT NULL DEFAULT 1 CHECK (factor_stock >= 1);`,
+  `ALTER TABLE detalle_compra ADD COLUMN unidad TEXT;`,
+  `ALTER TABLE detalle_compra ADD COLUMN factor_stock INTEGER NOT NULL DEFAULT 1 CHECK (factor_stock >= 1);`,
 ];
 
 export function aplicarMigraciones(bd: BaseDatosLocal): void {

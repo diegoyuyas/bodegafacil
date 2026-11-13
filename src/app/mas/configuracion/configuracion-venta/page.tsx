@@ -9,6 +9,7 @@ import {
   CLAVE_MODO_VENTA_VOZ,
   CLAVE_NOTIFICAR_STOCK_BAJO,
   CLAVE_PRECIO_EDITABLE_VENTA,
+  CLAVE_VENTA_ENTERO_FRACCION,
   estaActivado,
   valorParaGuardar,
 } from '@/core/configuracion';
@@ -24,6 +25,7 @@ export default function PaginaConfiguracionVenta() {
   const [mensajePermiso, setMensajePermiso] = useState<string | null>(null);
   const [descripcionLineas, setDescripcionLineas] = useState(false);
   const [modoVentaVoz, setModoVentaVoz] = useState(false);
+  const [ventaEnteroFraccion, setVentaEnteroFraccion] = useState(false);
 
   useEffect(() => {
     if (!contenedor) return;
@@ -34,6 +36,7 @@ export default function PaginaConfiguracionVenta() {
     );
     setDescripcionLineas(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_DESCRIPCION_LINEAS)));
     setModoVentaVoz(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_MODO_VENTA_VOZ)));
+    setVentaEnteroFraccion(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_VENTA_ENTERO_FRACCION)));
   }, [contenedor]);
 
   const esPremium = estadoPlan?.tipo === 'premium';
@@ -43,6 +46,14 @@ export default function PaginaConfiguracionVenta() {
     const nuevoValor = !precioEditable;
     setPrecioEditable(nuevoValor);
     contenedor.configuracion.establecerValor(CLAVE_PRECIO_EDITABLE_VENTA, valorParaGuardar(nuevoValor));
+    await contenedor.persistir();
+  }
+
+  async function alternarVentaEnteroFraccion() {
+    if (!contenedor) return;
+    const nuevoValor = !ventaEnteroFraccion;
+    setVentaEnteroFraccion(nuevoValor);
+    contenedor.configuracion.establecerValor(CLAVE_VENTA_ENTERO_FRACCION, valorParaGuardar(nuevoValor));
     await contenedor.persistir();
   }
 
@@ -153,10 +164,12 @@ export default function PaginaConfiguracionVenta() {
         <li className="flex items-center justify-between gap-4 py-4">
           <div>
             <p className="text-sm font-semibold text-tinta">Activar Venta Entero/Fracción</p>
-            <p className="mt-0.5 text-xs text-tinta-suave">Vender productos por unidad completa o por fracciones.</p>
-            <p className="mt-1 text-xs font-semibold text-tinta-suave">Próximamente</p>
+            <p className="mt-0.5 text-xs text-tinta-suave">
+              Vender productos por unidad completa o por fracciones (por ejemplo, Caja y Unidad). Al crear un producto
+              eliges su forma de venta. Si lo apagas, todos se venden como enteros.
+            </p>
           </div>
-          <Interruptor activado={false} onChange={() => {}} disabled />
+          <Interruptor activado={ventaEnteroFraccion} onChange={alternarVentaEnteroFraccion} disabled={!contenedor} />
         </li>
       </ul>
     </div>

@@ -17,6 +17,11 @@ export interface FilaProducto {
   controla_stock: number;
   tipo: Producto['tipo'];
   unidad_medida: string;
+  forma_venta: string;
+  unidad_entera: string | null;
+  unidad_fraccion: string | null;
+  factor_fraccion: number | null;
+  precio_fraccion: number | null;
   alias: string | null;
   activo: number;
   creado_en: string;
@@ -36,6 +41,11 @@ export function mapearProducto(fila: FilaProducto): Producto {
     controlaStock: fila.controla_stock === 1,
     tipo: fila.tipo === 'insumo' ? 'insumo' : 'venta_compra',
     unidadMedida: fila.unidad_medida,
+    formaVenta: fila.forma_venta === 'fraccion' ? 'fraccion' : 'entero',
+    unidadEntera: fila.unidad_entera ?? null,
+    unidadFraccion: fila.unidad_fraccion ?? null,
+    factorFraccion: fila.factor_fraccion ?? null,
+    precioFraccion: fila.precio_fraccion ?? null,
     alias: fila.alias ?? null,
     activo: fila.activo === 1,
     creadoEn: fila.creado_en,

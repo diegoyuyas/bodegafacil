@@ -83,11 +83,10 @@ afirmar(tarjetaTxt.includes('<section aria-label="Pendientes" className="border-
 afirmar(tarjetaTxt.indexOf('>Pendientes</h2>') < tarjetaTxt.indexOf('textoResumenPendientes(pendientes.length)') && tarjetaTxt.indexOf('textoResumenPendientes(pendientes.length)') < tarjetaTxt.indexOf('{abierto && ('), 'Orden: título «Pendientes», debajo «Tienes N pendientes» y, al desplegar, el detalle');
 afirmar(!inicio.includes('pendientes de cobro</p>') && inicio.includes('totalPorCobrar: resumenDelDia.totalPorCobrar'), 'Inicio ya no muestra el monto por cobrar suelto: va dentro de los pendientes');
 
-// ---- «Ventas de los últimos 7 días»: título, texto y «Ver gráfico» dentro de las mismas líneas
-const iTitulo = inicio.indexOf('Ventas de los últimos 7 días</h2>');
+// ---- «Ventas de los últimos 7 días / por mes»: título, selector, texto y «Ver gráfico» dentro de las mismas líneas
+const iTitulo = inicio.indexOf("'Ventas de los últimos 7 días'");
 const iVer = inicio.indexOf('<span>Ver gráfico</span>');
 const iGrafico = inicio.indexOf('graficoAbierto && (');
-const iMasVendido = inicio.indexOf('Más vendido hoy');
-afirmar(iTitulo > 0 && inicio.slice(Math.max(0, iTitulo - 200), iTitulo).includes('border-y border-linea') && iTitulo < iVer && iVer < iGrafico && iGrafico < iMasVendido, 'Título, texto y «Ver gráfico» comparten las mismas líneas horizontales; el gráfico se abre dentro de ellas y «Más vendido hoy» queda debajo');
+afirmar(iTitulo > 0 && inicio.slice(Math.max(0, iTitulo - 600), iTitulo).includes('border-y border-linea') && iTitulo < iVer && iVer < iGrafico && !inicio.includes('Más vendido hoy'), 'Título, selector, texto y «Ver gráfico» comparten las mismas líneas horizontales; el gráfico se abre dentro de ellas y ya no hay «Más vendido hoy»');
 
 console.log('🎉 Todas las pruebas de V4a pasaron.');

@@ -42,12 +42,12 @@ const COLUMNAS_DE_MIGRACIONES: Record<string, string[]> = {
   cliente: ['documento', 'ultimo_recordatorio_en', 'fecha_compromiso'], // 0001, 0039, 0040
   proveedor: ['ruc'], // 0002
   compra: ['proveedor_nombre_libre', 'comprobante', 'metodo_pago', 'motivo_anulacion', 'usuario_id', 'anulada_por', 'fecha_anulacion', 'modificada_por', 'fecha_modificacion'], // 0002, 0006, 0019, 0026-0029
-  producto: ['controla_stock', 'tipo', 'alias'], // 0003, 0014, 0016
+  producto: ['controla_stock', 'tipo', 'alias', 'forma_venta', 'unidad_entera', 'unidad_fraccion', 'factor_fraccion', 'precio_fraccion'], // 0003, 0014, 0016, 0041
   venta: ['telefono_whatsapp', 'comprobante_pago_ruta', 'cliente_nombre_libre', 'usuario_id', 'anulada_por', 'fecha_anulacion', 'tipo_comprobante', 'serie', 'numero_comprobante'], // 0004, 0005, 0015, 0018, 0024-0025, 0031-0033
   movimiento_caja: ['compra_id', 'cliente_id', 'clase', 'abono_id', 'pago_anulado', 'usuario_id'], // 0007, 0011, 0012, 0020
   pago_deuda: ['foto_ruta', 'abono_id', 'anulado', 'motivo_anulacion', 'fecha_anulacion', 'usuario_id', 'anulado_por'], // 0008, 0010, 0021, 0030
-  detalle_venta: ['descripcion'], // 0013
-  detalle_compra: ['descripcion'], // 0013
+  detalle_venta: ['descripcion', 'unidad', 'factor_stock'], // 0013, 0042
+  detalle_compra: ['descripcion', 'unidad', 'factor_stock'], // 0013, 0043
 };
 
 const localizarArchivo = () => path.join(__dirname, '..', 'node_modules', 'sql.js', 'dist', 'sql-wasm.wasm');
@@ -117,6 +117,11 @@ async function main() {
   afirmar(productoViejo?.tipo === 'venta_compra', "Su tipo queda en 'venta_compra' (valor por defecto)");
   afirmar(productoViejo?.controlaStock === true, 'Sigue controlando stock (valor por defecto)');
   afirmar(productoViejo?.stockActual === 10, 'Su stock no cambió');
+  afirmar(productoViejo?.formaVenta === 'entero', "Su forma de venta queda en 'entero' (se vende como siempre)");
+  afirmar(
+    productoViejo?.unidadEntera === null && productoViejo.unidadFraccion === null && productoViejo.factorFraccion === null && productoViejo.precioFraccion === null,
+    'Sus datos de fracción quedan en null (no los tenía) y no revienta',
+  );
 
   const proveedor = bd.consultar<{ nombre: string; ruc: string | null }>('SELECT nombre, ruc FROM proveedor WHERE id = 1')[0];
   afirmar(proveedor?.nombre === 'Proveedor viejo' && proveedor.ruc === null, 'El proveedor viejo sigue ahí con RUC null');
@@ -146,6 +151,8 @@ async function main() {
 
   const detalle = bd.consultar<{ cantidad: number; descripcion: string | null }>('SELECT cantidad, descripcion FROM detalle_venta WHERE id = 1')[0];
   afirmar(detalle?.cantidad === 2 && detalle.descripcion === null, 'El detalle de la venta vieja sigue ahí');
+  const detalleFraccion = bd.consultar<{ unidad: string | null; factor_stock: number }>('SELECT unidad, factor_stock FROM detalle_venta WHERE id = 1')[0];
+  afirmar(detalleFraccion?.unidad === null && detalleFraccion.factor_stock === 1, 'La línea de venta vieja queda sin unidad y con factor_stock 1 (mueve el stock como siempre)');
 
   const caja = bd.consultar<{ concepto: string; clase: string }>('SELECT concepto, clase FROM movimiento_caja ORDER BY id');
   afirmar(caja[0]?.clase === 'normal', "Un movimiento de caja normal queda como 'normal'");

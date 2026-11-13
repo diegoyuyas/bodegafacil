@@ -4,10 +4,19 @@ import type { RegistroActividad } from '@/core/actividad';
 import { aMayusculas, partirAlias, unirAlias } from '@/core/texto';
 import type {
   CampoHistorialProducto,
+  FormaVenta,
   HistorialProductoItem,
   MovimientoInventarioItem,
   Producto,
 } from '@/core/tipos';
+import { buscarUnidad, textoUnidad } from '@/core/unidades';
+import {
+  configuracionFraccionDeProducto,
+  convertirAEntero,
+  convertirAFracciones,
+  textoCantidadFraccion,
+  validarConfiguracionFraccion,
+} from '@/core/venta-fraccion';
 import { ahoraLocalSql } from '@/core/tiempo';
 import type { BaseDatosLocal } from './base-datos';
 import { mapearMovimientoInventario, mapearProducto, type FilaMovimientoInventario, type FilaProducto } from './mapeadores';
@@ -27,8 +36,15 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
   listarActivosParaVenta(): Producto[] {
     return this.bd
       .consultar<FilaProducto>(
-        "SELECT * FROM producto WHERE activo = 1 AND tipo = 'venta_compra' ORDER BY nombre",
+        // Sin los productos por fracciones: este listado lo usa la venta por voz, que todavía no sabe pedir cajas o unidades.
+        "SELECT * FROM producto WHERE activo = 1 AND tipo = 'venta_compra' AND forma_venta = 'entero' ORDER BY nombre",
       )
+      .map(mapearProducto);
+  }
+
+  listarActivosParaVentaConFracciones(): Producto[] {
+    return this.bd
+      .consultar<FilaProducto>("SELECT * FROM producto WHERE activo = 1 AND tipo = 'venta_compra' ORDER BY nombre")
       .map(mapearProducto);
   }
 
@@ -43,7 +59,7 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
     return this.bd
       .consultar<FilaProducto>(
         `SELECT * FROM producto
-         WHERE activo = 1 AND tipo = 'venta_compra' AND (nombre LIKE ? OR CAST(precio_venta AS TEXT) LIKE ?)
+         WHERE activo = 1 AND tipo = 'venta_compra' AND forma_venta = 'entero' AND (nombre LIKE ? OR CAST(precio_venta AS TEXT) LIKE ?)
          ORDER BY nombre LIMIT 20`,
         [patron, patron],
       )
@@ -68,8 +84,9 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
     if (esInsumo && datos.costo < 0) {
       throw new ErrorDeNegocio('El costo no puede ser negativo.');
     }
-    // Un insumo no se vende, así que nunca lleva alias.
+    // Un insumo no se vende, así que nunca lleva alias ni forma de venta por fracciones.
     const alias = esInsumo ? null : this.prepararAlias(datos.alias);
+    const fraccion = esInsumo ? null : this.prepararFraccion(datos);
 
     return this.bd.transaccion(() => {
       // Un insumo nunca lleva stock ni precio de venta: solo sirve para registrar compras.
@@ -77,11 +94,17 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
       const precioVenta = esInsumo ? 0 : datos.precioVenta;
       const stockInicial = controlaStock ? datos.stockActual : 0;
       const stockMinimoInicial = controlaStock ? datos.stockMinimo : 0;
+      // Por fracciones, el stock se lleva en la unidad más pequeña y siempre como número entero.
+      if (fraccion && controlaStock) {
+        this.exigirEnteroFraccion(stockInicial, 'El stock inicial', fraccion.unidadFraccion);
+        this.exigirEnteroFraccion(stockMinimoInicial, 'El stock mínimo', fraccion.unidadFraccion);
+      }
 
       this.bd.ejecutar(
         `INSERT INTO producto
-           (nombre, categoria_id, codigo, precio_venta, costo, stock_actual, stock_minimo, controla_stock, unidad_medida, tipo, alias)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (nombre, categoria_id, codigo, precio_venta, costo, stock_actual, stock_minimo, controla_stock, unidad_medida, tipo, alias,
+            forma_venta, unidad_entera, unidad_fraccion, factor_fraccion, precio_fraccion)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           nombreNormalizado,
           datos.categoriaId ?? null,
@@ -94,6 +117,11 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
           datos.unidadMedida,
           esInsumo ? 'insumo' : 'venta_compra',
           alias,
+          fraccion ? 'fraccion' : 'entero',
+          fraccion?.unidadEntera ?? null,
+          fraccion?.unidadFraccion ?? null,
+          fraccion?.factor ?? null,
+          fraccion?.precioFraccion ?? null,
         ],
       );
       const id = this.bd.ultimoIdInsertado();
@@ -109,6 +137,56 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
 
       return this.obtenerPorId(id);
     });
+  }
+
+  /**
+   * Valida y normaliza los datos de fracción. Devuelve null si el producto se vende en enteros (lo normal).
+   * Las unidades se guardan con el nombre de la lista ("Caja"), aunque lleguen en minúsculas.
+   */
+  private prepararFraccion(datos: {
+    formaVenta?: FormaVenta;
+    unidadEntera?: string | null;
+    unidadFraccion?: string | null;
+    factorFraccion?: number | null;
+    precioFraccion?: number | null;
+  }): { unidadEntera: string; unidadFraccion: string; factor: number; precioFraccion: number } | null {
+    if (datos.formaVenta !== 'fraccion') return null;
+    validarConfiguracionFraccion({
+      unidadEntera: datos.unidadEntera,
+      unidadFraccion: datos.unidadFraccion,
+      factor: datos.factorFraccion,
+      precioFraccion: datos.precioFraccion,
+    });
+    return {
+      unidadEntera: buscarUnidad(datos.unidadEntera)?.nombre ?? '',
+      unidadFraccion: buscarUnidad(datos.unidadFraccion)?.nombre ?? '',
+      factor: Number(datos.factorFraccion),
+      precioFraccion: Number(datos.precioFraccion),
+    };
+  }
+
+  /** En un producto por fracciones el stock se cuenta en unidades enteras de la fracción (sin decimales). */
+  private exigirEnteroFraccion(valor: number, etiqueta: string, unidadFraccion: string): void {
+    if (!Number.isInteger(valor) || valor < 0) {
+      throw new ErrorDeNegocio(`${etiqueta} debe ser un número entero de ${textoUnidad(unidadFraccion, 2)}.`);
+    }
+  }
+
+  /**
+   * ¿Se puede cambiar la forma de venta (Entero ↔ Fracciones)? Solo si el producto no tiene ventas ni compras (sus
+   * líneas guardan el stock que movieron en la unidad de entonces). Para volver de Fracciones a Entero tampoco puede
+   * tener ajustes de stock. Los datos de ventas y compras antiguos se podrán convertir en una etapa posterior.
+   */
+  puedeCambiarFormaVenta(id: number): boolean {
+    const producto = this.obtenerPorId(id);
+    if (this.contarFilas('detalle_venta', id) > 0 || this.contarFilas('detalle_compra', id) > 0) return false;
+    if (producto.formaVenta === 'fraccion' && this.contarFilas('movimiento_inventario', id) > 0) return false;
+    return true;
+  }
+
+  private contarFilas(tabla: 'detalle_venta' | 'detalle_compra' | 'movimiento_inventario', productoId: number): number {
+    const fila = this.bd.consultar<{ n: number }>(`SELECT COUNT(*) AS n FROM ${tabla} WHERE producto_id = ?`, [productoId])[0];
+    return fila?.n ?? 0;
   }
 
   /** Parte, normaliza (MAYÚSCULAS, sin repetidos) y valida los alias; devuelve el texto a guardar. */
@@ -150,15 +228,59 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
       );
     }
 
+    // Forma de venta. Si no se indica, se conserva la actual; un insumo siempre es Entero. Los datos de fracción que
+    // no lleguen se toman de los guardados (así editar solo el precio no obliga a mandar todo otra vez).
+    const formaNueva: FormaVenta = esInsumo ? 'entero' : (datos.formaVenta ?? actual.formaVenta);
+    const cambiaForma = formaNueva !== actual.formaVenta;
+    const fraccion =
+      formaNueva === 'fraccion'
+        ? this.prepararFraccion({
+            formaVenta: 'fraccion',
+            unidadEntera: datos.unidadEntera ?? actual.unidadEntera,
+            unidadFraccion: datos.unidadFraccion ?? actual.unidadFraccion,
+            factorFraccion: datos.factorFraccion ?? actual.factorFraccion,
+            precioFraccion: datos.precioFraccion ?? actual.precioFraccion,
+          })
+        : null;
+    if (cambiaForma && !esInsumo && !this.puedeCambiarFormaVenta(id)) {
+      throw new ErrorDeNegocio(
+        formaNueva === 'fraccion'
+          ? `"${actual.nombre}" ya tiene ventas o compras registradas: por ahora no se puede cambiar a venta por fracciones.`
+          : `"${actual.nombre}" ya tiene ventas, compras o ajustes de stock registrados: por ahora no se puede volver a Entero.`,
+      );
+    }
+
     return this.bd.transaccion(() => {
       const controlaStock = esInsumo ? false : datos.controlaStock;
       const precioVentaNuevo = esInsumo ? 0 : datos.precioVenta;
-      const stockMinimoNuevo = controlaStock ? datos.stockMinimo : 0;
+
+      // Stock y stock mínimo. Al CAMBIAR de forma se convierten solos (20 cajas → 240 unidades) y lo que venga en
+      // datos.stockMinimo se ignora; si no cambia la forma, el stock no se toca desde acá (eso es el Ajuste).
+      let stockNuevo = controlaStock ? actual.stockActual : 0;
+      let stockMinimoNuevo = controlaStock ? datos.stockMinimo : 0;
+      let motivoCambioForma: string | undefined;
+      if (controlaStock && cambiaForma && fraccion) {
+        const convertido = convertirAFracciones(actual.stockActual, actual.stockMinimo, fraccion.factor);
+        stockNuevo = convertido.stock;
+        stockMinimoNuevo = convertido.minimo;
+        motivoCambioForma = `Cambió a venta por fracciones: el stock pasó de ${textoUnidad(fraccion.unidadEntera, 2)} a ${textoUnidad(fraccion.unidadFraccion, 2)} (1 ${textoUnidad(fraccion.unidadEntera, 1)} = ${fraccion.factor})`;
+      } else if (controlaStock && cambiaForma && !esInsumo) {
+        const configuracionActual = configuracionFraccionDeProducto(actual, true);
+        if (configuracionActual) {
+          const convertido = convertirAEntero(actual.stockActual, actual.stockMinimo, configuracionActual);
+          stockNuevo = convertido.stock;
+          stockMinimoNuevo = convertido.minimo;
+          motivoCambioForma = `Volvió a venta por enteros: el stock pasó de ${textoUnidad(configuracionActual.unidadFraccion, 2)} a ${textoUnidad(configuracionActual.unidadEntera, 2)}`;
+        }
+      } else if (fraccion && controlaStock) {
+        this.exigirEnteroFraccion(stockMinimoNuevo, 'El stock mínimo', fraccion.unidadFraccion);
+      }
 
       this.bd.ejecutar(
         `UPDATE producto
            SET nombre = ?, categoria_id = ?, codigo = ?, precio_venta = ?, costo = ?,
                stock_minimo = ?, controla_stock = ?, unidad_medida = ?, activo = ?, tipo = ?, alias = ?,
+               forma_venta = ?, unidad_entera = ?, unidad_fraccion = ?, factor_fraccion = ?, precio_fraccion = ?,
                actualizado_en = datetime('now')
          WHERE id = ?`,
         [
@@ -173,14 +295,25 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
           datos.activo ? 1 : 0,
           tipoNuevo,
           aliasNuevo,
+          fraccion ? 'fraccion' : 'entero',
+          fraccion?.unidadEntera ?? null,
+          fraccion?.unidadFraccion ?? null,
+          fraccion?.factor ?? null,
+          fraccion?.precioFraccion ?? null,
           id,
         ],
       );
       // Si se desactivó el control de stock, el stock actual también vuelve a 0
       // (no tiene sentido dejar un número "colgado" que ya no se usa para nada).
-      const stockNuevo = controlaStock ? actual.stockActual : 0;
-      if (!controlaStock) {
-        this.actualizarStock(id, 0);
+      if (!controlaStock || stockNuevo !== actual.stockActual) {
+        this.actualizarStock(id, stockNuevo);
+      }
+      // Los ajustes de stock que ya tenía (Kardex) se pasan a la unidad más pequeña, para que sigan cuadrando.
+      if (cambiaForma && fraccion) {
+        this.bd.ejecutar(
+          `UPDATE movimiento_inventario SET cantidad = ROUND(cantidad * ?), stock_resultante = ROUND(stock_resultante * ?) WHERE producto_id = ?`,
+          [fraccion.factor, fraccion.factor, id],
+        );
       }
 
       // Bitácora: solo se deja constancia de lo que REALMENTE cambió.
@@ -197,9 +330,15 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
         this.registrarHistorial(id, 'stock_minimo', String(actual.stockMinimo), String(stockMinimoNuevo));
       }
       if (actual.stockActual !== stockNuevo) {
-        this.registrarHistorial(id, 'stock', String(actual.stockActual), String(stockNuevo));
+        this.registrarHistorial(id, 'stock', String(actual.stockActual), String(stockNuevo), motivoCambioForma);
       }
-      this.actividad?.registrar({ accion: 'producto_modificado', entidad: 'producto', entidadId: id, detalle: nombreNormalizado, permiso: 'gestionar_productos' });
+      this.actividad?.registrar({
+        accion: 'producto_modificado',
+        entidad: 'producto',
+        entidadId: id,
+        detalle: cambiaForma ? `${nombreNormalizado} (ahora se vende ${formaNueva === 'fraccion' ? 'por fracciones' : 'por enteros'})` : nombreNormalizado,
+        permiso: 'gestionar_productos',
+      });
 
       return this.obtenerPorId(id);
     });
@@ -218,6 +357,11 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
       if (producto.tipo === 'insumo') {
         throw new ErrorDeNegocio(`"${producto.nombre}" es un insumo: no registra stock, no se puede ajustar.`);
       }
+      // Por fracciones el stock se cuenta en la unidad más pequeña: el ajuste también va en números enteros.
+      const configuracionFraccion = configuracionFraccionDeProducto(producto, true);
+      if (configuracionFraccion && !Number.isInteger(delta)) {
+        throw new ErrorDeNegocio(`En este producto el ajuste debe ser en números enteros de ${textoUnidad(configuracionFraccion.unidadFraccion, 2)}.`);
+      }
       const stockNuevo = calcularStockNuevo(
         producto.stockActual,
         delta > 0 ? delta : 0,
@@ -235,7 +379,7 @@ export class ProductoRepositorioSqlite implements ProductoRepositorio {
         accion: 'stock_ajustado',
         entidad: 'producto',
         entidadId: id,
-        detalle: `${producto.nombre} (${delta > 0 ? '+' : ''}${delta})`,
+        detalle: `${producto.nombre} (${delta > 0 ? '+' : '-'}${configuracionFraccion ? textoCantidadFraccion(Math.abs(delta), configuracionFraccion) : Math.abs(delta)})`,
         permiso: 'gestionar_productos',
       });
       return this.obtenerPorId(id);

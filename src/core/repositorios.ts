@@ -28,6 +28,7 @@ import type {
   MetodoPagoSinFiado,
   MovimientoCaja,
   MovimientoInventarioItem,
+  FormaVenta,
   Producto,
   TipoProducto,
   ProductoMasVendidoItem,
@@ -53,6 +54,11 @@ export interface ProductoRepositorio {
   listarActivos(): Producto[];
   /** Solo los activos que se pueden vender (excluye los insumos). */
   listarActivosParaVenta(): Producto[];
+  /**
+   * Igual que listarActivosParaVenta, pero con los productos por fracciones. Solo lo usa Nueva venta (que sabe armarlos
+   * en dos casillas); la venta por voz sigue sin ofrecerlos hasta que aprenda a pedir cajas o unidades.
+   */
+  listarActivosParaVentaConFracciones(): Producto[];
   /** Para la pantalla de administración: incluye también los inactivos. */
   listarTodos(): Producto[];
   buscarPorNombre(texto: string): Producto[];
@@ -69,6 +75,11 @@ export interface ProductoRepositorio {
    * dejaría el stock en negativo o si no se da un motivo.
    */
   ajustarStock(id: number, delta: number, motivo: string): Producto;
+  /**
+   * ¿Se puede cambiar la forma de venta (Entero ↔ Fracciones)? No, si el producto ya tiene ventas o compras (para
+   * volver a Entero tampoco, si tiene ajustes de stock). Se usa para avisar antes de que el usuario intente guardar.
+   */
+  puedeCambiarFormaVenta(id: number): boolean;
   /** Kardex: movimientos de stock de un producto en un rango de fechas ('YYYY-MM-DD'), de más antiguo a más reciente. */
   listarMovimientosInventario(productoId: number, desde: string, hasta: string): MovimientoInventarioItem[];
   /**
@@ -94,6 +105,17 @@ export interface DatosNuevoProducto {
   tipo?: TipoProducto;
   /** Alias separados por coma (opcional). Se normalizan y validan al guardar; un insumo nunca lleva alias. */
   alias?: string | null;
+  /**
+   * Por defecto 'entero'. Con 'fraccion' el producto se vende en dos unidades (ej. Caja y Unidad) y hay que mandar las
+   * unidades, cuántas trae y el precio de la fracción. En ese caso stockActual y stockMinimo van YA en la unidad más
+   * pequeña (20 cajas y 8 unidades de 12 → 248) y como número entero; precioVenta y costo son los del ENTERO.
+   * Un insumo siempre es 'entero'.
+   */
+  formaVenta?: FormaVenta;
+  unidadEntera?: string | null;
+  unidadFraccion?: string | null;
+  factorFraccion?: number | null;
+  precioFraccion?: number | null;
 }
 
 export interface DatosActualizarProducto {
@@ -113,6 +135,17 @@ export interface DatosActualizarProducto {
    * (así no se pierden con el modo voz en OFF); null o '' los borra.
    */
   alias?: string | null;
+  /**
+   * Si no se indica, conserva la forma de venta actual (y los datos de fracción guardados). Cambiarla (Entero ↔
+   * Fracciones) solo se puede si el producto no tiene ventas ni compras; al cambiarla el stock y el stock mínimo se
+   * convierten solos y se IGNORA stockMinimo. Sin cambiar de forma, en un producto por fracciones stockMinimo va en
+   * la unidad más pequeña, como número entero.
+   */
+  formaVenta?: FormaVenta;
+  unidadEntera?: string | null;
+  unidadFraccion?: string | null;
+  factorFraccion?: number | null;
+  precioFraccion?: number | null;
 }
 
 export interface ClienteRepositorio {
@@ -214,6 +247,11 @@ export interface VentaRepositorio {
   listarDeHoyConDetalle(): VentaListaItem[];
   /** Para Inicio (Pedidos Generados): igual que listarDeHoyConDetalle pero con un rango de fechas 'YYYY-MM-DD' inclusive. */
   listarPorRangoConDetalle(desde: string, hasta: string): VentaListaItem[];
+  /**
+   * Para el gráfico «Ventas por mes» de Inicio: cuánto se vendió y cuántas ventas hubo en cada mes de un año ('YYYY'),
+   * sin contar las anuladas. Solo trae los meses con ventas; el mes es 'YYYY-MM'.
+   */
+  totalesPorMes(anio: string): { mes: string; total: number; numeroVentas: number }[];
   /** Para el preview al expandir una venta en la lista. */
   obtenerLineas(ventaId: number): LineaVentaResumen[];
   /** Líneas con precio unitario y subtotal, para armar el mensaje de WhatsApp de una venta. */
@@ -387,7 +425,12 @@ export interface DatosActualizarProveedor {
 
 export interface LineaCompraEntrada {
   productoId: number;
+  /**
+   * Cuántas unidades. Producto por fracciones: SIEMPRE el total en la unidad más pequeña (5 cajas de 12 → 60; 1 caja y
+   * 6 unidades → 18), esté o no encendido el interruptor; se guarda en una línea de cajas y otra de unidades.
+   */
   cantidad: number;
+  /** Costo de una unidad. Producto por fracciones: el costo de UN ENTERO (la caja); el de la unidad se calcula (÷ factor). */
   costoUnitario: number;
   /** Nota corta de la línea (hasta 100 caracteres). */
   descripcion?: string | null;

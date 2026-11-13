@@ -9,6 +9,14 @@ import type {
 } from '@/core/repositorios';
 import { ErrorDeNegocio, calcularStockNuevo, redondear, validarComprobante } from '@/core/reglas-negocio';
 import { ahoraLocalSql } from '@/core/tiempo';
+import {
+  armarLineasDeCompra,
+  colapsarLineasDeCompra,
+  configuracionFraccionDeProducto,
+  textoCantidadFraccion,
+  unidadesBaseDeLinea,
+  type LineaCompraArmada,
+} from '@/core/venta-fraccion';
 import type { Compra, CompraListaItem, HistorialCostoItem, MetodoPagoSinFiado } from '@/core/tipos';
 import type { FilaCompraDetallada } from '@/core/exportacion';
 import type { BaseDatosLocal } from './base-datos';
@@ -28,9 +36,7 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
    * siguen funcionando igual que con cualquier otra línea.
    */
   private normalizarLineas(lineas: LineaCompraEntrada[]): LineaCompraEntrada[] {
-    return lineas.map((l) =>
-      this.productos.obtenerPorId(l.productoId).tipo === 'insumo' ? { ...l, cantidad: 1 } : l,
-    );
+    return lineas.map((l) => (this.productos.obtenerPorId(l.productoId).tipo === 'insumo' ? { ...l, cantidad: 1 } : l));
   }
 
   registrarCompra(entrada: RegistrarCompraInput): Compra {
@@ -42,9 +48,12 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
       validarComprobante(input.comprobante);
     }
 
+    // Un producto por fracciones sale en 2 líneas (cajas y unidades); los demás en 1, como siempre.
+    const lineasArmadas = armarLineasDeCompra(input.lineas, (id) => this.productos.obtenerPorId(id));
+
     return this.bd.transaccion(() => {
       const total = redondear(
-        input.lineas.reduce((suma, l) => suma + l.cantidad * l.costoUnitario, 0),
+        lineasArmadas.reduce((suma, l) => suma + l.cantidad * l.costoUnitario, 0),
       );
 
       this.bd.ejecutar(
@@ -63,7 +72,7 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
       const compraId = this.bd.ultimoIdInsertado();
       this.actividad?.registrar({ accion: 'compra_registrada', entidad: 'compra', entidadId: compraId, detalle: `C-${compraId}`, permiso: 'registrar_compra' });
 
-      for (const linea of input.lineas) {
+      for (const linea of lineasArmadas) {
         this.aplicarLineaDeCompra(compraId, linea, 'compra');
       }
 
@@ -176,6 +185,7 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
         proveedor_nombre_guardado: string | null;
         producto: string;
         cantidad: number;
+        unidad: string | null;
         costo_unitario: number;
         subtotal: number;
         descripcion: string | null;
@@ -195,6 +205,7 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
            pv.nombre AS proveedor_nombre_guardado,
            p.nombre AS producto,
            dc.cantidad AS cantidad,
+           dc.unidad AS unidad,
            dc.costo_unitario AS costo_unitario,
            dc.subtotal AS subtotal,
            dc.descripcion AS descripcion,
@@ -223,6 +234,7 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
         proveedor: fila.proveedor_nombre_guardado ?? fila.proveedor_nombre_libre ?? 'Sin especificar',
         producto: fila.producto,
         cantidad: fila.cantidad,
+        unidad: fila.unidad,
         precioUnitario: fila.costo_unitario,
         subtotal: fila.subtotal,
         descripcion: fila.descripcion,
@@ -259,6 +271,7 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
         fecha: string;
         costo_unitario: number;
         cantidad: number;
+        unidad: string | null;
         proveedor_nombre_libre: string | null;
         proveedor_nombre_guardado: string | null;
       }>(
@@ -267,6 +280,7 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
            c.fecha AS fecha,
            dc.costo_unitario AS costo_unitario,
            dc.cantidad AS cantidad,
+           dc.unidad AS unidad,
            c.proveedor_nombre_libre AS proveedor_nombre_libre,
            pv.nombre AS proveedor_nombre_guardado
          FROM detalle_compra dc
@@ -280,6 +294,7 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
         fecha: fila.fecha,
         costoUnitario: fila.costo_unitario,
         cantidad: fila.cantidad,
+        unidad: fila.unidad,
         proveedorNombre: fila.proveedor_nombre_guardado ?? fila.proveedor_nombre_libre,
         compraId: fila.compra_id,
       }));
@@ -291,30 +306,45 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
     lineas: (LineaCompraEntrada & { nombreProducto: string })[];
   } {
     const compra = this.obtenerPorId(id);
-    const lineas = this.bd.consultar<{
+    const filas = this.bd.consultar<{
       producto_id: number;
       cantidad: number;
       costo_unitario: number;
       nombre: string;
       descripcion: string | null;
+      unidad: string | null;
+      factor_stock: number;
     }>(
       `SELECT dc.producto_id AS producto_id, dc.cantidad AS cantidad,
               dc.costo_unitario AS costo_unitario, p.nombre AS nombre,
-              dc.descripcion AS descripcion
+              dc.descripcion AS descripcion, dc.unidad AS unidad, dc.factor_stock AS factor_stock
          FROM detalle_compra dc
          JOIN producto p ON p.id = dc.producto_id
         WHERE dc.compra_id = ?
         ORDER BY dc.id`,
       [id],
     );
+    const nombres = new Map(filas.map((f) => [f.producto_id, f.nombre]));
+    // Las líneas de cajas y de unidades de un producto por fracciones vuelven a ser una (total en unidades base).
+    const colapsadas = colapsarLineasDeCompra(
+      filas.map((f) => ({
+        productoId: f.producto_id,
+        cantidad: f.cantidad,
+        costoUnitario: f.costo_unitario,
+        descripcion: f.descripcion,
+        unidad: f.unidad,
+        factorStock: f.factor_stock,
+      })),
+      (productoId) => this.productos.obtenerPorId(productoId).factorFraccion,
+    );
     return {
       compra,
-      lineas: lineas.map((l) => ({
-        productoId: l.producto_id,
+      lineas: colapsadas.map((l) => ({
+        productoId: l.productoId,
         cantidad: l.cantidad,
-        costoUnitario: l.costo_unitario,
+        costoUnitario: l.costoUnitario,
         descripcion: l.descripcion,
-        nombreProducto: l.nombre,
+        nombreProducto: nombres.get(l.productoId) ?? '',
       })),
     };
   }
@@ -337,6 +367,8 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
       validarComprobante(input.comprobante);
     }
 
+    const lineasArmadas = armarLineasDeCompra(input.lineas, (productoId) => this.productos.obtenerPorId(productoId));
+
     return this.bd.transaccion(() => {
       const actual = this.obtenerPorId(id);
       if (actual.estado === 'anulada') {
@@ -346,17 +378,18 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
       // Camino corto: si NO cambió ningún producto, cantidad, costo ni forma de pago (solo
       // descripciones, proveedor o comprobante), no se toca stock, Kardex ni Caja: no hay
       // nada que retirar y volver a meter. Se actualizan solo esos datos.
-      const detalleActual = this.bd.consultar<{ id: number; producto_id: number; cantidad: number; costo_unitario: number }>(
-        'SELECT id, producto_id, cantidad, costo_unitario FROM detalle_compra WHERE compra_id = ? ORDER BY id',
+      const detalleActual = this.bd.consultar<{ id: number; producto_id: number; cantidad: number; costo_unitario: number; unidad: string | null }>(
+        'SELECT id, producto_id, cantidad, costo_unitario, unidad FROM detalle_compra WHERE compra_id = ? ORDER BY id',
         [id],
       );
       const mismasLineas =
-        detalleActual.length === input.lineas.length &&
+        detalleActual.length === lineasArmadas.length &&
         detalleActual.every((d, i) => {
-          const n = input.lineas[i];
+          const n = lineasArmadas[i];
           return (
             !!n &&
             n.productoId === d.producto_id &&
+            n.unidad === d.unidad &&
             redondear(n.cantidad) === redondear(d.cantidad) &&
             redondear(n.costoUnitario) === redondear(d.costo_unitario)
           );
@@ -364,7 +397,7 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
       if (mismasLineas && (actual.metodoPago ?? 'efectivo') === input.metodoPago) {
         detalleActual.forEach((d, i) => {
           this.bd.ejecutar('UPDATE detalle_compra SET descripcion = ? WHERE id = ?', [
-            normalizarDescripcionLinea(input.lineas[i]?.descripcion),
+            normalizarDescripcionLinea(lineasArmadas[i]?.descripcion),
             d.id,
           ]);
         });
@@ -383,8 +416,8 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
         return this.obtenerPorId(id);
       }
 
-      const lineasAnteriores = this.bd.consultar<{ producto_id: number; cantidad: number }>(
-        'SELECT producto_id, cantidad FROM detalle_compra WHERE compra_id = ?',
+      const lineasAnteriores = this.bd.consultar<{ producto_id: number; cantidad: number; factor_stock: number }>(
+        'SELECT producto_id, cantidad, factor_stock FROM detalle_compra WHERE compra_id = ?',
         [id],
       );
 
@@ -393,12 +426,13 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
       // y volver a meter": si ya se vendió parte, retirar todo da negativo aunque el
       // resultado final sea correcto (ej. compra 500, vendí 2 → modificar a 450 es válido).
       const anteriorPorProducto = new Map<number, number>();
+      // Todo en la unidad del stock (una caja de 12 cuenta 12), para comparar con el stock actual.
       for (const l of lineasAnteriores) {
-        anteriorPorProducto.set(l.producto_id, redondear((anteriorPorProducto.get(l.producto_id) ?? 0) + l.cantidad));
+        anteriorPorProducto.set(l.producto_id, redondear((anteriorPorProducto.get(l.producto_id) ?? 0) + unidadesBaseDeLinea(l.cantidad, l.factor_stock)));
       }
       const nuevoPorProducto = new Map<number, number>();
-      for (const l of input.lineas) {
-        nuevoPorProducto.set(l.productoId, redondear((nuevoPorProducto.get(l.productoId) ?? 0) + l.cantidad));
+      for (const l of lineasArmadas) {
+        nuevoPorProducto.set(l.productoId, redondear((nuevoPorProducto.get(l.productoId) ?? 0) + unidadesBaseDeLinea(l.cantidad, l.factorStock)));
       }
       const idsProductos = new Set<number>([
         ...Array.from(anteriorPorProducto.keys()),
@@ -412,8 +446,10 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
         const stockFinal = redondear(producto.stockActual - anterior + nuevo);
         if (stockFinal < 0) {
           const minimo = redondear(anterior - producto.stockActual);
+          const configuracionFraccion = configuracionFraccionDeProducto(producto, true);
+          const textoMinimo = configuracionFraccion ? textoCantidadFraccion(minimo, configuracionFraccion) : `${minimo} unidades`;
           throw new ErrorDeNegocio(
-            `No se puede modificar: de "${producto.nombre}" ya salieron ${minimo} unidades de las que entraron en esta compra. La cantidad mínima es ${minimo}.`,
+            `No se puede modificar: de "${producto.nombre}" ya salieron ${textoMinimo} de las que entraron en esta compra. La cantidad mínima es ${textoMinimo}.`,
           );
         }
       });
@@ -425,13 +461,13 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
         .map((f) => f.id);
 
       const total = redondear(
-        input.lineas.reduce((suma, l) => suma + l.cantidad * l.costoUnitario, 0),
+        lineasArmadas.reduce((suma, l) => suma + l.cantidad * l.costoUnitario, 0),
       );
-      for (const linea of input.lineas) {
+      for (const linea of lineasArmadas) {
         this.aplicarLineaDeCompra(id, linea, 'modificacion');
       }
       for (const linea of lineasAnteriores) {
-        this.revertirLineaDeCompra(id, linea.producto_id, linea.cantidad, 'modificacion');
+        this.revertirLineaDeCompra(id, linea.producto_id, unidadesBaseDeLinea(linea.cantidad, linea.factor_stock), 'modificacion');
       }
       for (const detalleId of idsDetalleAnterior) {
         this.bd.ejecutar('DELETE FROM detalle_compra WHERE id = ?', [detalleId]);
@@ -489,12 +525,13 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
         throw new ErrorDeNegocio(`La compra C-${id} ya estaba anulada.`);
       }
 
-      const lineas = this.bd.consultar<{ producto_id: number; cantidad: number }>(
-        'SELECT producto_id, cantidad FROM detalle_compra WHERE compra_id = ?',
+      const lineas = this.bd.consultar<{ producto_id: number; cantidad: number; factor_stock: number }>(
+        'SELECT producto_id, cantidad, factor_stock FROM detalle_compra WHERE compra_id = ?',
         [id],
       );
       for (const linea of lineas) {
-        this.revertirLineaDeCompra(id, linea.producto_id, linea.cantidad, 'anulacion');
+        // Se retira lo que la línea hizo entrar: cantidad × unidades de stock que mueve cada una (caja de 12 → 12).
+        this.revertirLineaDeCompra(id, linea.producto_id, unidadesBaseDeLinea(linea.cantidad, linea.factor_stock), 'anulacion');
       }
 
       this.caja.registrarIngreso(
@@ -516,12 +553,12 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
   }
 
   /** Entra stock por una línea de compra (nueva o al reaplicar una modificación) y deja trazabilidad en movimiento_inventario. */
-  private aplicarLineaDeCompra(compraId: number, linea: LineaCompraEntrada, motivo: 'compra' | 'modificacion'): void {
+  private aplicarLineaDeCompra(compraId: number, linea: LineaCompraArmada, motivo: 'compra' | 'modificacion'): void {
     const subtotal = redondear(linea.cantidad * linea.costoUnitario);
 
     this.bd.ejecutar(
-      `INSERT INTO detalle_compra (compra_id, producto_id, cantidad, costo_unitario, subtotal, descripcion)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO detalle_compra (compra_id, producto_id, cantidad, costo_unitario, subtotal, descripcion, unidad, factor_stock)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         compraId,
         linea.productoId,
@@ -529,24 +566,29 @@ export class CompraRepositorioSqlite implements CompraRepositorio {
         linea.costoUnitario,
         subtotal,
         normalizarDescripcionLinea(linea.descripcion),
+        linea.unidad,
+        linea.factorStock,
       ],
     );
 
     const producto = this.productos.obtenerPorId(linea.productoId);
     // El costo puede cambiar de una compra a otra; se actualiza para
-    // que la ganancia de las próximas ventas sea correcta.
-    this.bd.ejecutar('UPDATE producto SET costo = ? WHERE id = ?', [linea.costoUnitario, producto.id]);
+    // que la ganancia de las próximas ventas sea correcta. En un producto por fracciones el costo del producto
+    // es el de UN entero (la caja), venga la línea en cajas o en unidades.
+    this.bd.ejecutar('UPDATE producto SET costo = ? WHERE id = ?', [linea.costoProducto, producto.id]);
     // Un insumo no registra stock ni movimientos de inventario: solo el costo.
     if (producto.tipo === 'insumo') return;
 
-    const stockNuevo = calcularStockNuevo(producto.stockActual, linea.cantidad, 0);
+    // El stock se lleva en la unidad más pequeña: una caja de 12 mete 12.
+    const entrada = unidadesBaseDeLinea(linea.cantidad, linea.factorStock);
+    const stockNuevo = calcularStockNuevo(producto.stockActual, entrada, 0);
     this.productos.actualizarStock(producto.id, stockNuevo);
 
     this.bd.ejecutar(
       `INSERT INTO movimiento_inventario
          (producto_id, tipo, cantidad, motivo, compra_id, stock_resultante, fecha_hora)
        VALUES (?, 'entrada', ?, ?, ?, ?, ?)`,
-      [linea.productoId, linea.cantidad, motivo, compraId, stockNuevo, ahoraLocalSql()],
+      [linea.productoId, entrada, motivo, compraId, stockNuevo, ahoraLocalSql()],
     );
   }
 

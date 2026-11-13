@@ -17,6 +17,7 @@ import {
 import { formatearMonto } from './moneda';
 import { redondear } from './reglas-negocio';
 import type { Cliente, DeudaPendienteDetalle, PagoFiado } from './tipos';
+import { sufijoUnidad } from './unidades';
 import { textoCantidad } from './ventas-semana';
 
 /** Para que la imagen no salga interminable: se muestran los últimos movimientos y lo anterior se resume en un saldo. */
@@ -66,7 +67,7 @@ function etiquetaMetodo(metodo: string): string {
 }
 
 function productosDe(d: DeudaPendienteDetalle): string {
-  return d.lineas.map((l) => `${textoCantidad(l.cantidad)} ${l.producto}`).join(', ');
+  return d.lineas.map((l) => `${textoCantidad(l.cantidad)}${sufijoUnidad(l.unidad, l.cantidad)} ${l.producto}`).join(', ');
 }
 
 /**

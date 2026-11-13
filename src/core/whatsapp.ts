@@ -8,6 +8,7 @@
 
 import type { Cliente, DeudaPendienteDetalle, LineaVentaMensaje, Venta } from './tipos';
 import { formatearMonto } from './moneda';
+import { sufijoUnidad } from './unidades';
 
 const ETIQUETAS_METODO_PAGO_MENSAJE: Record<string, string> = {
   efectivo: 'Efectivo',
@@ -56,7 +57,7 @@ export function construirMensajeDeuda(
       );
     }
     for (const linea of deuda.lineas) {
-      lineas.push(`   • ${linea.producto} x${linea.cantidad}`);
+      lineas.push(`   • ${linea.producto} x${linea.cantidad}${sufijoUnidad(linea.unidad, linea.cantidad)}`);
     }
   }
 
@@ -95,7 +96,7 @@ export function construirMensajeVenta(
   ];
 
   for (const linea of lineasVenta) {
-    lineas.push(`• ${linea.producto} x${linea.cantidad} — ${formatearMonto(linea.subtotal, simboloMoneda)}`);
+    lineas.push(`• ${linea.producto} x${linea.cantidad}${sufijoUnidad(linea.unidad, linea.cantidad)} — ${formatearMonto(linea.subtotal, simboloMoneda)}`);
     if (linea.descripcion) lineas.push(`   ${linea.descripcion}`);
   }
 

@@ -8,6 +8,8 @@
 import { formatearMonto } from './moneda';
 import { redondear } from './reglas-negocio';
 import type { LineaVentaResumen } from './tipos';
+import { sufijoUnidad } from './unidades';
+import { formatearPrecioFraccion } from './venta-fraccion';
 import { textoCantidad } from './ventas-semana';
 
 export const TEXTO_CONFIRMAR_ANULACION = '¿Seguro que quieres anular esta venta?';
@@ -15,23 +17,27 @@ export const TEXTO_CONFIRMAR_ANULACION = '¿Seguro que quieres anular esta venta
 export interface FilaDetalleVenta {
   producto: string;
   cantidad: number;
-  /** '2', '1.5'… sin ceros de más. */
+  /** '2', '1.5'… sin ceros de más; en una línea por fracciones lleva su unidad: '1 caja', '8 unidades'. */
   cantidadTexto: string;
   /** null en ventas muy antiguas que no guardaron el precio de cada producto. */
   precioUnitario: number | null;
+  /** El precio unitario ya escrito con su símbolo: en una línea por fracciones con todos sus decimales (S/ 0.008). */
+  precioUnitarioTexto: string | null;
   /** cantidad × precio unitario, a 2 decimales (null si no hay precio). */
   subtotal: number | null;
   descripcion: string | null;
 }
 
-export function construirDetalleVenta(lineas: LineaVentaResumen[]): FilaDetalleVenta[] {
+export function construirDetalleVenta(lineas: LineaVentaResumen[], simboloMoneda = 'S/'): FilaDetalleVenta[] {
   return lineas.map((l) => {
     const precio = l.precioUnitario ?? null;
     return {
       producto: l.producto,
       cantidad: l.cantidad,
-      cantidadTexto: textoCantidad(l.cantidad),
+      cantidadTexto: `${textoCantidad(l.cantidad)}${sufijoUnidad(l.unidad, l.cantidad)}`,
       precioUnitario: precio,
+      precioUnitarioTexto:
+        precio === null ? null : l.unidad ? formatearPrecioFraccion(precio, simboloMoneda) : formatearMonto(precio, simboloMoneda),
       subtotal: precio === null ? null : redondear(l.cantidad * precio),
       descripcion: l.descripcion && l.descripcion.trim() !== '' ? l.descripcion : null,
     };

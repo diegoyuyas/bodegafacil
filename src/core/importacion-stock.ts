@@ -87,6 +87,9 @@ export function parsearFilaImportacionStock(
       errores.push(`No existe un producto llamado exactamente "${nombre}" en el sistema.`);
     } else if (!producto.controlaStock) {
       errores.push(`"${nombre}" no controla stock, así que no se le puede sumar.`);
+    } else if (producto.formaVenta === 'fraccion') {
+      // Su stock está en la unidad más pequeña: un número del Excel caería en la unidad equivocada.
+      errores.push(`"${nombre}" se vende por fracciones: ajusta su stock en Productos (cajas y unidades).`);
     }
   }
 

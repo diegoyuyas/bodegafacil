@@ -8,6 +8,7 @@ import { EsqueletoLista } from '@/components/ui/esqueleto';
 import { AVISOS } from '@/core/avisos';
 import { construirMensajeEstadoCuenta } from '@/core/estado-cuenta';
 import { coincideConBusqueda } from '@/core/fiados-busqueda';
+import { sufijoUnidad } from '@/core/unidades';
 import { textoCantidad } from '@/core/ventas-semana';
 import { construirDatosEstadoCuenta } from '@/infraestructura/comprobante-imagen/compartir-estado-cuenta';
 import { usarPermisos } from '@/hooks/usar-permisos';
@@ -644,7 +645,7 @@ export default function PaginaFiados() {
                               </div>
                               {venta.lineas.length > 0 && (
                                 <p className="text-tinta-suave">
-                                  {venta.lineas.map((l) => `${textoCantidad(l.cantidad)} ${l.producto}`).join(', ')}
+                                  {venta.lineas.map((l) => `${textoCantidad(l.cantidad)}${sufijoUnidad(l.unidad, l.cantidad)} ${l.producto}`).join(', ')}
                                 </p>
                               )}
                               <p className="text-tinta-suave">

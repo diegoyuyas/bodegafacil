@@ -27,6 +27,13 @@ export const CLAVE_NOTIFICAR_STOCK_BAJO = 'notificar_stock_bajo';
  */
 export const CLAVE_MODO_VENTA_VOZ = 'modo_venta_voz';
 
+/**
+ * Activar Venta Entero/Fracción — Free. Default: OFF. Con '1' al crear un producto se elige su "Forma de venta"
+ * (Enteros | Fracciones) y los de Fracciones se venden en dos unidades (ej. Caja y Unidad). Apagado, todos los
+ * productos se venden en enteros (ver formaVentaEfectiva en core/venta-fraccion.ts); sus datos de fracción se conservan.
+ */
+export const CLAVE_VENTA_ENTERO_FRACCION = 'venta_entero_fraccion';
+
 /** Nombre propio del negocio — Premium. Reemplaza la etiqueta "Vende Fácil" en Inicio. */
 export const CLAVE_NOMBRE_TIENDA = 'nombre_tienda';
 

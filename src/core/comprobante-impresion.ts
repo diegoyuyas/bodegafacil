@@ -29,6 +29,8 @@
 
 import { LEYENDA_DOCUMENTO_INTERNO, TITULO_DOCUMENTO_INTERNO } from './comprobantes';
 import { redondear } from './reglas-negocio';
+import { sufijoUnidad, textoUnidad } from './unidades';
+import { formatearPrecioFraccion } from './venta-fraccion';
 
 export const ANCHO_TICKET = 32;
 
@@ -70,6 +72,13 @@ export function columnas(izquierda: string, derecha: string, ancho: number): str
 export interface LineaComprobante {
   descripcion: string;
   cantidad: number;
+  /** Venta Entero/Fracción: unidad de la línea ('Caja'). Sin ella la línea sale como siempre. */
+  unidad?: string | null;
+  /**
+   * Producto por fracciones: lo que se llevó, ya escrito («1 caja y 2 unidades»). Con esto la línea sale SIN precio por
+   * caja ni por unidad: el nombre y debajo la cantidad con el subtotal.
+   */
+  cantidadTexto?: string;
   precioUnitario: number;
   subtotal: number;
   /** Descripción corta que se añadió a este producto en la venta (se imprime debajo del producto). */
@@ -192,9 +201,27 @@ export function construirLineasComprobante(datos: DatosComprobante, ancho: numbe
   i(lineaSeparadora(ancho));
 
   for (const linea of datos.lineas) {
-    i(`${linea.cantidad} ${linea.descripcion}`);
-    if (linea.nota) i(`  ${linea.nota}`);
-    i(columnas(`  ${monto(linea.precioUnitario, s)} c/u`, monto(linea.subtotal, s), ancho));
+    if (linea.cantidadTexto) {
+      // Por fracciones: el nombre y debajo lo que se llevó con el subtotal, sin precio por caja ni por unidad.
+      i(linea.descripcion);
+      if (linea.nota) i(`  ${linea.nota}`);
+      const izquierda = `  ${linea.cantidadTexto}`;
+      const derecha = monto(linea.subtotal, s);
+      if (izquierda.length + derecha.length + 1 > ancho) {
+        // En papel angosto, si no entran juntos, el subtotal baja a su propia línea (no se corta la cantidad).
+        i(izquierda);
+        i(columnas('', derecha, ancho));
+      } else {
+        i(columnas(izquierda, derecha, ancho));
+      }
+    } else {
+      i(`${linea.cantidad}${sufijoUnidad(linea.unidad, linea.cantidad)} ${linea.descripcion}`);
+      if (linea.nota) i(`  ${linea.nota}`);
+      const precioLinea = linea.unidad
+        ? `  ${formatearPrecioFraccion(linea.precioUnitario, s)} por ${textoUnidad(linea.unidad, 1)}`
+        : `  ${monto(linea.precioUnitario, s)} c/u`;
+      i(columnas(precioLinea, monto(linea.subtotal, s), ancho));
+    }
   }
   i(lineaSeparadora(ancho));
 
@@ -267,4 +294,50 @@ export function construirTextoComprobante(datos: DatosComprobante, ancho: number
 
   partes.push('\n\n\n', CORTAR_PAPEL);
   return normalizarParaImpresora(partes.join(''));
+}
+
+/** Una línea de venta como la guarda la base (una por cada unidad: cajas y unidades van separadas). */
+export interface LineaDeVentaGuardada {
+  producto: string;
+  cantidad: number;
+  unidad?: string | null;
+  precioUnitario: number;
+  subtotal: number;
+  descripcion?: string | null;
+}
+
+/**
+ * Las líneas del ticket: un producto por fracciones que se guardó en dos líneas (1 caja + 2 unidades) sale en UNA, con su
+ * cantidad escrita («1 caja y 2 unidades») y la suma de sus subtotales. Las líneas sin unidad pasan como siempre.
+ */
+export function construirLineasDeTicket(lineas: LineaDeVentaGuardada[]): LineaComprobante[] {
+  const salida: LineaComprobante[] = [];
+  let i = 0;
+  while (i < lineas.length) {
+    const l = lineas[i];
+    if (!l) break;
+    if (!l.unidad) {
+      salida.push({ descripcion: l.producto, cantidad: l.cantidad, unidad: null, precioUnitario: l.precioUnitario, subtotal: l.subtotal, nota: l.descripcion });
+      i += 1;
+      continue;
+    }
+    // Junta las líneas seguidas del mismo producto que tienen unidad (la de cajas y la de unidades).
+    const grupo: LineaDeVentaGuardada[] = [l];
+    while (i + grupo.length < lineas.length) {
+      const siguiente = lineas[i + grupo.length];
+      if (!siguiente || !siguiente.unidad || siguiente.producto !== l.producto) break;
+      grupo.push(siguiente);
+    }
+    salida.push({
+      descripcion: l.producto,
+      cantidad: grupo.reduce((suma, g) => suma + g.cantidad, 0),
+      unidad: l.unidad,
+      cantidadTexto: grupo.map((g) => `${g.cantidad} ${textoUnidad(g.unidad ?? '', g.cantidad)}`).join(' y '),
+      precioUnitario: 0, // no se imprime: el ticket de fracciones no muestra precio por caja ni por unidad
+      subtotal: redondear(grupo.reduce((suma, g) => suma + g.subtotal, 0)),
+      nota: grupo.map((g) => g.descripcion).find((d) => d && d.trim() !== '') ?? null,
+    });
+    i += grupo.length;
+  }
+  return salida;
 }

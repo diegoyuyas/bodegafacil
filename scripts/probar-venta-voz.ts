@@ -10,7 +10,8 @@ function prod(nombre: string, alias: string | null = null, precio = 5): Producto
   id += 1;
   return {
     id, nombre, categoriaId: null, codigo: null, precioVenta: precio, costo: 1, stockActual: 50, stockMinimo: 1,
-    controlaStock: true, tipo: 'venta_compra', unidadMedida: 'unidad', alias, activo: true, creadoEn: '', actualizadoEn: '',
+    controlaStock: true, tipo: 'venta_compra', unidadMedida: 'unidad', formaVenta: 'entero', unidadEntera: null, unidadFraccion: null,
+    factorFraccion: null, precioFraccion: null, alias, activo: true, creadoEn: '', actualizadoEn: '',
   };
 }
 

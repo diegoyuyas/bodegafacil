@@ -15,7 +15,7 @@ import {
 } from '@/core/informacion-tienda';
 import { CLAVE_MONEDA, obtenerSimboloMoneda } from '@/core/moneda';
 import { CLAVE_LOGO_DATOS, CLAVE_LOGO_EN_IMAGEN, esLogoValido, logoEnImagenActivo } from '@/core/logo';
-import type { DatosComprobante } from '@/core/comprobante-impresion';
+import { construirLineasDeTicket, type DatosComprobante } from '@/core/comprobante-impresion';
 
 function fechaHoraLegibles(fechaHoraSql: string): { fecha: string; hora: string } {
   const [fecha = '', hora = ''] = fechaHoraSql.split(' ');
@@ -92,13 +92,8 @@ export function construirDatosComprobanteDeVenta(
     nombreVendedor: nombreDelVendedor(contenedor, venta.usuarioId),
     clienteNombre: cliente?.nombre ?? venta.clienteNombreLibre ?? 'Cliente Eventual',
     clienteDocumento: cliente?.documento ?? null,
-    lineas: lineas.map((l) => ({
-      descripcion: l.producto,
-      cantidad: l.cantidad,
-      precioUnitario: l.precioUnitario,
-      subtotal: l.subtotal,
-      nota: l.descripcion,
-    })),
+    // Un producto por fracciones (guardado en 2 líneas) sale en una sola, con su cantidad y su subtotal.
+    lineas: construirLineasDeTicket(lineas),
     total: venta.total,
     metodoPago: venta.metodoPago,
     simboloMoneda: obtenerSimboloMoneda(c.obtenerValor(CLAVE_MONEDA)),

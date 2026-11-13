@@ -24,6 +24,29 @@ export function limpiarNumeroEscrito(textoTipeado: string): string {
 }
 
 /**
+ * Lo que se escribe en una casilla de números con decimales (costo, cantidad de un producto normal): solo dígitos y un
+ * punto (la coma cuenta como punto), sin ceros de más delante ("01" → "1", pero "0.5" se respeta). Una casilla vacía queda
+ * vacía: así se puede borrar todo para escribir otro número.
+ */
+export function limpiarDecimalEscrito(texto: string): string {
+  const conPunto = texto.replace(',', '.').replace(/[^0-9.]/g, '');
+  const i = conPunto.indexOf('.');
+  const unSoloPunto = i === -1 ? conPunto : conPunto.slice(0, i + 1) + conPunto.slice(i + 1).replace(/\./g, '');
+  return limpiarNumeroEscrito(unSoloPunto);
+}
+
+/** Lo mismo para una casilla de números enteros (cajas, kg, gramos): solo dígitos y sin ceros de más delante. */
+export function limpiarEnteroEscrito(texto: string): string {
+  return soloDigitosAlEscribir(texto).replace(/^0+(?=\d)/, '');
+}
+
+/** El número que vale lo escrito en una casilla: vacío, un punto solo o algo que no es número valen 0. */
+export function numeroDeCasilla(texto: string): number {
+  const numero = Number(texto);
+  return texto.trim() === '' || !Number.isFinite(numero) ? 0 : numero;
+}
+
+/**
  * Nombres de productos, clientes y proveedores: siempre en MAYÚSCULAS.
  * Se aplica en los repositorios (único punto por el que pasan la
  * pantalla, la importación masiva y los datos de ejemplo), así que ningún

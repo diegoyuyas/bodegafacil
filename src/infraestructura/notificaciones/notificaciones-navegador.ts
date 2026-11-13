@@ -107,10 +107,12 @@ export function mostrarNotificacionStockBajoProducto(
   nombreProducto: string,
   stockActual: number,
   nombreTienda: string,
+  /** Si se indica, reemplaza al número (productos por fracciones: «3 cajas y 4 unidades»). */
+  cantidadTexto?: string,
 ): void {
   void mostrarNotificacion({
     titulo: nombreTienda,
-    cuerpo: `${nombreProducto}: quedan ${stockActual}, por debajo del stock mínimo.`,
+    cuerpo: `${nombreProducto}: quedan ${cantidadTexto ?? stockActual}, por debajo del stock mínimo.`,
     tag: `venta-facil-stock-bajo-${nombreProducto}`,
   });
 }

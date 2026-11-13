@@ -18,6 +18,8 @@ export type EstadoCompra = 'pendiente' | 'recibida' | 'anulada';
 export type TipoRespaldo = 'manual' | 'automatico';
 /** 'venta_compra': producto normal. 'insumo': solo sirve para Compras (sin stock ni precio de venta, no sale a vender). */
 export type TipoProducto = 'venta_compra' | 'insumo';
+/** Cómo se vende un producto: 'entero' (como siempre) o 'fraccion' (en dos unidades, ej. Caja y Unidad). Ver core/venta-fraccion.ts. */
+export type FormaVenta = 'entero' | 'fraccion';
 export type EstadoRespaldo = 'completado' | 'fallido';
 
 export interface Categoria {
@@ -42,6 +44,20 @@ export interface Producto {
   /** 'insumo' = solo para Compras: controlaStock=false, precioVenta=0, stock en 0. */
   tipo: TipoProducto;
   unidadMedida: string;
+  /**
+   * 'entero' (todos los productos que ya existían) o 'fraccion'. Con 'fraccion', stockActual y stockMinimo están en la
+   * unidad MÁS PEQUEÑA (fracción) como número entero; precioVenta y costo son los de UN entero (la caja).
+   * Si el interruptor "Activar Venta Entero/Fracción" está apagado se vende como entero (ver formaVentaEfectiva).
+   */
+  formaVenta: FormaVenta;
+  /** Solo con forma 'fraccion': unidad entera (Caja, Kg…). null en los productos de forma 'entero'. */
+  unidadEntera: string | null;
+  /** Solo con forma 'fraccion': unidad fracción (Unidad, Gramo…). */
+  unidadFraccion: string | null;
+  /** Solo con forma 'fraccion': cuántas fracciones trae un entero (12, 1000). Entero ≥ 2. */
+  factorFraccion: number | null;
+  /** Solo con forma 'fraccion': precio de venta de UNA fracción. */
+  precioFraccion: number | null;
   /** Otros nombres del producto para la venta por voz: MAYÚSCULAS separadas por coma, o null si no tiene. Ver partirAlias. */
   alias: string | null;
   activo: boolean;
@@ -118,6 +134,10 @@ export interface DetalleVenta {
   subtotal: number;
   gananciaLinea: number;
   descripcion?: string | null;
+  /** Venta Entero/Fracción: unidad de esta línea ('Caja'). Ausente o null en las líneas de siempre. */
+  unidad?: string | null;
+  /** Unidades de stock que mueve UNA unidad de esta línea (12 la caja, 1 la fracción). Ausente = 1. */
+  factorStock?: number;
 }
 
 export interface DeudaCliente {
@@ -254,7 +274,17 @@ export interface MetadatoRespaldo {
  */
 export interface LineaVentaEntrada {
   productoId: number;
+  /**
+   * Cuántas unidades. Producto Entero: como siempre. Producto por fracciones con el interruptor encendido: el TOTAL en
+   * la unidad más pequeña (1 caja y 8 galletas de 12 → 20), que se guarda en dos líneas (cajas y galletas). Producto por
+   * fracciones con el interruptor apagado: cantidad de enteros completos (cajas).
+   */
   cantidad: number;
+  /**
+   * Solo producto por fracciones con el interruptor encendido: lo que se quiere cobrar por TODA la línea (cajas y unidades
+   * juntas). Los precios de las dos líneas se reparten en proporción y la suma da justo este monto.
+   */
+  subtotalEditado?: number;
   /**
    * Precio a cobrar por unidad, si se quiere anular el precioVenta
    * del catálogo (switch "Precio editable al vender" en Más >
@@ -327,6 +357,12 @@ export interface LineaVentaResumen {
   /** Precio unitario cobrado (el preview de Inicio lo muestra). */
   precioUnitario?: number;
   descripcion?: string | null;
+  /** Venta Entero/Fracción: unidad de la línea ('Caja'). null o ausente en las ventas de siempre. */
+  unidad?: string | null;
+  /** Unidades de stock que movió UNA unidad de esta línea (12 la caja, 1 la fracción). Ausente = 1. */
+  factorStock?: number;
+  /** Solo en líneas por fracciones: cómo se parte hoy ese producto (para contar y mostrar lo vendido). */
+  fraccion?: { unidadEntera: string; unidadFraccion: string; factor: number } | null;
 }
 
 /** Una línea de producto con precio, para armar el mensaje de WhatsApp de una venta (Ventas → Nueva venta / reenvío). */
@@ -336,6 +372,8 @@ export interface LineaVentaMensaje {
   precioUnitario: number;
   subtotal: number;
   descripcion?: string | null;
+  /** Venta Entero/Fracción: unidad de la línea ('Caja'). null o ausente en las ventas de siempre. */
+  unidad?: string | null;
 }
 
 /** Una fila de resultado en Más > Reimprimir documentos. */
@@ -428,7 +466,12 @@ export interface CompraListaItem {
 export interface ProductoMasVendidoItem {
   productoId: number;
   nombre: string;
+  /** Producto por fracciones: en enteros equivalentes (1 caja y 6 unidades = 1.5). */
   cantidadVendida: number;
+  /** Producto por fracciones: «1 caja y 6 unidades». */
+  cantidadTexto?: string;
+  /** Producto por fracciones: la unidad entera en que está `cantidadVendida` (Excel: «GALLETA (en cajas)»). */
+  unidadEntera?: string | null;
   totalVendido: number;
   gananciaTotal: number;
 }
@@ -438,6 +481,8 @@ export interface GananciaProductoItem {
   productoId: number;
   nombre: string;
   cantidadVendida: number;
+  cantidadTexto?: string;
+  unidadEntera?: string | null;
   totalVendido: number;
   costoTotal: number;
   gananciaTotal: number;
@@ -486,6 +531,8 @@ export interface HistorialCostoItem {
   fecha: string;
   costoUnitario: number;
   cantidad: number;
+  /** Venta Entero/Fracción: unidad de esa línea de compra ('Caja'). null o ausente en las compras de siempre. */
+  unidad?: string | null;
   proveedorNombre: string | null;
   compraId: number;
 }

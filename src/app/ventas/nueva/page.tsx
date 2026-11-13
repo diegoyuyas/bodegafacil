@@ -7,11 +7,23 @@ import { IconoImpresora, IconoTicket, IconoWhatsApp } from '@/components/ui/icon
 import { imprimirComprobanteDeVenta } from '@/infraestructura/impresora-bluetooth/imprimir-venta';
 import { CLAVE_IMPRESORA_ACTIVA, IMPRESION_BLUETOOTH_DISPONIBLE } from '@/core/impresora';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
-import { construirVenta, ErrorDeNegocio, redondear } from '@/core/reglas-negocio';
+import { ErrorDeNegocio, redondear } from '@/core/reglas-negocio';
+import { textoUnidad } from '@/core/unidades';
+import {
+  configuracionFraccionDeProducto,
+  construirVentaFraccion,
+  formatearPrecioFraccion,
+  lineasDeVentaDesdeCarrito,
+  procesarEscrituraFraccion,
+  separarEnBase,
+  subtotalDeLineaFraccion,
+  textoCantidadFraccion,
+  type ConfiguracionFraccion,
+} from '@/core/venta-fraccion';
 import { calcularPrecioDesdeSubtotal, textoPrecioUnitario } from '@/core/precio-por-subtotal';
 import { HojaOpciones } from '@/components/hoja-opciones';
 import { LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
-import { CLAVE_DESCRIPCION_LINEAS, CLAVE_NOMBRE_TIENDA, CLAVE_NOTIFICAR_STOCK_BAJO, CLAVE_PRECIO_EDITABLE_VENTA, estaActivado, obtenerNombreTienda } from '@/core/configuracion';
+import { CLAVE_DESCRIPCION_LINEAS, CLAVE_NOMBRE_TIENDA, CLAVE_NOTIFICAR_STOCK_BAJO, CLAVE_PRECIO_EDITABLE_VENTA, CLAVE_VENTA_ENTERO_FRACCION, estaActivado, obtenerNombreTienda } from '@/core/configuracion';
 import { CLAVE_PREFIJO_PAIS, obtenerPrefijoPais } from '@/core/paises';
 import { construirMensajeVenta } from '@/core/whatsapp';
 import { construirEnlaceWhatsApp } from '@/infraestructura/whatsapp/enlace';
@@ -44,6 +56,34 @@ interface LineaCarrito {
   stockDisponible: number;
   /** Nota corta de esta línea (solo si está activo "Añadir descripción en Venta/Compra"). */
   descripcion: string;
+  /**
+   * Solo si se vende por fracciones (interruptor encendido): cómo se parte el producto. En ese caso `cantidad` y
+   * `stockDisponible` están en la unidad MÁS PEQUEÑA (1 caja y 8 galletas de 12 → 20) y se escriben en dos casillas.
+   */
+  fraccion?: ConfiguracionFraccion;
+  /** Producto por fracciones con el interruptor apagado: se vende en enteros completos; es el nombre de esa unidad ("Caja"). */
+  unidadEntera?: string;
+  /**
+   * Solo por fracciones: lo que se quiere cobrar por toda la línea (editado a mano). Si se cambia la cantidad se borra y
+   * vuelve el precio de lista, para no dejar un subtotal viejo con otra cantidad.
+   */
+  subtotalEditado?: number;
+}
+
+const mayuscula = (texto: string) => texto.charAt(0).toUpperCase() + texto.slice(1);
+
+/** Cuántas unidades de este producto se pueden poner en el carrito (en la unidad con la que se cuenta ahí). */
+function disponibleParaVenta(producto: Producto, fraccionActiva: boolean): number {
+  if (!producto.controlaStock) return Infinity;
+  const config = producto.formaVenta === 'fraccion' ? configuracionFraccionDeProducto(producto, true) : null;
+  return config && !fraccionActiva ? Math.floor(producto.stockActual / config.factor) : producto.stockActual;
+}
+
+/** Subtotal de una línea del carrito: por fracciones suma sus cajas y sus unidades; si no, precio × cantidad. */
+function subtotalLinea(linea: LineaCarrito): number {
+  return linea.fraccion
+    ? subtotalDeLineaFraccion(linea.fraccion, linea.cantidad, linea.subtotalEditado)
+    : linea.precioVenta * linea.cantidad;
 }
 
 const METODOS_PAGO: { valor: MetodoPago; etiqueta: string }[] = [
@@ -103,6 +143,10 @@ export default function PaginaNuevaVenta() {
   // llega a ser 0. Al salir del campo se vuelve a mostrar la cantidad real.
   const [borradoCantidad, setBorradoCantidad] = useState<{ productoId: number; texto: string } | null>(null);
   const [avisoCantidad, setAvisoCantidad] = useState<{ productoId: number; texto: string } | null>(null);
+  // Lo mismo para las dos casillas (cajas y unidades) de un producto por fracciones.
+  const [borradoFraccion, setBorradoFraccion] = useState<{ productoId: number; campo: 'enteros' | 'sueltas'; texto: string } | null>(null);
+  // Venta Entero/Fracción (Más > Configuración > Configuración de Venta).
+  const [ventaFraccionActiva, setVentaFraccionActiva] = useState(false);
   const [mensajeFotoPago, setMensajeFotoPago] = useState<string | null>(null);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
@@ -123,7 +167,8 @@ export default function PaginaNuevaVenta() {
 
   useEffect(() => {
     if (!contenedor) return;
-    setProductos(contenedor.productos.listarActivosParaVenta());
+    setProductos(contenedor.productos.listarActivosParaVentaConFracciones());
+    setVentaFraccionActiva(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_VENTA_ENTERO_FRACCION)));
     const usadas = contenedor.ventas.contarTotalHistorico();
     const premium = contenedor.plan.obtenerEstado().tipo === 'premium';
     setVentasUsadas(usadas);
@@ -160,30 +205,37 @@ export default function PaginaNuevaVenta() {
   const calculo = useMemo(() => {
     if (carrito.length === 0) return null;
     try {
-      return construirVenta(
-        carrito.map((l) => ({
-          productoId: l.productoId,
-          cantidad: l.cantidad,
-          precioUnitario: precioEditable ? l.precioVenta : undefined,
-        })),
+      return construirVentaFraccion(
+        // Las mismas líneas que se guardan al confirmar (una sola función para las dos cosas).
+        lineasDeVentaDesdeCarrito(carrito, { precioEditable, descripcionActiva }),
         (id) => {
           const producto = productos.find((p) => p.id === id);
           if (!producto) throw new ErrorDeNegocio(`Producto ${id} ya no existe.`);
           return producto;
         },
+        ventaFraccionActiva,
       );
     } catch (e) {
       return e instanceof ErrorDeNegocio ? e.message : 'No se pudo calcular la venta.';
     }
-  }, [carrito, productos, precioEditable]);
+  }, [carrito, productos, precioEditable, ventaFraccionActiva]);
 
   const calculoValido = calculo && typeof calculo !== 'string' ? calculo : null;
+  // Las cajas y las unidades sueltas no se suman entre sí: si hay un producto por fracciones solo se cuentan los productos.
+  const hayFraccion = carrito.some((l) => l.fraccion !== undefined);
   const totalUnidades = carrito.reduce((suma, l) => suma + l.cantidad, 0);
   const lineaSubtotal = editandoSubtotal ? (carrito.find((l) => l.productoId === editandoSubtotal.productoId) ?? null) : null;
   const precioDelSubtotal =
     editandoSubtotal && lineaSubtotal && editandoSubtotal.texto.trim() !== ''
       ? calcularPrecioDesdeSubtotal(Number(editandoSubtotal.texto), lineaSubtotal.cantidad)
       : null;
+  // Línea por fracciones: el subtotal escrito vale si es un número de 0 en adelante.
+  const subtotalFraccionValido =
+    editandoSubtotal !== null &&
+    lineaSubtotal?.fraccion !== undefined &&
+    editandoSubtotal.texto.trim() !== '' &&
+    Number.isFinite(Number(editandoSubtotal.texto)) &&
+    Number(editandoSubtotal.texto) >= 0;
   const errorCalculo = typeof calculo === 'string' ? calculo : null;
 
   const comprobantesPosibles = comprobantesDisponibles(esPremium, seriesActivas);
@@ -209,24 +261,34 @@ export default function PaginaNuevaVenta() {
 
   function agregarProducto(producto: Producto) {
     setTexto('');
+    // Producto por fracciones: con el interruptor encendido entra con sus dos casillas (en la unidad más pequeña);
+    // apagado, entra como un producto normal que se vende en enteros completos (cajas).
+    const configuracion = producto.formaVenta === 'fraccion' ? configuracionFraccionDeProducto(producto, true) : null;
+    const fraccion = configuracion && ventaFraccionActiva ? configuracion : undefined;
+    const unidadEntera = configuracion && !ventaFraccionActiva ? configuracion.unidadEntera : undefined;
+    const disponible = disponibleParaVenta(producto, ventaFraccionActiva);
+    // Cada toque suma un entero (una caja); si ya no queda una caja completa, lo que haya. En lo demás, suma uno.
+    const paso = fraccion ? Math.min(fraccion.factor, disponible) : 1;
     setCarrito((actual) => {
       const existente = actual.find((l) => l.productoId === producto.id);
       if (existente) {
-        if (producto.controlaStock && existente.cantidad >= producto.stockActual) return actual;
+        if (existente.cantidad >= disponible) return actual;
         return actual.map((l) =>
-          l.productoId === producto.id ? { ...l, cantidad: l.cantidad + 1 } : l,
+          l.productoId === producto.id ? { ...l, cantidad: Math.min(l.cantidad + paso, disponible), subtotalEditado: undefined } : l,
         );
       }
-      if (producto.controlaStock && producto.stockActual <= 0) return actual;
+      if (disponible <= 0) return actual;
       return [
         ...actual,
         {
           productoId: producto.id,
           nombre: producto.nombre,
-          cantidad: 1,
+          cantidad: paso,
           precioVenta: producto.precioVenta,
-          stockDisponible: producto.controlaStock ? producto.stockActual : Infinity,
+          stockDisponible: disponible,
           descripcion: '',
+          fraccion,
+          unidadEntera,
         },
       ];
     });
@@ -292,6 +354,55 @@ export default function PaginaNuevaVenta() {
     setAvisoCantidad(null);
   }
 
+  /**
+   * Una de las dos casillas (cajas o unidades) de un producto por fracciones. Se junta todo en unidades base y se vuelve a
+   * separar: [1] caja y [12] unidades pasan solas a [2] cajas y [0] unidades. Nunca baja de 1 ni pasa del stock.
+   */
+  function escribirCantidadFraccion(linea: LineaCarrito, config: ConfiguracionFraccion, campo: 'enteros' | 'sueltas', textoTipeado: string) {
+    const resultado = procesarEscrituraFraccion(config, linea.cantidad, linea.stockDisponible, campo, textoTipeado);
+    setAvisoCantidad(resultado.aviso ? { productoId: linea.productoId, texto: resultado.aviso } : null);
+    setBorradoFraccion({ productoId: linea.productoId, campo, texto: resultado.texto });
+    const { cantidad } = resultado;
+    if (cantidad === null) return;
+    // Con otra cantidad deja de valer el subtotal editado: vuelve el precio de lista.
+    setCarrito((actual) => actual.map((l) => (l.productoId === linea.productoId ? { ...l, cantidad, subtotalEditado: undefined } : l)));
+  }
+
+  function terminarEscrituraFraccion() {
+    setBorradoFraccion(null);
+    setAvisoCantidad(null);
+  }
+
+  /** Una casilla de cantidad (cajas o unidades) con su unidad escrita debajo. */
+  function casillaFraccion(linea: LineaCarrito, config: ConfiguracionFraccion, campo: 'enteros' | 'sueltas') {
+    const partes = separarEnBase(linea.cantidad, config.factor);
+    const unidad = campo === 'enteros' ? config.unidadEntera : config.unidadFraccion;
+    const valor =
+      borradoFraccion?.productoId === linea.productoId && borradoFraccion.campo === campo
+        ? borradoFraccion.texto
+        : String(campo === 'enteros' ? partes.enteros : partes.sueltas);
+    return (
+      <div className="flex flex-col items-center">
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          enterKeyHint="done"
+          value={valor}
+          onChange={(e) => escribirCantidadFraccion(linea, config, campo, e.target.value)}
+          onFocus={(e) => e.target.select()}
+          onBlur={terminarEscrituraFraccion}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur();
+          }}
+          aria-label={`${mayuscula(textoUnidad(unidad, 2))} de ${linea.nombre}`}
+          className="h-11 w-16 rounded-lg border border-linea text-center text-xl font-bold text-tinta outline-none focus:border-bodega"
+        />
+        <span className="mt-0.5 text-xs text-tinta-suave">{mayuscula(textoUnidad(unidad, 2))}</span>
+      </div>
+    );
+  }
+
   /** Solo tiene efecto si el switch "Precio editable al vender" está activo. */
   function cambiarPrecioLinea(productoId: number, nuevoPrecioTexto: string) {
     const nuevoPrecio = nuevoPrecioTexto.trim() === '' ? 0 : Number(nuevoPrecioTexto);
@@ -303,7 +414,7 @@ export default function PaginaNuevaVenta() {
 
   /** «Editar subtotal»: abre el pop-up con el subtotal actual de la línea. Solo con «Precio editable al vender». */
   function abrirEdicionSubtotal(linea: LineaCarrito) {
-    setEditandoSubtotal({ productoId: linea.productoId, texto: redondear(linea.precioVenta * linea.cantidad).toFixed(2) });
+    setEditandoSubtotal({ productoId: linea.productoId, texto: redondear(subtotalLinea(linea)).toFixed(2) });
   }
 
   /** Aplica el subtotal escrito: recalcula el precio por unidad de ESA línea (el del producto no cambia). */
@@ -311,6 +422,14 @@ export default function PaginaNuevaVenta() {
     if (!editandoSubtotal || editandoSubtotal.texto.trim() === '') return;
     const linea = carrito.find((l) => l.productoId === editandoSubtotal.productoId);
     if (!linea) return;
+    if (linea.fraccion) {
+      // Por fracciones el subtotal es de toda la línea (cajas y unidades juntas); los precios se reparten al guardar la venta.
+      const subtotal = Number(editandoSubtotal.texto);
+      if (!Number.isFinite(subtotal) || subtotal < 0) return;
+      setCarrito((actual) => actual.map((l) => (l.productoId === linea.productoId ? { ...l, subtotalEditado: redondear(subtotal) } : l)));
+      setEditandoSubtotal(null);
+      return;
+    }
     const precio = calcularPrecioDesdeSubtotal(Number(editandoSubtotal.texto), linea.cantidad);
     if (precio === null) return;
     setCarrito((actual) => actual.map((l) => (l.productoId === linea.productoId ? { ...l, precioVenta: precio } : l)));
@@ -368,7 +487,14 @@ export default function PaginaNuevaVenta() {
       if (producto.stockActual === 0) {
         mostrarNotificacionSinStock(producto.nombre, nombreTienda);
       } else if (producto.stockActual < producto.stockMinimo) {
-        mostrarNotificacionStockBajoProducto(producto.nombre, producto.stockActual, nombreTienda);
+        // Por fracciones el stock está en la unidad más pequeña: se avisa en cajas y unidades.
+        const configuracion = configuracionFraccionDeProducto(producto, true);
+        mostrarNotificacionStockBajoProducto(
+          producto.nombre,
+          producto.stockActual,
+          nombreTienda,
+          configuracion ? textoCantidadFraccion(producto.stockActual, configuracion) : undefined,
+        );
       }
     }
   }
@@ -449,12 +575,7 @@ export default function PaginaNuevaVenta() {
     setMensajeError(null);
     try {
       const venta = contenedor.ventas.registrarVenta({
-        lineas: carrito.map((l) => ({
-          productoId: l.productoId,
-          cantidad: l.cantidad,
-          precioUnitario: precioEditable ? l.precioVenta : undefined,
-          descripcion: descripcionActiva ? l.descripcion : null,
-        })),
+        lineas: lineasDeVentaDesdeCarrito(carrito, { precioEditable, descripcionActiva }),
         metodoPago,
         clienteId: clienteSeleccionado?.id ?? null,
         clienteNombreLibre: nombreClienteLibre() || null,
@@ -509,7 +630,7 @@ export default function PaginaNuevaVenta() {
     setMensajeError(null);
     setEtapa('armando');
     if (contenedor) {
-      setProductos(contenedor.productos.listarActivosParaVenta());
+      setProductos(contenedor.productos.listarActivosParaVentaConFracciones());
       // Las series pudieron cambiar (el siguiente número avanzó): se vuelven a leer y vuelve el comprobante por defecto.
       const activas = contenedor.series.listarActivas();
       setSeriesActivas(activas);
@@ -681,11 +802,13 @@ export default function PaginaNuevaVenta() {
             <li key={linea.productoId} className="py-3 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-tinta/80">
-                  {linea.cantidad} × {linea.nombre}
+                  {linea.fraccion
+                    ? `${linea.nombre} · ${textoCantidadFraccion(linea.cantidad, linea.fraccion)}`
+                    : linea.unidadEntera
+                      ? `${linea.cantidad} ${textoUnidad(linea.unidadEntera, linea.cantidad)} × ${linea.nombre}`
+                      : `${linea.cantidad} × ${linea.nombre}`}
                 </span>
-                <span className="font-semibold text-tinta">
-                  {formatearMonto(linea.precioVenta * linea.cantidad, simboloMoneda)}
-                </span>
+                <span className="font-semibold text-tinta">{formatearMonto(subtotalLinea(linea), simboloMoneda)}</span>
               </div>
               {descripcionActiva && linea.descripcion.trim() !== '' && (
                 <p className="mt-0.5 break-words text-xs text-tinta-suave">{linea.descripcion.trim()}</p>
@@ -766,14 +889,16 @@ export default function PaginaNuevaVenta() {
               <li key={producto.id}>
                 <button
                   onClick={() => agregarProducto(producto)}
-                  disabled={producto.controlaStock && producto.stockActual <= 0}
+                  disabled={disponibleParaVenta(producto, ventaFraccionActiva) <= 0}
                   className="flex w-full items-center justify-between px-4 py-3 text-left text-sm disabled:opacity-40"
                 >
                   <span>{producto.nombre}</span>
                   <span className="text-tinta-suave">
-                    {producto.controlaStock && producto.stockActual <= 0
+                    {disponibleParaVenta(producto, ventaFraccionActiva) <= 0
                       ? 'Sin stock'
-                      : formatearMonto(producto.precioVenta, simboloMoneda)}
+                      : producto.formaVenta === 'fraccion' && producto.unidadEntera
+                        ? `${formatearMonto(producto.precioVenta, simboloMoneda)} ${textoUnidad(producto.unidadEntera, 1)}`
+                        : formatearMonto(producto.precioVenta, simboloMoneda)}
                   </span>
                 </button>
               </li>
@@ -792,12 +917,22 @@ export default function PaginaNuevaVenta() {
           <ul className="divide-y divide-linea border-y border-linea">
             {carrito.map((linea) => {
               const editando = lineaEditandoId === linea.productoId;
+              // El precio de una línea por fracciones es el de la lista: solo se edita en las demás.
+              const puedeEditarPrecio = precioEditable && !linea.fraccion;
+              // El monto (subtotal) de la línea sí se puede editar en las de fracciones.
+              const puedeEditarSubtotal = precioEditable;
               return (
                 <li key={linea.productoId} className="py-3.5">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="text-lg font-bold text-tinta">{linea.nombre}</p>
-                      <p className="text-xs text-tinta-suave">{formatearMonto(linea.precioVenta, simboloMoneda)} c/u</p>
+                      <p className="text-xs text-tinta-suave">
+                        {linea.fraccion
+                          ? `${formatearMonto(linea.precioVenta, simboloMoneda)} por ${textoUnidad(linea.fraccion.unidadEntera, 1)} · ${formatearPrecioFraccion(linea.fraccion.precioFraccion, simboloMoneda)} por ${textoUnidad(linea.fraccion.unidadFraccion, 1)}`
+                          : linea.unidadEntera
+                            ? `${formatearMonto(linea.precioVenta, simboloMoneda)} por ${textoUnidad(linea.unidadEntera, 1)}`
+                            : `${formatearMonto(linea.precioVenta, simboloMoneda)} c/u`}
+                      </p>
                     </div>
                     <button
                       onClick={() => quitarProducto(linea.productoId)}
@@ -808,6 +943,12 @@ export default function PaginaNuevaVenta() {
                     </button>
                   </div>
                   <div className="mt-2.5 flex items-center justify-between gap-3">
+                    {linea.fraccion ? (
+                      <div className="flex items-start gap-3">
+                        {casillaFraccion(linea, linea.fraccion, 'enteros')}
+                        {casillaFraccion(linea, linea.fraccion, 'sueltas')}
+                      </div>
+                    ) : (
                     <div className="flex items-center gap-3">
                       <button
                         onClick={() => cambiarCantidad(linea.productoId, -1)}
@@ -844,32 +985,31 @@ export default function PaginaNuevaVenta() {
                         +
                       </button>
                     </div>
-                    {precioEditable ? (
+                    )}
+                    {puedeEditarSubtotal ? (
                       <button
                         type="button"
                         onClick={() => abrirEdicionSubtotal(linea)}
                         aria-label={`Editar subtotal de ${linea.nombre}`}
                         className="flex h-11 items-center gap-2 rounded-xl border-[1.5px] border-dashed border-bodega bg-white px-3.5 text-xl font-extrabold text-tinta"
                       >
-                        {formatearMonto(linea.precioVenta * linea.cantidad, simboloMoneda)}
+                        {formatearMonto(subtotalLinea(linea), simboloMoneda)}
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-bodega" aria-hidden="true">
                           <path d="M4 20h4L19 9l-4-4L4 16v4zM13 7l4 4" />
                         </svg>
                       </button>
                     ) : (
-                      <span className="text-xl font-extrabold text-tinta">
-                        {formatearMonto(linea.precioVenta * linea.cantidad, simboloMoneda)}
-                      </span>
+                      <span className="text-xl font-extrabold text-tinta">{formatearMonto(subtotalLinea(linea), simboloMoneda)}</span>
                     )}
                   </div>
-                  {precioEditable && <p className="mt-1.5 text-right text-xs text-tinta-suave">Toca el monto para cambiarlo</p>}
+                  {puedeEditarSubtotal && <p className="mt-1.5 text-right text-xs text-tinta-suave">Toca el monto para cambiarlo</p>}
                   {avisoCantidad?.productoId === linea.productoId && (
                     <p className="mt-1 text-xs text-alerta">{avisoCantidad.texto}</p>
                   )}
                   {!editando && linea.descripcion.trim() !== '' && (
                     <p className="mt-1.5 text-xs italic text-tinta-suave">{linea.descripcion}</p>
                   )}
-                  {(precioEditable || descripcionActiva) && (
+                  {(puedeEditarPrecio || descripcionActiva) && (
                     <button
                       type="button"
                       onClick={() => setLineaEditandoId(editando ? null : linea.productoId)}
@@ -878,16 +1018,16 @@ export default function PaginaNuevaVenta() {
                     >
                       {editando
                         ? 'Ocultar'
-                        : precioEditable && descripcionActiva
+                        : puedeEditarPrecio && descripcionActiva
                           ? 'Editar precio o nota'
-                          : precioEditable
+                          : puedeEditarPrecio
                             ? 'Editar precio'
                             : 'Agregar nota'}
                     </button>
                   )}
                   {editando && (
                     <div className="mt-2 space-y-2">
-                      {precioEditable && (
+                      {puedeEditarPrecio && (
                         <label className="flex items-center gap-2 text-sm text-tinta-suave">
                           {simboloMoneda}
                           <input
@@ -1055,8 +1195,8 @@ export default function PaginaNuevaVenta() {
       {calculoValido && (
         <div className="fixed inset-x-0 bottom-0 mx-auto max-w-app border-t border-linea bg-papel px-5 pt-2.5 pb-[calc(1.25rem+var(--area-segura-abajo))]">
           <p className="mb-2 text-center text-[13px] text-tinta-suave">
-            {carrito.length} {carrito.length === 1 ? 'producto' : 'productos'} · {textoCantidad(totalUnidades)}{' '}
-            {totalUnidades === 1 ? 'unidad' : 'unidades'}
+            {carrito.length} {carrito.length === 1 ? 'producto' : 'productos'}
+            {!hayFraccion && ` · ${textoCantidad(totalUnidades)} ${totalUnidades === 1 ? 'unidad' : 'unidades'}`}
           </p>
           <button
             onClick={() => {
@@ -1075,7 +1215,11 @@ export default function PaginaNuevaVenta() {
       {editandoSubtotal && lineaSubtotal && (
         <HojaOpciones
           titulo="Editar subtotal"
-          subtitulo={`${lineaSubtotal.nombre} · ${textoCantidad(lineaSubtotal.cantidad)} ${lineaSubtotal.cantidad === 1 ? 'unidad' : 'unidades'}`}
+          subtitulo={`${lineaSubtotal.nombre} · ${
+            lineaSubtotal.fraccion
+              ? textoCantidadFraccion(lineaSubtotal.cantidad, lineaSubtotal.fraccion)
+              : `${textoCantidad(lineaSubtotal.cantidad)} ${lineaSubtotal.cantidad === 1 ? 'unidad' : 'unidades'}`
+          }`}
           onCerrar={() => setEditandoSubtotal(null)}
         >
           <div className="space-y-3">
@@ -1102,7 +1246,17 @@ export default function PaginaNuevaVenta() {
               </div>
             </div>
             <div className="rounded-xl bg-bodega-claro px-3.5 py-3 text-sm leading-snug text-tinta">
-              {precioDelSubtotal === null ? (
+              {lineaSubtotal.fraccion ? (
+                subtotalFraccionValido ? (
+                  <>
+                    Cobrarás <b>{formatearMonto(Number(editandoSubtotal.texto), simboloMoneda)}</b> por{' '}
+                    {textoCantidadFraccion(lineaSubtotal.cantidad, lineaSubtotal.fraccion)}. Los precios de {lineaSubtotal.nombre} en tu
+                    lista <b>no cambian</b>.
+                  </>
+                ) : (
+                  'Escribe cuánto quieres cobrar por este producto.'
+                )
+              ) : precioDelSubtotal === null ? (
                 'Escribe cuánto quieres cobrar por este producto.'
               ) : (
                 <>
@@ -1126,7 +1280,7 @@ export default function PaginaNuevaVenta() {
               <button
                 type="button"
                 onClick={aplicarSubtotal}
-                disabled={precioDelSubtotal === null}
+                disabled={lineaSubtotal.fraccion ? !subtotalFraccionValido : precioDelSubtotal === null}
                 className="h-[54px] flex-[1.4] rounded-full bg-bodega text-[17px] font-bold text-white disabled:opacity-50"
               >
                 Aplicar

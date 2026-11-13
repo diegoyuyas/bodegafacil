@@ -54,15 +54,15 @@ afirmar(calcularGananciaLinea(2.5, 1.5, 4) === 4 && calcularGananciaLinea(10, 7.
 const raiz = path.join(__dirname, '..');
 const leer = (ruta: string) => readFileSync(path.join(raiz, ruta), 'utf8').replace(/\r\n/g, '\n');
 const pagina = leer('src/app/ventas/nueva/page.tsx');
-afirmar(pagina.includes('{precioEditable ? (\n                      <button\n                        type="button"\n                        onClick={() => abrirEdicionSubtotal(linea)}') && pagina.includes('border-dashed border-bodega'), 'El subtotal de la línea es un botón (borde punteado y lápiz) solo con «Precio editable al vender»');
-afirmar(pagina.includes('Toca el monto para cambiarlo') && pagina.includes('{precioEditable && <p'), 'Con el ajuste activo se avisa «Toca el monto para cambiarlo»');
+afirmar(pagina.includes('{puedeEditarSubtotal ? (\n                      <button\n                        type="button"\n                        onClick={() => abrirEdicionSubtotal(linea)}') && pagina.includes('border-dashed border-bodega'), 'El subtotal de la línea es un botón (borde punteado y lápiz) solo con «Precio editable al vender»');
+afirmar(pagina.includes('Toca el monto para cambiarlo') && pagina.includes('{puedeEditarSubtotal && <p'), 'Con el ajuste activo se avisa «Toca el monto para cambiarlo»');
 afirmar(pagina.includes('titulo="Editar subtotal"') && pagina.includes('Subtotal de la línea') && pagina.includes('Precio por unidad en esta venta:') && pagina.includes('no cambia'), 'El pop-up muestra «Editar subtotal», el campo y el nuevo precio por unidad, y avisa que el precio del producto no cambia');
-afirmar(pagina.includes('>\n                Cancelar\n              </button>') && pagina.includes('onClick={aplicarSubtotal}') && pagina.includes('disabled={precioDelSubtotal === null}'), 'Tiene Cancelar y Aplicar (Aplicar no funciona con un monto inválido)');
+afirmar(pagina.includes('>\n                Cancelar\n              </button>') && pagina.includes('onClick={aplicarSubtotal}') && pagina.includes('disabled={lineaSubtotal.fraccion ? !subtotalFraccionValido : precioDelSubtotal === null}'), 'Tiene Cancelar y Aplicar (Aplicar no funciona con un monto inválido)');
 const iAplicar = pagina.indexOf('function aplicarSubtotal()');
 const aplicar = pagina.slice(iAplicar, pagina.indexOf('function quitarProducto', iAplicar));
 afirmar(aplicar.includes('calcularPrecioDesdeSubtotal(Number(editandoSubtotal.texto), linea.cantidad)') && aplicar.includes('precioVenta: precio') && !aplicar.includes('contenedor.productos'), 'Aplicar solo cambia el precio de esa línea en el carrito: no toca el producto en la lista');
 afirmar(pagina.includes("if (e.key === 'Enter') aplicarSubtotal();"), 'Enter en el campo también aplica');
-afirmar(pagina.includes('precioUnitario: precioEditable ? l.precioVenta : undefined,'), 'El precio de la línea sigue llegando al cálculo y se guarda en la venta');
+afirmar(leer('src/core/venta-fraccion.ts').includes('precioUnitario: opciones.precioEditable && !l.fraccion ? l.precioVenta : undefined,') && (pagina.match(/lineasDeVentaDesdeCarrito\(carrito, \{ precioEditable, descripcionActiva \}\)/g) ?? []).length === 2, 'El precio de la línea sigue llegando al cálculo y se guarda en la venta (salvo en las de fracciones, cuyo precio es el de la lista)');
 afirmar(leer('src/components/hoja-opciones.tsx').includes('usarCapaAtras(true, onCerrar)'), '«Atrás» de Android cierra el pop-up de subtotal sin salir de Nueva venta');
 
 console.log('🎉 Todas las pruebas de la Etapa 2 de Nueva venta pasaron.');

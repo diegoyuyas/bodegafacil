@@ -59,7 +59,7 @@ export function DetalleVentaSheet({
   useEffect(() => setMontado(true), []);
   if (!montado) return null;
 
-  const filas = construirDetalleVenta(lineas);
+  const filas = construirDetalleVenta(lineas, simboloMoneda);
   const acciones = accionesDeVenta(venta, esPremium);
 
   return createPortal(
@@ -120,7 +120,7 @@ export function DetalleVentaSheet({
                   <p className="text-sm font-semibold text-tinta">{fila.producto}</p>
                   <p className="text-xs text-tinta-suave">
                     {fila.cantidadTexto}
-                    {fila.precioUnitario !== null && ` × ${formatearMonto(fila.precioUnitario, simboloMoneda)}`}
+                    {fila.precioUnitarioTexto !== null && ` × ${fila.precioUnitarioTexto}`}
                   </p>
                   {fila.descripcion && <p className="break-words text-xs text-tinta-suave">{fila.descripcion}</p>}
                 </div>

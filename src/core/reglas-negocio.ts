@@ -440,3 +440,13 @@ export function productosConMismoAlias(alias: string, productos: Producto[], exc
       partirAlias(p.alias).some((a) => normalizarParaBusqueda(a) === clave),
   );
 }
+
+/** Lo menos que se puede cobrar en una venta (0.10): por debajo no hay con qué pagar. Vale para todas las ventas. */
+export const MONTO_MINIMO_VENTA = 0.1;
+
+/** Rechaza una venta cuyo total sea menor a 0.10 (por ejemplo, 1 gramo de manzana, o un subtotal editado a 0.01). */
+export function validarMontoMinimoVenta(total: number): void {
+  if (redondear(total) < MONTO_MINIMO_VENTA - 1e-9) {
+    throw new ErrorDeNegocio(`El monto total de la venta debe ser de ${MONTO_MINIMO_VENTA.toFixed(2)} o más.`);
+  }
+}

@@ -4,9 +4,10 @@ import {
   ErrorDeNegocio,
   calcularDeudaNueva,
   calcularStockNuevo,
-  construirVenta,
   redondear,
 } from '@/core/reglas-negocio';
+import { CLAVE_VENTA_ENTERO_FRACCION, estaActivado } from '@/core/configuracion';
+import { construirVentaFraccion, resumenCantidadVendida, unidadesBaseDeLinea } from '@/core/venta-fraccion';
 import { calcularEstadoPlan, CLAVE_PLAN_VENCE_EN, LIMITE_VENTAS_PLAN_GRATIS } from '@/core/plan';
 import type {
   ClienteCompradorItem,
@@ -105,13 +106,15 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
           ? null
           : this.elegirSerieParaVenta(tipoComprobante, input, estadoPlan.tipo === 'premium');
 
-      const calculada = construirVenta(input.lineas, (id) => {
+      // Venta Entero/Fracción: con el interruptor apagado los productos por fracciones se venden solo en enteros.
+      const fraccionActiva = estaActivado(this.configuracion.obtenerValor(CLAVE_VENTA_ENTERO_FRACCION));
+      const calculada = construirVentaFraccion(input.lineas, (id) => {
         const producto = this.productos.obtenerPorId(id);
         if (producto.tipo === 'insumo') {
           throw new ErrorDeNegocio(`"${producto.nombre}" es un insumo: solo sirve para Compras, no se puede vender.`);
         }
         return producto;
-      });
+      }, fraccionActiva);
 
       // El número se toma DENTRO de esta transacción, justo antes de guardar la venta: si algo falla
       // más abajo, todo vuelve atrás y el número no se gasta (no hay repetidos ni saltos).
@@ -140,10 +143,13 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
       const ventaId = this.bd.ultimoIdInsertado();
 
       for (const [indice, detalle] of calculada.detalles.entries()) {
+        const lineaOrigen = calculada.origen[indice] ?? indice;
+        // Un producto por fracciones sale en 2 detalles (cajas y unidades): la nota va solo en el primero.
+        const esPrimeroDeSuLinea = calculada.origen.indexOf(lineaOrigen) === indice;
         this.bd.ejecutar(
           `INSERT INTO detalle_venta
-             (venta_id, producto_id, cantidad, precio_unitario, costo_unitario, subtotal, ganancia_linea, descripcion)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+             (venta_id, producto_id, cantidad, precio_unitario, costo_unitario, subtotal, ganancia_linea, descripcion, unidad, factor_stock)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             ventaId,
             detalle.productoId,
@@ -152,21 +158,24 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
             detalle.costoUnitario,
             detalle.subtotal,
             detalle.gananciaLinea,
-            // Mismo orden que las líneas de entrada (construirVenta usa map).
-            normalizarDescripcionLinea(input.lineas[indice]?.descripcion),
+            normalizarDescripcionLinea(esPrimeroDeSuLinea ? input.lineas[lineaOrigen]?.descripcion : null),
+            detalle.unidad ?? null,
+            detalle.factorStock ?? 1,
           ],
         );
 
         const producto = this.productos.obtenerPorId(detalle.productoId);
         if (producto.controlaStock) {
-          const stockNuevo = calcularStockNuevo(producto.stockActual, 0, detalle.cantidad);
+          // El stock se lleva en la unidad más pequeña: una caja de 12 descuenta 12.
+          const salida = unidadesBaseDeLinea(detalle.cantidad, detalle.factorStock ?? 1);
+          const stockNuevo = calcularStockNuevo(producto.stockActual, 0, salida);
           this.productos.actualizarStock(producto.id, stockNuevo);
 
           this.bd.ejecutar(
             `INSERT INTO movimiento_inventario
                (producto_id, tipo, cantidad, motivo, venta_id, stock_resultante, fecha_hora)
              VALUES (?, 'salida', ?, 'venta', ?, ?, ?)`,
-            [detalle.productoId, detalle.cantidad, ventaId, stockNuevo, ahoraLocalSql()],
+            [detalle.productoId, salida, ventaId, stockNuevo, ahoraLocalSql()],
           );
         }
       }
@@ -269,6 +278,19 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
       }));
   }
 
+  totalesPorMes(anio: string): { mes: string; total: number; numeroVentas: number }[] {
+    return this.bd
+      .consultar<{ mes: string; total: number; numero_ventas: number }>(
+        `SELECT substr(fecha_hora, 1, 7) AS mes, SUM(total) AS total, COUNT(*) AS numero_ventas
+         FROM venta
+         WHERE anulada = 0 AND substr(fecha_hora, 1, 4) = ?
+         GROUP BY substr(fecha_hora, 1, 7)
+         ORDER BY mes`,
+        [anio],
+      )
+      .map((fila) => ({ mes: fila.mes, total: redondear(fila.total), numeroVentas: fila.numero_ventas }));
+  }
+
   listarPorRangoConDetalle(desde: string, hasta: string): VentaListaItem[] {
     return this.bd
       .consultar<{
@@ -363,9 +385,16 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         cantidad: number;
         precio_unitario: number;
         descripcion: string | null;
+        unidad: string | null;
+        factor_stock: number;
+        unidad_entera: string | null;
+        unidad_fraccion: string | null;
+        factor_fraccion: number | null;
       }>(
         `SELECT p.nombre AS producto, dv.cantidad AS cantidad,
-                dv.precio_unitario AS precio_unitario, dv.descripcion AS descripcion
+                dv.precio_unitario AS precio_unitario, dv.descripcion AS descripcion, dv.unidad AS unidad,
+                dv.factor_stock AS factor_stock, p.unidad_entera AS unidad_entera,
+                p.unidad_fraccion AS unidad_fraccion, p.factor_fraccion AS factor_fraccion
          FROM detalle_venta dv
          JOIN producto p ON p.id = dv.producto_id
          WHERE dv.venta_id = ?
@@ -377,6 +406,13 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         cantidad: f.cantidad,
         precioUnitario: f.precio_unitario,
         descripcion: f.descripcion,
+        unidad: f.unidad,
+        factorStock: f.factor_stock,
+        // Solo las líneas por fracciones: cómo se parte hoy ese producto (para contar y mostrar lo vendido).
+        fraccion:
+          f.unidad !== null && f.unidad_entera && f.unidad_fraccion && f.factor_fraccion
+            ? { unidadEntera: f.unidad_entera, unidadFraccion: f.unidad_fraccion, factor: f.factor_fraccion }
+            : null,
       }));
   }
 
@@ -389,10 +425,11 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         precio_unitario: number;
         subtotal: number;
         descripcion: string | null;
+        unidad: string | null;
       }>(
         `SELECT p.nombre AS producto, dv.cantidad AS cantidad,
                 dv.precio_unitario AS precio_unitario, dv.subtotal AS subtotal,
-                dv.descripcion AS descripcion
+                dv.descripcion AS descripcion, dv.unidad AS unidad
          FROM detalle_venta dv
          JOIN producto p ON p.id = dv.producto_id
          WHERE dv.venta_id = ?
@@ -405,6 +442,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         precioUnitario: fila.precio_unitario,
         subtotal: fila.subtotal,
         descripcion: fila.descripcion,
+        unidad: fila.unidad,
       }));
   }
 
@@ -430,21 +468,23 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         throw new ErrorDeNegocio(`La venta V-${id} ya estaba anulada.`);
       }
 
-      const lineas = this.bd.consultar<{ producto_id: number; cantidad: number }>(
-        'SELECT producto_id, cantidad FROM detalle_venta WHERE venta_id = ?',
+      const lineas = this.bd.consultar<{ producto_id: number; cantidad: number; factor_stock: number }>(
+        'SELECT producto_id, cantidad, factor_stock FROM detalle_venta WHERE venta_id = ?',
         [id],
       );
 
       for (const linea of lineas) {
         const producto = this.productos.obtenerPorId(linea.producto_id);
         if (!producto.controlaStock) continue;
-        const stockNuevo = calcularStockNuevo(producto.stockActual, linea.cantidad, 0);
+        // Se devuelve lo que la línea descontó: cantidad × cuántas unidades de stock mueve cada una (caja de 12 → 12).
+        const devuelto = unidadesBaseDeLinea(linea.cantidad, linea.factor_stock);
+        const stockNuevo = calcularStockNuevo(producto.stockActual, devuelto, 0);
         this.productos.actualizarStock(producto.id, stockNuevo);
         this.bd.ejecutar(
           `INSERT INTO movimiento_inventario
              (producto_id, tipo, cantidad, motivo, venta_id, stock_resultante, fecha_hora)
            VALUES (?, 'entrada', ?, 'anulacion', ?, ?, ?)`,
-          [linea.producto_id, linea.cantidad, id, stockNuevo, ahoraLocalSql()],
+          [linea.producto_id, devuelto, id, stockNuevo, ahoraLocalSql()],
         );
       }
 
@@ -634,6 +674,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         fecha_hora: string;
         producto: string;
         cantidad: number;
+        unidad: string | null;
         precio_unitario: number;
         subtotal: number;
         descripcion: string | null;
@@ -653,6 +694,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
            v.fecha_hora AS fecha_hora,
            p.nombre AS producto,
            dv.cantidad AS cantidad,
+           dv.unidad AS unidad,
            dv.precio_unitario AS precio_unitario,
            dv.subtotal AS subtotal,
            dv.descripcion AS descripcion,
@@ -685,6 +727,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         fecha: fila.fecha_hora,
         producto: fila.producto,
         cantidad: fila.cantidad,
+        unidad: fila.unidad,
         precioUnitario: fila.precio_unitario,
         subtotal: fila.subtotal,
         descripcion: fila.descripcion,
@@ -712,13 +755,26 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         producto_id: number;
         nombre: string;
         cantidad_vendida: number;
+        cantidad_base: number;
+        forma_venta: string;
+        unidad_entera: string | null;
+        unidad_fraccion: string | null;
+        factor_fraccion: number | null;
         total_vendido: number;
         ganancia_total: number;
       }>(
+        // Un producto por fracciones vende cajas y unidades: se cuenta todo en unidades base (cajas × 12 + unidades) y se pasa a
+        // enteros equivalentes para poder ordenarlo con los demás. Los productos normales: igual que siempre (factor 1).
         `SELECT
            p.id AS producto_id,
            p.nombre AS nombre,
-           SUM(dv.cantidad) AS cantidad_vendida,
+           SUM(dv.cantidad * dv.factor_stock) * 1.0
+             / CASE WHEN p.forma_venta = 'fraccion' AND p.factor_fraccion >= 2 THEN p.factor_fraccion ELSE 1 END AS cantidad_vendida,
+           SUM(dv.cantidad * dv.factor_stock) AS cantidad_base,
+           p.forma_venta AS forma_venta,
+           p.unidad_entera AS unidad_entera,
+           p.unidad_fraccion AS unidad_fraccion,
+           p.factor_fraccion AS factor_fraccion,
            SUM(dv.subtotal) AS total_vendido,
            SUM(dv.ganancia_linea) AS ganancia_total
          FROM detalle_venta dv
@@ -732,13 +788,24 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
          LIMIT ?`,
         [desde, hasta, limite],
       )
-      .map((fila) => ({
-        productoId: fila.producto_id,
-        nombre: fila.nombre,
-        cantidadVendida: fila.cantidad_vendida,
-        totalVendido: fila.total_vendido,
-        gananciaTotal: fila.ganancia_total,
-      }));
+      .map((fila) => {
+        const resumen = resumenCantidadVendida(fila.cantidad_base, {
+          formaVenta: fila.forma_venta,
+          unidadEntera: fila.unidad_entera,
+          unidadFraccion: fila.unidad_fraccion,
+          factorFraccion: fila.factor_fraccion,
+        });
+        return {
+          productoId: fila.producto_id,
+          nombre: fila.nombre,
+          // Producto normal: la suma de siempre (sin tocar); por fracciones: enteros equivalentes.
+          cantidadVendida: resumen.cantidadTexto ? resumen.cantidad : fila.cantidad_vendida,
+          cantidadTexto: resumen.cantidadTexto,
+          unidadEntera: resumen.unidadEntera ?? null,
+          totalVendido: fila.total_vendido,
+          gananciaTotal: fila.ganancia_total,
+        };
+      });
   }
 
   listarGananciaPorProducto(desde: string, hasta: string): GananciaProductoItem[] {
@@ -747,6 +814,11 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         producto_id: number;
         nombre: string;
         cantidad_vendida: number;
+        cantidad_base: number;
+        forma_venta: string;
+        unidad_entera: string | null;
+        unidad_fraccion: string | null;
+        factor_fraccion: number | null;
         total_vendido: number;
         costo_total: number;
         ganancia_total: number;
@@ -754,7 +826,13 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         `SELECT
            p.id AS producto_id,
            p.nombre AS nombre,
-           SUM(dv.cantidad) AS cantidad_vendida,
+           SUM(dv.cantidad * dv.factor_stock) * 1.0
+             / CASE WHEN p.forma_venta = 'fraccion' AND p.factor_fraccion >= 2 THEN p.factor_fraccion ELSE 1 END AS cantidad_vendida,
+           SUM(dv.cantidad * dv.factor_stock) AS cantidad_base,
+           p.forma_venta AS forma_venta,
+           p.unidad_entera AS unidad_entera,
+           p.unidad_fraccion AS unidad_fraccion,
+           p.factor_fraccion AS factor_fraccion,
            SUM(dv.subtotal) AS total_vendido,
            SUM(dv.costo_unitario * dv.cantidad) AS costo_total,
            SUM(dv.ganancia_linea) AS ganancia_total
@@ -768,15 +846,25 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
          ORDER BY ganancia_total DESC, p.nombre`,
         [desde, hasta],
       )
-      .map((f) => ({
-        productoId: f.producto_id,
-        nombre: f.nombre,
-        cantidadVendida: f.cantidad_vendida,
-        totalVendido: f.total_vendido,
-        costoTotal: f.costo_total,
-        gananciaTotal: f.ganancia_total,
-        margenPorcentaje: f.total_vendido > 0 ? (f.ganancia_total / f.total_vendido) * 100 : 0,
-      }));
+      .map((f) => {
+        const resumen = resumenCantidadVendida(f.cantidad_base, {
+          formaVenta: f.forma_venta,
+          unidadEntera: f.unidad_entera,
+          unidadFraccion: f.unidad_fraccion,
+          factorFraccion: f.factor_fraccion,
+        });
+        return {
+          productoId: f.producto_id,
+          nombre: f.nombre,
+          cantidadVendida: resumen.cantidadTexto ? resumen.cantidad : f.cantidad_vendida,
+          cantidadTexto: resumen.cantidadTexto,
+          unidadEntera: resumen.unidadEntera ?? null,
+          totalVendido: f.total_vendido,
+          costoTotal: f.costo_total,
+          gananciaTotal: f.ganancia_total,
+          margenPorcentaje: f.total_vendido > 0 ? (f.ganancia_total / f.total_vendido) * 100 : 0,
+        };
+      });
   }
 
   listarVentasPorFormaPago(desde: string, hasta: string): VentaFormaPagoItem[] {
