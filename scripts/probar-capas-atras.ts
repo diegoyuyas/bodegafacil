@@ -48,7 +48,7 @@ afirmar(menuTicket.includes('usarCapaAtras(true, onCerrar)') && opciones.include
 afirmar(hoja.indexOf('usarCapaAtras(') < hoja.indexOf('if (!montado) return null;'), 'Los ganchos van antes del «return null» (orden de hooks estable)');
 
 // ---- Detalle del pedido: botones en fila
-afirmar(/Enviar\n/.test(hoja) && hoja.includes('<IconoTacho tamano={24} />') && hoja.includes('<IconoImpresora tamano={24} />') && hoja.includes('<IconoWhatsApp tamano={24}'), 'Enviar (WhatsApp), Reimprimir (impresora) y Anular pedido (tacho), cada uno con su ícono');
+afirmar(/Enviar\n/.test(hoja) && hoja.includes('<IconoTacho tamano={24} />') && hoja.includes('<IconoImpresora tamano={24} />') && hoja.includes('<IconoWhatsApp tamano={24}') && hoja.includes('<IconoCopiar tamano={24} />'), 'Enviar (WhatsApp), Reimprimir (impresora), Copiar y Anular (tacho), cada uno con su ícono');
 
 // ---- Opciones de un cliente
 afirmar(clientes.includes('<HojaOpciones') && clientes.includes('abrirEdicion(cliente)') && clientes.includes('abrirChatWhatsApp(telefonoCliente)'), 'Clientes: al tocar un cliente se abre un pop-up con Editar y Contactar');

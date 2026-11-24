@@ -381,6 +381,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
   obtenerLineas(ventaId: number): LineaVentaResumen[] {
     return this.bd
       .consultar<{
+        producto_id: number;
         producto: string;
         cantidad: number;
         precio_unitario: number;
@@ -391,7 +392,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         unidad_fraccion: string | null;
         factor_fraccion: number | null;
       }>(
-        `SELECT p.nombre AS producto, dv.cantidad AS cantidad,
+        `SELECT dv.producto_id AS producto_id, p.nombre AS producto, dv.cantidad AS cantidad,
                 dv.precio_unitario AS precio_unitario, dv.descripcion AS descripcion, dv.unidad AS unidad,
                 dv.factor_stock AS factor_stock, p.unidad_entera AS unidad_entera,
                 p.unidad_fraccion AS unidad_fraccion, p.factor_fraccion AS factor_fraccion
@@ -402,6 +403,7 @@ export class VentaRepositorioSqlite implements VentaRepositorio {
         [ventaId],
       )
       .map((f) => ({
+        productoId: f.producto_id,
         producto: f.producto,
         cantidad: f.cantidad,
         precioUnitario: f.precio_unitario,

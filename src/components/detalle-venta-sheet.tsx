@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { IconoImpresora, IconoTacho, IconoWhatsApp } from '@/components/ui/iconos';
+import { IconoCopiar, IconoImpresora, IconoTacho, IconoWhatsApp } from '@/components/ui/iconos';
 import { usarCapaAtras } from '@/hooks/usar-capa-atras';
 import { TEXTO_CONFIRMAR_ANULACION, accionesDeVenta, construirDetalleVenta } from '@/core/detalle-venta';
 import { formatearMonto } from '@/core/moneda';
@@ -11,9 +11,9 @@ import type { LineaVentaResumen, VentaListaItem } from '@/core/tipos';
 
 /**
  * Pop-up (bottom sheet) con el detalle de un pedido de la pantalla Pedidos: sus productos con cantidad, precio
- * unitario y subtotal, el total, la forma de pago, el cliente y la fecha; y abajo tres botones compactos en fila,
- * cada uno con su ícono encima del texto: «Enviar» (WhatsApp), «Reimprimir» (impresora) y «Anular pedido» (tacho;
- * pide confirmación). El botón «Atrás» de Android cierra este pop-up (o la confirmación, si está abierta) y deja
+ * unitario y subtotal, el total, la forma de pago, el cliente y la fecha; y abajo cuatro botones compactos en fila,
+ * cada uno con su ícono encima del texto: «Enviar» (WhatsApp), «Reimprimir» (impresora), «Copiar» (pasa los productos
+ * a una Nueva venta) y «Anular» (tacho; pide confirmación). El botón «Atrás» de Android cierra este pop-up (o la confirmación, si está abierta) y deja
  * viendo la lista de pedidos.
  *
  * Se dibuja en un portal sobre <body> y SE APOYA SOBRE LA BARRA INFERIOR (termina donde empieza la barra: 4 rem
@@ -31,6 +31,7 @@ export function DetalleVentaSheet({
   avisoAnulacion,
   onEnviarWhatsApp,
   onReimprimir,
+  onCopiar,
   onAnular,
   onCerrar,
   reimprimiendo = false,
@@ -45,6 +46,8 @@ export function DetalleVentaSheet({
   avisoAnulacion: string | null;
   onEnviarWhatsApp: () => void;
   onReimprimir: () => void;
+  /** «Copiar»: lleva los productos de este pedido a una Nueva venta (sin cliente ni forma de pago). */
+  onCopiar: () => void;
   /** Se llama cuando el usuario YA confirmó la anulación. */
   onAnular: () => void;
   onCerrar: () => void;
@@ -141,8 +144,8 @@ export function DetalleVentaSheet({
           </div>
         </div>
 
-        {(acciones.whatsapp || acciones.reimprimir !== 'oculto' || acciones.anular) && (
-          <div className="border-t border-linea px-5 pb-4 pt-3">
+        {/* «Copiar» está siempre: sirve también para repetir un pedido anulado. */}
+        <div className="border-t border-linea px-5 pb-4 pt-3">
             <div className="grid auto-cols-fr grid-flow-col gap-2">
               {acciones.whatsapp && (
                 <button
@@ -166,14 +169,24 @@ export function DetalleVentaSheet({
                   Reimprimir
                 </button>
               )}
+              <button
+                type="button"
+                onClick={onCopiar}
+                aria-label="Copiar pedido"
+                className="flex h-16 flex-col items-center justify-center gap-1 rounded-xl border-2 border-bodega text-xs font-semibold text-bodega"
+              >
+                <IconoCopiar tamano={24} />
+                Copiar
+              </button>
               {acciones.anular && (
                 <button
                   type="button"
                   onClick={() => setConfirmando(true)}
+                  aria-label="Anular pedido"
                   className="flex h-16 flex-col items-center justify-center gap-1 rounded-xl bg-alerta text-xs font-semibold text-white"
                 >
                   <IconoTacho tamano={24} />
-                  Anular pedido
+                  Anular
                 </button>
               )}
             </div>
@@ -181,7 +194,6 @@ export function DetalleVentaSheet({
               <p className="mt-1 text-center text-xs font-semibold text-acento-oscuro">Reimprimir: función Premium</p>
             )}
           </div>
-        )}
 
         {confirmando && (
           <div

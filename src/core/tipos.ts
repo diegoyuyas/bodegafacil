@@ -352,6 +352,8 @@ export interface VentaListaItem {
 
 /** Una línea de producto dentro de una venta, para el preview al expandir. */
 export interface LineaVentaResumen {
+  /** Producto de la línea (lo usa «Copiar pedido»). Ausente en listas que no lo necesitan. */
+  productoId?: number;
   producto: string;
   cantidad: number;
   /** Precio unitario cobrado (el preview de Inicio lo muestra). */

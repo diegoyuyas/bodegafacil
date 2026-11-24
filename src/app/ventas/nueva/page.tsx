@@ -9,6 +9,8 @@ import { CLAVE_IMPRESORA_ACTIVA, IMPRESION_BLUETOOTH_DISPONIBLE } from '@/core/i
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import { ErrorDeNegocio, redondear } from '@/core/reglas-negocio';
 import { textoUnidad } from '@/core/unidades';
+import { cantidadParaCarrito, textoAvisoCopia } from '@/core/copiar-pedido';
+import { tomarPedidoACopiar } from '@/infraestructura/copiar-pedido/almacen';
 import {
   configuracionFraccionDeProducto,
   construirVentaFraccion,
@@ -149,6 +151,8 @@ export default function PaginaNuevaVenta() {
   const [ventaFraccionActiva, setVentaFraccionActiva] = useState(false);
   const [mensajeFotoPago, setMensajeFotoPago] = useState<string | null>(null);
   const [mensajeError, setMensajeError] = useState<string | null>(null);
+  // Aviso tras «Copiar pedido» (desde Pedidos): cuántos productos se copiaron y cuáles no.
+  const [avisoCopia, setAvisoCopia] = useState<string | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [limiteAlcanzado, setLimiteAlcanzado] = useState(false);
   const [ventasUsadas, setVentasUsadas] = useState(0);
@@ -167,8 +171,40 @@ export default function PaginaNuevaVenta() {
 
   useEffect(() => {
     if (!contenedor) return;
-    setProductos(contenedor.productos.listarActivosParaVentaConFracciones());
-    setVentaFraccionActiva(estaActivado(contenedor.configuracion.obtenerValor(CLAVE_VENTA_ENTERO_FRACCION)));
+    const listaProductos = contenedor.productos.listarActivosParaVentaConFracciones();
+    const fraccionActiva = estaActivado(contenedor.configuracion.obtenerValor(CLAVE_VENTA_ENTERO_FRACCION));
+    setProductos(listaProductos);
+    setVentaFraccionActiva(fraccionActiva);
+
+    // «Copiar pedido»: solo productos y cantidades; con el precio y el stock de hoy. Sin cliente, pago en Efectivo.
+    const copia = tomarPedidoACopiar();
+    if (copia) {
+      const lineas: LineaCarrito[] = [];
+      const omitidos: string[] = [];
+      const recortados: string[] = [];
+      for (const item of copia.items) {
+        const producto = listaProductos.find((p) => p.id === item.productoId);
+        const resultado = producto ? cantidadParaCarrito(item.cantidadBase, producto, fraccionActiva) : null;
+        if (!producto || !resultado) {
+          omitidos.push(item.nombre);
+          continue;
+        }
+        if (resultado.recortada) recortados.push(producto.nombre);
+        const { configuracion } = resultado;
+        lineas.push({
+          productoId: producto.id,
+          nombre: producto.nombre,
+          cantidad: resultado.cantidad,
+          precioVenta: producto.precioVenta,
+          stockDisponible: resultado.disponible,
+          descripcion: '',
+          fraccion: configuracion && fraccionActiva ? configuracion : undefined,
+          unidadEntera: configuracion && !fraccionActiva ? configuracion.unidadEntera : undefined,
+        });
+      }
+      setCarrito(lineas);
+      setAvisoCopia(textoAvisoCopia(copia.comprobante, lineas.length, omitidos, recortados));
+    }
     const usadas = contenedor.ventas.contarTotalHistorico();
     const premium = contenedor.plan.obtenerEstado().tipo === 'premium';
     setVentasUsadas(usadas);
@@ -873,6 +909,8 @@ export default function PaginaNuevaVenta() {
           Te quedan {LIMITE_VENTAS_PLAN_GRATIS - ventasUsadas} pedidos en tu Plan Gratis.
         </p>
       )}
+
+      {avisoCopia && <p className="mt-3 rounded-lg bg-acento/10 px-3 py-2 text-xs text-tinta/70">{avisoCopia}</p>}
 
       {/* Buscador de productos */}
       <div className="relative mt-5">

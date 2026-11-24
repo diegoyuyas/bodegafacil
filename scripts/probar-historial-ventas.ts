@@ -62,13 +62,13 @@ afirmar(!inicio.includes('ventaExpandida') && inicio.includes('<DetalleVentaShee
 afirmar(!inicio.includes('¿Eliminar el pedido'), 'El viejo cuadro «¿Eliminar el pedido…?» se reemplazó por la confirmación del pop-up');
 afirmar(inicio.includes("pedirPermiso('anular_venta'") && inicio.includes('devolverCobrado'), 'Se conservan el permiso de anular y la pregunta de devolver lo cobrado en fiados');
 
-afirmar(['Detalle del pedido', 'Enviar', 'Reimprimir', 'Anular pedido', 'Cancelar', 'TEXTO_CONFIRMAR_ANULACION', 'IconoWhatsApp'].every((p) => hoja.includes(p)), 'El pop-up tiene el detalle, los 3 botones y la confirmación (Cancelar / Anular)');
+afirmar(['Detalle del pedido', 'Enviar', 'Reimprimir', 'Copiar', 'Anular pedido', 'Cancelar', 'TEXTO_CONFIRMAR_ANULACION', 'IconoWhatsApp'].every((p) => hoja.includes(p)), 'El pop-up tiene el detalle, los 4 botones y la confirmación (Cancelar / Anular)');
 afirmar(['Fecha y hora', 'Forma de pago', 'Cliente', 'Total', 'construirDetalleVenta'].every((p) => hoja.includes(p)), 'El pop-up muestra fecha/hora, forma de pago, cliente, productos y total');
-afirmar((hoja.match(/flex h-16 flex-col items-center justify-center gap-1/g) ?? []).length === 3 && hoja.includes('grid auto-cols-fr grid-flow-col gap-2'), 'Los 3 botones van en una sola fila, compactos (h-16) y de igual ancho, con el ícono arriba y el texto debajo');
-afirmar(hoja.indexOf('<IconoWhatsApp') < hoja.indexOf('Enviar\n') && hoja.indexOf('<IconoImpresora') < hoja.indexOf('Reimprimir\n') && hoja.indexOf('<IconoTacho') < hoja.indexOf('Anular pedido\n') && hoja.indexOf('Enviar\n') < hoja.indexOf('<IconoImpresora') && hoja.indexOf('Reimprimir\n') < hoja.indexOf('<IconoTacho'), 'Orden: WhatsApp «Enviar», impresora «Reimprimir» y tacho «Anular pedido»');
+afirmar((hoja.match(/flex h-16 flex-col items-center justify-center gap-1/g) ?? []).length === 4 && hoja.includes('grid auto-cols-fr grid-flow-col gap-2'), 'Los 4 botones van en una sola fila, compactos (h-16) y de igual ancho, con el ícono arriba y el texto debajo');
+afirmar(hoja.indexOf('<IconoWhatsApp') < hoja.indexOf('Enviar\n') && hoja.indexOf('<IconoImpresora') < hoja.indexOf('Reimprimir\n') && hoja.indexOf('<IconoCopiar') < hoja.indexOf('Copiar\n') && hoja.indexOf('<IconoTacho') < hoja.indexOf('Anular\n') && hoja.indexOf('Enviar\n') < hoja.indexOf('<IconoImpresora') && hoja.indexOf('Reimprimir\n') < hoja.indexOf('<IconoCopiar') && hoja.indexOf('Copiar\n') < hoja.indexOf('<IconoTacho'), 'Orden: WhatsApp «Enviar», impresora «Reimprimir», «Copiar» y tacho «Anular»');
 const inicioAnular = hoja.indexOf('onClick={() => setConfirmando(true)}');
-const botonAnular = hoja.slice(inicioAnular, hoja.indexOf('Anular pedido', inicioAnular) + 13);
-afirmar(botonAnular.includes('bg-alerta') && botonAnular.includes('text-white') && hoja.includes('border-[#25D366]'), '«Anular pedido» va en rojo y «WhatsApp» con el verde de WhatsApp');
+const botonAnular = hoja.slice(inicioAnular, hoja.indexOf('Anular\n', inicioAnular) + 6);
+afirmar(botonAnular.includes('bg-alerta') && botonAnular.includes('text-white') && hoja.includes('border-[#25D366]'), '«Anular» va en rojo y «WhatsApp» con el verde de WhatsApp');
 
 // ---- Logo de WhatsApp en toda la app
 function archivos(dir: string): string[] {

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { usarContenedor } from '@/hooks/usar-contenedor';
 import { usarPermisos } from '@/hooks/usar-permisos';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
@@ -16,6 +17,8 @@ import { guardarTicketComoImagen } from '@/infraestructura/comprobante-imagen/co
 import { MenuImprimirTicket } from '@/components/menu-imprimir-ticket';
 import { DetalleVentaSheet } from '@/components/detalle-venta-sheet';
 import { avisoAnulacionFiado } from '@/core/detalle-venta';
+import { itemsParaCopiar } from '@/core/copiar-pedido';
+import { guardarPedidoACopiar } from '@/infraestructura/copiar-pedido/almacen';
 import { EsqueletoLista } from '@/components/ui/esqueleto';
 import { etiquetaMetodoPago, filtrarPedidos, rangoEsHoy, rangoInvalido, resumirPedidos } from '@/core/pedidos';
 import { formatearFechaHora, hoyLocalSql } from '@/core/tiempo';
@@ -23,12 +26,13 @@ import { formatearFechaHora, hoyLocalSql } from '@/core/tiempo';
 /**
  * Pantalla «Pedidos» (acceso de la barra inferior). Es el antiguo «Historial de ventas» de Inicio, pero fijo (sin
  * desplegar): rango de fechas (por defecto HOY), buscador por cliente, producto, forma de pago o monto, y la lista.
- * Al tocar un pedido se abre su detalle (con WhatsApp, Reimprimir y Anular pedido). El botón flotante
+ * Al tocar un pedido se abre su detalle (con WhatsApp, Reimprimir, Copiar y Anular). El botón flotante
  * «Nueva venta» vive en el layout y aquí siempre está a la vista.
  */
 export default function PaginaPedidos() {
   const { contenedor, error, cargando } = usarContenedor();
   const { pedirPermiso, modalPermiso } = usarPermisos(contenedor);
+  const router = useRouter();
   const [simboloMoneda, setSimboloMoneda] = useState(obtenerSimboloMoneda(null));
   const [prefijoPais, setPrefijoPais] = useState(obtenerPrefijoPais(null));
   const [nombreTienda, setNombreTienda] = useState(obtenerNombreTienda(null));
@@ -152,6 +156,23 @@ export default function PaginaPedidos() {
     const mensaje = construirMensajeVenta(nombreTienda, ventaCompleta, lineasMensaje, simboloMoneda);
     const enlace = construirEnlaceWhatsApp(telefono, mensaje, prefijoPais);
     window.open(enlace, '_blank');
+  }
+
+  /**
+   * «Copiar» del detalle: lleva SOLO los productos y cantidades del pedido a una Nueva venta (sin cliente ni forma
+   * de pago: arranca en Efectivo). No toca el pedido original.
+   */
+  function copiarPedido(venta: VentaListaItem) {
+    if (!contenedor) return;
+    const items = itemsParaCopiar(lineasPorVenta[venta.id] ?? contenedor.ventas.obtenerLineas(venta.id));
+    if (items.length === 0) {
+      setVentaDetalle(null);
+      setMensajeImpresion('Este pedido no tiene productos que se puedan copiar.');
+      return;
+    }
+    guardarPedidoACopiar({ comprobante: venta.comprobante, items });
+    setVentaDetalle(null);
+    router.push('/ventas/nueva');
   }
 
   /** «Reimprimir» del detalle: abre el menú «Imprimir en ticketera / Guardar como...» para reconstruir el ticket. */
@@ -320,6 +341,7 @@ export default function PaginaPedidos() {
           }
           onEnviarWhatsApp={() => enviarWhatsAppDeVenta(ventaDetalle)}
           onReimprimir={() => abrirMenuTicket(ventaDetalle)}
+          onCopiar={() => copiarPedido(ventaDetalle)}
           onAnular={() => anularVenta(ventaDetalle)}
           onCerrar={() => setVentaDetalle(null)}
           reimprimiendo={imprimiendoVentaId === ventaDetalle.id}
