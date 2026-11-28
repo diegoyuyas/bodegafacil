@@ -51,10 +51,10 @@ afirmar(hoja.indexOf('usarCapaAtras(') < hoja.indexOf('if (!montado) return null
 afirmar(/Enviar\n/.test(hoja) && hoja.includes('<IconoTacho tamano={24} />') && hoja.includes('<IconoImpresora tamano={24} />') && hoja.includes('<IconoWhatsApp tamano={24}') && hoja.includes('<IconoCopiar tamano={24} />'), 'Enviar (WhatsApp), Reimprimir (impresora), Copiar y Anular (tacho), cada uno con su ícono');
 
 // ---- Opciones de un cliente
-afirmar(clientes.includes('<HojaOpciones') && clientes.includes('abrirEdicion(cliente)') && clientes.includes('abrirChatWhatsApp(telefonoCliente)'), 'Clientes: al tocar un cliente se abre un pop-up con Editar y Contactar');
-const iEditar = clientes.indexOf('            Editar\n          </button>');
-const iContactar = clientes.indexOf('Contactar\n            </button>');
-afirmar(iEditar > 0 && iContactar > iEditar && clientes.slice(iEditar, iContactar).includes('<IconoWhatsApp'), 'Orden: «Editar» y debajo el logo de WhatsApp con «Contactar»');
+afirmar(clientes.includes('<HojaOpciones') && clientes.includes('abrirEdicion(cliente)') && clientes.includes('abrirChatWhatsApp(telefonoCliente)'), 'Clientes: al tocar un cliente se abre un pop-up con Editar y WhatsApp');
+const iEditar = clientes.indexOf('              Editar\n            </button>');
+const iWhatsApp = clientes.indexOf('WhatsApp\n              </button>');
+afirmar(iEditar > 0 && iWhatsApp > iEditar && clientes.slice(iEditar, iWhatsApp).includes('<IconoWhatsApp'), 'Orden: «Editar» y a su lado, en la misma fila, el logo de WhatsApp con «WhatsApp»');
 const filas = clientes.slice(clientes.indexOf('clientesFiltrados.map('), clientes.indexOf('</ul>', clientes.indexOf('clientesFiltrados.map(')));
 afirmar(!filas.includes('WhatsApp') && !filas.includes('Editar') && filas.includes('setClienteOpcionesId(cliente.id)'), 'La fila de cada cliente ya no tiene botones de WhatsApp ni Editar: toda la fila se toca');
 afirmar(opciones.includes('createPortal(') && opciones.includes('bottom-[calc(4rem+var(--area-segura-abajo)+var(--desfase-viewport-abajo,0px))]') && opciones.includes('z-40'), 'El pop-up de opciones se apoya sobre la barra inferior (no la tapa), igual que el detalle de un pedido');

@@ -16,11 +16,14 @@ import { usarEscribiendo } from '@/hooks/usar-escribiendo';
 export function HojaOpciones({
   titulo,
   subtitulo,
+  tituloCompleto = false,
   onCerrar,
   children,
 }: {
   titulo: string;
   subtitulo?: string;
+  /** true = el título se ve completo (varias líneas) en vez de cortarse con «…». Por defecto se corta. */
+  tituloCompleto?: boolean;
   onCerrar: () => void;
   children: ReactNode;
 }) {
@@ -49,7 +52,13 @@ export function HojaOpciones({
       >
         <div className="flex items-start justify-between gap-3 px-5 pb-2 pt-4">
           <div className="min-w-0">
-            <h2 className="truncate text-base font-extrabold text-bodega-oscuro">{titulo}</h2>
+            <h2
+              className={`text-base font-extrabold text-bodega-oscuro ${
+                tituloCompleto ? 'break-words leading-snug' : 'truncate'
+              }`}
+            >
+              {titulo}
+            </h2>
             {subtitulo && <p className="truncate text-xs text-tinta-suave">{subtitulo}</p>}
           </div>
           <button type="button" onClick={onCerrar} aria-label="Cerrar" className="shrink-0 text-2xl leading-none text-tinta-suave">

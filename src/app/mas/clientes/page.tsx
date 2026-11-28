@@ -19,6 +19,15 @@ import type { Cliente } from '@/core/tipos';
 import { SelectorEstado, filtrarPorEstado, type FiltroEstado } from '@/components/selector-estado';
 import { EtiquetaCampo, VentanaFormulario } from '@/components/ventana-formulario';
 import { HojaOpciones } from '@/components/hoja-opciones';
+import {
+  botonesOpcionesCliente,
+  datosContactoCliente,
+  etiquetasCliente,
+  resumenCliente,
+} from '@/core/clientes-lista';
+
+// Chip rojo de aviso: «Inactivo» y «Debe S/ X».
+const CLASE_CHIP_ALERTA = 'rounded-full bg-alerta/10 px-2 py-0.5 text-[11px] font-semibold text-alerta';
 
 export default function PaginaClientes() {
   const { contenedor, cargando, error } = usarContenedor();
@@ -290,39 +299,60 @@ export default function PaginaClientes() {
       )}
 
       {clienteOpciones && (
-        <HojaOpciones
-          titulo={clienteOpciones.nombre}
-          subtitulo={clienteOpciones.telefono ?? clienteOpciones.documento ?? undefined}
-          onCerrar={() => setClienteOpcionesId(null)}
-        >
-          <button
-            type="button"
-            onClick={() => {
-              const cliente = clienteOpciones;
-              setClienteOpcionesId(null);
-              abrirEdicion(cliente);
-            }}
-            className="flex h-12 w-full items-center justify-center rounded-xl border-2 border-bodega text-sm font-semibold text-bodega"
-          >
-            Editar
-          </button>
-          {clienteOpciones.telefono && (
+        <HojaOpciones titulo={clienteOpciones.nombre} tituloCompleto onCerrar={() => setClienteOpcionesId(null)}>
+          {etiquetasCliente(clienteOpciones).length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {etiquetasCliente(clienteOpciones).map((etiqueta) => (
+                <span key={etiqueta} className={CLASE_CHIP_ALERTA}>
+                  {etiqueta === 'inactivo' ? 'Inactivo' : `Debe ${formatearMonto(clienteOpciones.saldoPendiente, simboloMoneda)}`}
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            {resumenCliente(clienteOpciones).map((cuadro) => (
+              <div key={cuadro.clave} className="min-w-0 rounded-xl bg-white px-3 py-2">
+                <span className="block text-[11px] text-tinta-suave">{cuadro.etiqueta}</span>
+                <span
+                  className={`block break-words text-sm ${
+                    cuadro.valor ? 'font-semibold text-tinta' : 'text-tinta-suave'
+                  }`}
+                >
+                  {cuadro.valor ?? 'No registrado'}
+                </span>
+              </div>
+            ))}
+          </div>
+          <div className="flex gap-2 pt-1">
             <button
               type="button"
               onClick={() => {
-                const telefonoCliente = clienteOpciones.telefono as string;
+                const cliente = clienteOpciones;
                 setClienteOpcionesId(null);
-                abrirChatWhatsApp(telefonoCliente);
+                abrirEdicion(cliente);
               }}
-              disabled={!esPremium}
-              className="flex h-12 w-full items-center justify-center gap-2 rounded-xl border-2 border-[#25D366] bg-white text-sm font-semibold text-tinta disabled:opacity-40"
+              className="flex h-12 flex-1 items-center justify-center rounded-xl bg-bodega/10 text-sm font-semibold text-bodega-oscuro active:bg-bodega/20"
             >
-              <IconoWhatsApp tamano={22} className="text-[#25D366]" />
-              Contactar
+              Editar
             </button>
-          )}
-          {clienteOpciones.telefono && !esPremium && (
-            <p className="text-center text-xs font-semibold text-acento-oscuro">Contactar: función Premium</p>
+            {botonesOpcionesCliente(clienteOpciones).includes('whatsapp') && (
+              <button
+                type="button"
+                onClick={() => {
+                  const telefonoCliente = clienteOpciones.telefono as string;
+                  setClienteOpcionesId(null);
+                  abrirChatWhatsApp(telefonoCliente);
+                }}
+                disabled={!esPremium}
+                className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl border-2 border-[#25D366] bg-white text-sm font-semibold text-tinta disabled:opacity-40"
+              >
+                <IconoWhatsApp tamano={22} className="text-[#25D366]" />
+                WhatsApp
+              </button>
+            )}
+          </div>
+          {botonesOpcionesCliente(clienteOpciones).includes('whatsapp') && !esPremium && (
+            <p className="text-center text-xs font-semibold text-acento-oscuro">WhatsApp: función Premium</p>
           )}
         </HojaOpciones>
       )}
@@ -360,7 +390,7 @@ export default function PaginaClientes() {
           </p>
         )}
 
-        <ul className="divide-y divide-linea border-y border-linea">
+        <ul className="divide-y divide-linea/60 border-y border-linea/60">
           {clientesFiltrados.map((cliente) => (
             <li key={cliente.id}>
               <button
@@ -368,26 +398,22 @@ export default function PaginaClientes() {
                 onClick={() => setClienteOpcionesId(cliente.id)}
                 className="flex w-full items-center justify-between gap-3 py-3 text-left"
               >
-                <div className="min-w-0">
-                  <p className="text-sm text-tinta">
+                <div className="min-w-0 flex-1">
+                  <p className="line-clamp-2 break-words text-[15px] font-semibold leading-snug text-tinta">
                     {cliente.nombre}
-                    {!cliente.activo && (
-                      <span className="ml-2 rounded-full bg-alerta/10 px-2 py-0.5 text-xs font-semibold text-alerta">
-                        Inactivo
-                      </span>
-                    )}
                   </p>
-                  <p className="text-xs text-tinta-suave">
-                    {cliente.documento ?? 'Sin documento'}
-                    {cliente.telefono && ` · ${cliente.telefono}`}
-                    {cliente.saldoPendiente > 0 && (
-                      <span className="text-alerta"> · Debe {formatearMonto(cliente.saldoPendiente, simboloMoneda)}</span>
-                    )}
-                  </p>
+                  {(datosContactoCliente(cliente).length > 0 || !cliente.activo) && (
+                    <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-tinta-suave">
+                      {datosContactoCliente(cliente).join(' · ')}
+                      {!cliente.activo && <span className={CLASE_CHIP_ALERTA}>Inactivo</span>}
+                    </p>
+                  )}
                 </div>
-                <span className="shrink-0 text-tinta-suave" aria-hidden="true">
-                  ›
-                </span>
+                {cliente.saldoPendiente > 0 && (
+                  <span className={`shrink-0 whitespace-nowrap ${CLASE_CHIP_ALERTA}`}>
+                    Debe {formatearMonto(cliente.saldoPendiente, simboloMoneda)}
+                  </span>
+                )}
               </button>
             </li>
           ))}

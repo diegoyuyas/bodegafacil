@@ -13,7 +13,7 @@ import { AVISOS, estadoLista } from '@/core/avisos';
 import { CLAVE_MONEDA, formatearMonto, obtenerSimboloMoneda } from '@/core/moneda';
 import type { HistorialProductoItem, Producto, TipoProducto } from '@/core/tipos';
 import { ErrorDeNegocio } from '@/core/reglas-negocio';
-import { limpiarNumeroEscrito, mayusculasAlEscribir, partirAlias, partirEnLineas, unirAlias } from '@/core/texto';
+import { limpiarNumeroEscrito, mayusculasAlEscribir, partirAlias, unirAlias } from '@/core/texto';
 import { CLAVE_MODO_VENTA_VOZ, CLAVE_VENTA_ENTERO_FRACCION, estaActivado, modoVentaVozDisponible } from '@/core/configuracion';
 import { textoUnidad } from '@/core/unidades';
 import {
@@ -34,6 +34,26 @@ import { formatearFechaHora } from '@/core/tiempo';
 import { SelectorEstado, filtrarPorEstado, type FiltroEstado } from '@/components/selector-estado';
 import { EtiquetaCampo, VentanaFormulario } from '@/components/ventana-formulario';
 import { CampoAlias } from '@/components/campo-alias';
+import {
+  OPCIONES_FILTRO_TIPO,
+  TEXTO_BOTON_OPCION_PRODUCTO,
+  TEXTO_DATO_RESUMEN_PRODUCTO,
+  TEXTO_ETIQUETA_PRODUCTO,
+  botonesOpcionesProducto,
+  datosResumenProducto,
+  etiquetasProducto,
+  nombreMontoProducto,
+  type BotonOpcionProducto,
+  type DatoResumenProducto,
+  type EtiquetaProducto,
+} from '@/core/productos-lista';
+
+// Chips de la lista y del pop-up. Inactivo y Stock bajo van en rojo (aviso); Insumo, neutro con borde.
+const CLASE_ETIQUETA_PRODUCTO: Record<EtiquetaProducto, string> = {
+  insumo: 'rounded-full border border-linea px-2 py-0.5 text-[11px] font-semibold text-tinta-suave',
+  inactivo: 'rounded-full bg-alerta/10 px-2 py-0.5 text-[11px] font-semibold text-alerta',
+  stock_bajo: 'rounded-full bg-alerta/10 px-2 py-0.5 text-[11px] font-semibold text-alerta',
+};
 
 const ETIQUETAS_CAMPO_HISTORIAL: Record<HistorialProductoItem['campo'], string> = {
   nombre: 'Nombre',
@@ -261,6 +281,31 @@ export default function PaginaProductos() {
     setAjustandoId(null);
     setBitacoraId(producto.id);
     setHistorial(contenedor ? contenedor.productos.listarHistorial(producto.id) : []);
+  }
+
+  // Elegir un botón del pop-up: se cierra el pop-up y se abre el panel que corresponde en la fila.
+  function elegirOpcionProducto(boton: BotonOpcionProducto, producto: Producto) {
+    setMenuOpcionesId(null);
+    if (boton === 'editar') abrirEdicion(producto);
+    else if (boton === 'ajustar_stock') abrirAjuste(producto);
+    else alternarBitacora(producto);
+  }
+
+  // Valor (y detalle pequeño) de cada cuadro de resumen del pop-up.
+  function valorResumenProducto(producto: Producto, dato: DatoResumenProducto): { valor: string; detalle: string | null } {
+    const fraccion = producto.tipo !== 'insumo' ? configuracionFraccionDeProducto(producto, true) : null;
+    if (dato === 'stock') {
+      if (!producto.controlaStock) return { valor: 'No controla', detalle: null };
+      return {
+        valor: fraccion ? textoCantidadFraccion(producto.stockActual, fraccion) : String(producto.stockActual),
+        detalle: null,
+      };
+    }
+    const monto = dato === 'precio' ? producto.precioVenta : producto.costo;
+    return {
+      valor: formatearMonto(monto, simboloMoneda),
+      detalle: fraccion ? `por ${textoUnidad(fraccion.unidadEntera, 1)}` : null,
+    };
   }
 
   function formatearValorCampo(campo: HistorialProductoItem['campo'], valor: string | null): string {
@@ -782,16 +827,23 @@ export default function PaginaProductos() {
             />
             <SelectorEstado valor={filtroEstado} onCambiar={setFiltroEstado} />
           </div>
-          <select
-            value={filtroTipo}
-            onChange={(e) => setFiltroTipo(e.target.value as 'todos' | TipoProducto)}
-            aria-label="Filtrar por tipo de producto"
-            className="h-11 w-full rounded-xl border border-linea bg-white px-3 text-sm outline-none focus:border-bodega"
-          >
-            <option value="todos">Todos los productos</option>
-            <option value="venta_compra">Productos Venta y Compra</option>
-            <option value="insumo">Insumos</option>
-          </select>
+          <div role="group" aria-label="Filtrar por tipo de producto" className="flex gap-2">
+            {OPCIONES_FILTRO_TIPO.map((opcion) => (
+              <button
+                key={opcion.valor}
+                type="button"
+                onClick={() => setFiltroTipo(opcion.valor)}
+                aria-pressed={filtroTipo === opcion.valor}
+                className={`h-11 flex-1 rounded-full text-sm font-semibold transition-colors ${
+                  filtroTipo === opcion.valor
+                    ? 'bg-bodega text-white'
+                    : 'border border-linea bg-white text-tinta active:bg-bodega/10'
+                }`}
+              >
+                {opcion.texto}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -816,15 +868,15 @@ export default function PaginaProductos() {
           </p>
         )}
 
-        <ul className="divide-y divide-linea border-y border-linea">
+        <ul className="divide-y divide-linea/60 border-y border-linea/60">
           {productosFiltrados.map((producto) => {
-            const stockBajo = producto.controlaStock && producto.stockActual <= producto.stockMinimo;
+            const etiquetas = etiquetasProducto(producto);
             // Producto por fracciones: su stock está en la unidad más pequeña y se muestra como "20 cajas y 8 unidades".
             const configuracionFraccion = configuracionFraccionDeProducto(producto, true);
             const panelAbierto =
               ajustandoId === producto.id || bitacoraId === producto.id;
             return (
-              <li key={producto.id} id={`producto-${producto.id}`} className="scroll-mt-4 py-1">
+              <li key={producto.id} id={`producto-${producto.id}`} className="scroll-mt-4 py-1.5">
                 <button
                   type="button"
                   onClick={() => {
@@ -832,42 +884,32 @@ export default function PaginaProductos() {
                     else setMenuOpcionesId(producto.id);
                   }}
                   aria-haspopup="dialog"
-                  className={`flex w-full items-center justify-between gap-3 rounded-xl px-2 py-2 text-left transition-colors active:bg-bodega/15 ${
+                  className={`flex w-full items-center justify-between gap-3 rounded-xl px-2 py-3 text-left transition-colors active:bg-bodega/15 ${
                     menuOpcionesId === producto.id || panelAbierto ? 'bg-bodega/10' : ''
                   }`}
                 >
                   <div className="min-w-0 flex-1">
-                    <span className="block text-sm text-tinta">
-                      {partirEnLineas(producto.nombre, 25).map((linea, i, lineas) => (
-                        <span key={i} className="block">
-                          {linea}
-                          {i === lineas.length - 1 && producto.tipo === 'insumo' && (
-                            <span className="ml-2 text-xs font-semibold text-tinta-suave">(Insumo)</span>
-                          )}
-                          {i === lineas.length - 1 && !producto.activo && (
-                            <span className="ml-2 rounded-full bg-alerta/10 px-2 py-0.5 text-xs font-semibold text-alerta">
-                              Inactivo
-                            </span>
-                          )}
+                    <span className="line-clamp-2 break-words text-[15px] font-semibold leading-snug text-tinta">
+                      {producto.nombre}
+                    </span>
+                    <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                      {producto.tipo !== 'insumo' &&
+                        (producto.controlaStock ? (
+                          <span className="text-xs text-tinta-suave">
+                            Stock: {configuracionFraccion ? textoCantidadFraccion(producto.stockActual, configuracionFraccion) : producto.stockActual}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-tinta-suave">No controla stock</span>
+                        ))}
+                      {etiquetas.map((etiqueta) => (
+                        <span key={etiqueta} className={CLASE_ETIQUETA_PRODUCTO[etiqueta]}>
+                          {TEXTO_ETIQUETA_PRODUCTO[etiqueta]}
                         </span>
                       ))}
                     </span>
-                    {producto.tipo === 'insumo' ? null : producto.controlaStock ? (
-                      <span className={`block text-xs ${stockBajo ? 'text-alerta' : 'text-tinta-suave'}`}>
-                        Stock: {configuracionFraccion ? textoCantidadFraccion(producto.stockActual, configuracionFraccion) : producto.stockActual}{' '}
-                        {stockBajo && '· bajo'}
-                      </span>
-                    ) : (
-                      <span className="block text-xs text-tinta-suave">No controla stock</span>
-                    )}
                   </div>
                   <span className="max-w-[45%] shrink-0 text-right text-sm font-semibold text-tinta">
-                    {producto.tipo === 'insumo' ? (
-                      <>
-                        Costo:{' '}
-                        <span className="whitespace-nowrap">{formatearMonto(producto.costo, simboloMoneda)}</span>
-                      </>
-                    ) : configuracionFraccion ? (
+                    {producto.tipo !== 'insumo' && configuracionFraccion ? (
                       <>
                         <span className="block whitespace-nowrap">
                           {formatearMonto(producto.precioVenta, simboloMoneda)}{' '}
@@ -881,7 +923,12 @@ export default function PaginaProductos() {
                         </span>
                       </>
                     ) : (
-                      <span className="whitespace-nowrap">{formatearMonto(producto.precioVenta, simboloMoneda)}</span>
+                      <>
+                        <span className="block whitespace-nowrap text-[15px]">
+                          {formatearMonto(producto.tipo === 'insumo' ? producto.costo : producto.precioVenta, simboloMoneda)}
+                        </span>
+                        <span className="block text-[11px] font-normal text-tinta-suave">{nombreMontoProducto(producto)}</span>
+                      </>
                     )}
                   </span>
                 </button>
@@ -1024,43 +1071,46 @@ export default function PaginaProductos() {
               className="hoja-inferior w-full max-w-app rounded-t-2xl bg-white px-5 pb-6 pt-4 shadow-lg"
             >
               <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-linea" />
-              <p className="break-words text-sm font-extrabold text-bodega-oscuro">{productoMenu.nombre}</p>
-              <div className="mt-3 space-y-2">
-                <button
-                  onClick={() => {
-                    setMenuOpcionesId(null);
-                    abrirEdicion(productoMenu);
-                  }}
-                  className="min-h-12 w-full rounded-xl border border-linea px-4 py-2 text-left text-sm font-semibold text-bodega-oscuro active:bg-papel"
-                >
-                  Editar
-                </button>
-                {productoMenu.tipo !== 'insumo' && productoMenu.controlaStock && (
+              <p className="break-words text-base font-extrabold leading-snug text-bodega-oscuro">{productoMenu.nombre}</p>
+              {etiquetasProducto(productoMenu).length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {etiquetasProducto(productoMenu).map((etiqueta) => (
+                    <span key={etiqueta} className={CLASE_ETIQUETA_PRODUCTO[etiqueta]}>
+                      {TEXTO_ETIQUETA_PRODUCTO[etiqueta]}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div
+                className="mt-3 grid gap-2"
+                style={{ gridTemplateColumns: `repeat(${datosResumenProducto(productoMenu).length}, minmax(0, 1fr))` }}
+              >
+                {datosResumenProducto(productoMenu).map((dato) => {
+                  const { valor, detalle } = valorResumenProducto(productoMenu, dato);
+                  return (
+                    <div key={dato} className="min-w-0 rounded-xl bg-papel px-3 py-2">
+                      <span className="block text-[11px] text-tinta-suave">{TEXTO_DATO_RESUMEN_PRODUCTO[dato]}</span>
+                      <span className="block break-words text-sm font-semibold text-tinta">{valor}</span>
+                      {detalle && <span className="block text-[11px] text-tinta-suave">{detalle}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-4 flex gap-2">
+                {botonesOpcionesProducto(productoMenu).map((boton) => (
                   <button
-                    onClick={() => {
-                      setMenuOpcionesId(null);
-                      abrirAjuste(productoMenu);
-                    }}
-                    className="min-h-12 w-full rounded-xl border border-linea px-4 py-2 text-left text-sm font-semibold text-tinta active:bg-papel"
+                    key={boton}
+                    type="button"
+                    onClick={() => elegirOpcionProducto(boton, productoMenu)}
+                    className={`min-h-12 flex-1 rounded-xl px-2 py-2 text-center text-[13px] font-semibold leading-tight ${
+                      boton === 'editar'
+                        ? 'bg-bodega/10 text-bodega-oscuro active:bg-bodega/20'
+                        : 'border border-linea text-tinta active:bg-papel'
+                    }`}
                   >
-                    Ajustar Stock
+                    {TEXTO_BOTON_OPCION_PRODUCTO[boton]}
                   </button>
-                )}
-                <button
-                  onClick={() => {
-                    setMenuOpcionesId(null);
-                    alternarBitacora(productoMenu);
-                  }}
-                  className="min-h-12 w-full rounded-xl border border-linea px-4 py-2 text-left text-sm font-semibold text-tinta active:bg-papel"
-                >
-                  Bitácora (Historial)
-                </button>
-                <button
-                  onClick={() => setMenuOpcionesId(null)}
-                  className="min-h-12 w-full rounded-xl px-4 py-2 text-center text-sm font-semibold text-tinta-suave"
-                >
-                  Cancelar
-                </button>
+                ))}
               </div>
             </div>
           </div>,
